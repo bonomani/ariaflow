@@ -115,12 +115,19 @@ The repo ships a small release helper:
 python3 scripts/release.py --next-alpha --push
 ```
 
+Preview the steps without changing files:
+
+```bash
+python3 scripts/release.py --next-alpha --dry-run
+```
+
 That script will:
 
 - run the local test suite
 - bump `pyproject.toml` and `src/aria_queue/__init__.py`
 - commit the version bump
 - create and push the `v0.1.1-alpha.N` tag
+- optionally print the plan first with `--dry-run`
 
 After the tag push, the GitHub release workflow publishes the prerelease and
 dispatches the Homebrew tap sync.

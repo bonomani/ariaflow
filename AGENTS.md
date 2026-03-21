@@ -15,6 +15,7 @@ Release workflow:
 - Run the local test suite before tagging.
 - Prefer the helper script:
   - `python3 scripts/release.py --next-alpha --push`
+- Use `--dry-run` first if you want to preview the exact release plan.
 - If you need to do it manually, bump the package version in `pyproject.toml`
   and `src/aria_queue/__init__.py`, commit on `master`, create and push the tag,
   and let the release workflow publish the prerelease.

@@ -85,12 +85,29 @@ def run_py_compile() -> None:
     run(["python3", "-m", "py_compile", *files])
 
 
+def build_plan(current: str, next_version: str, tag: str, push: bool, run_tests: bool, allow_dirty: bool) -> list[str]:
+    return [
+        f"current version: {current}",
+        f"next version: {next_version}",
+        f"tag: {tag}",
+        f"tests: {'run' if run_tests else 'skip'}",
+        f"dirty tree: {'allowed' if allow_dirty else 'not allowed'}",
+        f"push: {'yes' if push else 'no'}",
+        "write pyproject.toml and src/aria_queue/__init__.py",
+        f"commit: Bump version for alpha {tag.split('.')[-1]}",
+        f"tag: {tag}",
+        "if push: git push origin master --tags",
+        "GitHub Actions will publish the prerelease and dispatch tap sync",
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Bump ariaflow, tag a prerelease, and push it.")
     parser.add_argument("--version", help="Set an explicit package version like 0.1.1a24.")
     parser.add_argument("--next-alpha", action="store_true", help="Auto-bump the current alpha version by one.")
     parser.add_argument("--no-tests", action="store_true", help="Skip local tests before committing.")
     parser.add_argument("--allow-dirty", action="store_true", help="Allow uncommitted changes before releasing.")
+    parser.add_argument("--dry-run", action="store_true", help="Print the planned release steps and exit.")
     parser.add_argument("--push", action="store_true", help="Push master and tags after committing.")
     args = parser.parse_args()
 
@@ -109,6 +126,19 @@ def main() -> int:
     if tag_exists(tag):
         raise SystemExit(f"Tag already exists: {tag}")
     ensure_clean_tree(args.allow_dirty)
+
+    plan = build_plan(
+        current=current,
+        next_version=next_version,
+        tag=tag,
+        push=args.push,
+        run_tests=not args.no_tests,
+        allow_dirty=args.allow_dirty,
+    )
+    if args.dry_run:
+        print("\n".join(plan))
+        print("Dry run only; no files changed.")
+        return 0
 
     if not args.no_tests:
         run_py_compile()
