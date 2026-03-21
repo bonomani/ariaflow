@@ -336,19 +336,17 @@ INDEX_HTML = """<!doctype html>
         <div class="topline">
           <span>Mode: <strong id="mode-label">idle</strong></span>
           <span>Item: <strong id="active-label" class="mono">none</strong></span>
-          <span>Queue: <strong id="queue-label">0 items</strong></span>
         </div>
         <div class="chips">
           <div class="chip">aria2 <strong id="chip-aria2">unknown</strong></div>
           <div class="chip">Cap <strong id="chip-cap">-</strong></div>
-          <div class="chip">State <strong id="chip-state">idle</strong></div>
           <div class="chip">Last issue <strong id="chip-error">none</strong></div>
         </div>
         <div class="summary" style="margin-top:10px;">
           <div class="metric"><div class="label">Waiting</div><div class="value" id="sum-queued">0</div><div class="sub">queued items</div></div>
           <div class="metric"><div class="label">Done</div><div class="value" id="sum-done">0</div><div class="sub">completed</div></div>
           <div class="metric"><div class="label">Errors</div><div class="value" id="sum-error">0</div><div class="sub">failed items</div></div>
-          <div class="metric"><div class="label">Current speed</div><div class="value" id="sum-speed">-</div><div class="sub">live transfer</div></div>
+          <div class="metric"><div class="label">Speed</div><div class="value" id="sum-speed">-</div><div class="sub">live transfer</div></div>
         </div>
       </div>
     </div>
@@ -824,12 +822,10 @@ INDEX_HTML = """<!doctype html>
         document.getElementById('chip-error').textContent = state.last_error || data.bandwidth?.reason || 'none';
         document.getElementById('chip-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || data.bandwidth_global?.limit || '-');
         document.getElementById('chip-aria2').textContent = data.aria2?.reachable ? `v${data.aria2.version}` : 'offline';
-        document.getElementById('chip-state').textContent = activeStateLabel(active, state);
         const toggleButton = document.getElementById('toggle-btn');
         if (toggleButton) toggleButton.textContent = data.state && data.state.paused ? 'Resume' : 'Pause';
         document.getElementById('mode-label').textContent = activeStateLabel(active, state);
         document.getElementById('active-label').textContent = summarizeActiveItem(active, state);
-        document.getElementById('queue-label').textContent = `${(data.summary && data.summary.total) || 0} item(s)`;
         document.getElementById('sum-speed').textContent = speed ? formatRate(speed) : "idle";
         renderQueueSummary(data.summary);
         document.getElementById('bw-source').textContent = data.bandwidth?.source || '-';
