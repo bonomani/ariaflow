@@ -41,7 +41,7 @@ INDEX_HTML = """<!doctype html>
   <title>ariaflow</title>
     <style>
     :root {
-      color-scheme: dark;
+      color-scheme: light dark;
       --bg: #08111f;
       --panel: rgba(15, 23, 42, 0.88);
       --panel-2: rgba(8, 17, 31, 0.9);
@@ -53,6 +53,16 @@ INDEX_HTML = """<!doctype html>
       --warn: #fbbf24;
       --danger: #fb7185;
       --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    }
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: rgba(255, 255, 255, 0.88);
+      --panel-2: rgba(248, 250, 252, 0.92);
+      --line: rgba(15, 23, 42, 0.12);
+      --text: #0f172a;
+      --muted: #475569;
+      --shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
     }
     * { box-sizing: border-box; }
     body {
@@ -260,6 +270,9 @@ INDEX_HTML = """<!doctype html>
       flex-wrap: wrap;
       margin: 0 0 18px;
     }
+    .nav .spacer {
+      flex: 1 1 auto;
+    }
     .nav a {
       text-decoration: none;
       color: var(--text);
@@ -273,6 +286,11 @@ INDEX_HTML = """<!doctype html>
       color: #082f49;
       border-color: transparent;
       font-weight: 700;
+    }
+    .nav button {
+      padding: 8px 12px;
+      border-radius: 999px;
+      min-width: 110px;
     }
     .page-only { display: none; }
     body.page-dashboard .show-dashboard,
@@ -292,6 +310,8 @@ INDEX_HTML = """<!doctype html>
       <a href="/bandwidth" data-page="bandwidth">Bandwidth</a>
       <a href="/lifecycle" data-page="lifecycle">Lifecycle</a>
       <a href="/log" data-page="log">Log</a>
+      <div class="spacer"></div>
+      <button class="secondary" id="theme-btn" onclick="toggleTheme()">Theme</button>
     </div>
     <div class="hero">
       <div class="title">
@@ -304,7 +324,7 @@ INDEX_HTML = """<!doctype html>
           <strong id="mode-label">idle</strong>
         </div>
         <div class="statusline">
-          <span>Active</span>
+          <span>Current transfer</span>
           <strong id="active-label" class="mono">none</strong>
         </div>
         <div class="statusline">
@@ -314,14 +334,14 @@ INDEX_HTML = """<!doctype html>
         <div class="chips">
           <div class="chip">aria2 <strong id="chip-aria2">unknown</strong></div>
           <div class="chip">Cap <strong id="chip-cap">-</strong></div>
-          <div class="chip">Speed <strong id="chip-speed">-</strong></div>
-          <div class="chip">Last error <strong id="chip-error">none</strong></div>
+          <div class="chip">State <strong id="chip-state">idle</strong></div>
+          <div class="chip">Last issue <strong id="chip-error">none</strong></div>
         </div>
         <div class="summary" style="margin-top:14px;">
           <div class="metric"><div class="label">Waiting</div><div class="value" id="sum-queued">0</div><div class="sub">queued items</div></div>
           <div class="metric"><div class="label">Done</div><div class="value" id="sum-done">0</div><div class="sub">completed</div></div>
           <div class="metric"><div class="label">Errors</div><div class="value" id="sum-error">0</div><div class="sub">failed items</div></div>
-          <div class="metric"><div class="label">Speed</div><div class="value" id="sum-speed">-</div><div class="sub">active transfer</div></div>
+          <div class="metric"><div class="label">Bandwidth</div><div class="value" id="sum-speed">-</div><div class="sub">active transfer</div></div>
         </div>
       </div>
     </div>
@@ -494,6 +514,37 @@ INDEX_HTML = """<!doctype html>
       }
     }
 
+    function applyTheme(theme) {
+      const root = document.documentElement;
+      const saved = theme || 'system';
+      const next = saved === 'system'
+        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        : saved;
+      root.dataset.theme = next;
+      localStorage.setItem('ariaflow.theme', saved);
+      const btn = document.getElementById('theme-btn');
+      if (btn) btn.textContent = saved === 'system' ? 'Theme: system' : `Theme: ${saved}`;
+    }
+
+    function initTheme() {
+      const saved = localStorage.getItem('ariaflow.theme') || 'system';
+      applyTheme(saved);
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const sync = () => {
+        if ((localStorage.getItem('ariaflow.theme') || 'system') === 'system') {
+          applyTheme('system');
+        }
+      };
+      if (mq.addEventListener) mq.addEventListener('change', sync);
+      else if (mq.addListener) mq.addListener(sync);
+    }
+
+    function toggleTheme() {
+      const current = localStorage.getItem('ariaflow.theme') || 'system';
+      const next = current === 'system' ? 'dark' : current === 'dark' ? 'light' : 'system';
+      applyTheme(next);
+    }
+
     function badgeClass(status) {
       if (["done", "converged", "ok", "complete"].includes(status)) return "badge good";
       if (["error", "failed", "missing"].includes(status)) return "badge bad";
@@ -519,6 +570,20 @@ INDEX_HTML = """<!doctype html>
     function formatMbps(value) {
       if (value == null) return "-";
       return `${value} Mbps`;
+    }
+    function humanCap(value) {
+      if (value == null) return "-";
+      const text = String(value).trim();
+      if (!text || text === "0" || text === "0M" || text === "0 Mbps" || text === "0 Mbps/s") return "unlimited";
+      return text;
+    }
+    function activeStateLabel(active, state) {
+      if (state?.paused && active?.recovered) return "paused · recovered";
+      if (state?.paused) return "paused";
+      if (active?.recovered) return active.status ? `recovered · ${active.status}` : "recovered";
+      if (active?.status) return active.status;
+      if (state?.running) return "running";
+      return "idle";
     }
     function renderQueueItem(item) {
       const status = item.status || "unknown";
@@ -694,12 +759,12 @@ INDEX_HTML = """<!doctype html>
         lastStatus = data;
         document.getElementById('queue').innerHTML = (data.items || []).length ? data.items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
         const active = data.active || {status: 'idle'};
-        const speed = active.downloadSpeed || data.state?.download_speed || "-";
+        const speed = active.downloadSpeed || data.state?.download_speed || null;
         const state = data.state || {};
-        document.getElementById('chip-error').textContent = state.last_error || 'none';
-        document.getElementById('chip-speed').textContent = formatRate(active.downloadSpeed || null);
-        document.getElementById('chip-cap').textContent = data.bandwidth?.cap_mbps ? formatMbps(data.bandwidth.cap_mbps) : (data.bandwidth?.limit || '-');
+        document.getElementById('chip-error').textContent = state.last_error || data.bandwidth?.reason || 'none';
+        document.getElementById('chip-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || data.bandwidth_global?.limit || '-');
         document.getElementById('chip-aria2').textContent = data.aria2?.reachable ? `v${data.aria2.version}` : 'offline';
+        document.getElementById('chip-state').textContent = activeStateLabel(active, state);
         const toggleButton = document.getElementById('toggle-btn');
         if (toggleButton) toggleButton.textContent = data.state && data.state.paused ? 'Resume' : 'Pause';
         const activeName = shortName(active.url || active.gid || "No active download");
@@ -707,10 +772,11 @@ INDEX_HTML = """<!doctype html>
           ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="Resume">▶</button>`
           : `<button class="secondary icon-btn" onclick="toggleQueue()" title="Pause">⏸</button>`;
         const activeRecoveryBadge = active.recovered ? `<span class="badge warn">recovered</span>` : "";
+        const activeSourceBadge = active.recovered && active.url ? `<span class="badge">queue source</span>` : "";
         document.getElementById('active').innerHTML = `
           <div class="transfer-head">
             <div>
-              <div class="transfer-name">${activeName} ${activeRecoveryBadge}</div>
+              <div class="transfer-name">${activeName} ${activeRecoveryBadge} ${activeSourceBadge}</div>
               <div class="transfer-sub">${active.url || "No active download"}</div>
             </div>
             <div class="action-strip">
@@ -728,21 +794,22 @@ INDEX_HTML = """<!doctype html>
             ${active.totalLength ? `<span>Total ${formatBytes(active.totalLength)}</span>` : ""}
             ${active.completedLength ? `<span>Done ${formatBytes(active.completedLength)}</span>` : ""}
             ${active.gid ? `<span>GID ${active.gid}</span>` : ""}
+            ${active.recovered ? `<span>Recovered from aria2</span>` : ""}
             ${active.errorMessage ? `<span class="mono">${active.errorMessage}</span>` : ""}
           </div>
         `;
         const percent = active && active.percent != null ? active.percent : 0;
         document.getElementById('bar').style.width = percent + '%';
-        document.getElementById('mode-label').textContent = data.state && data.state.paused ? 'paused' : (data.state && data.state.running ? 'running' : 'idle');
-        document.getElementById('active-label').textContent = active.url || 'none';
+        document.getElementById('mode-label').textContent = activeStateLabel(active, state);
+        document.getElementById('active-label').textContent = active.url || active.gid || 'none';
         document.getElementById('queue-label').textContent = `${(data.summary && data.summary.total) || 0} item(s)`;
-        document.getElementById('sum-speed').textContent = speed && speed !== "-" ? speed : "-";
+        document.getElementById('sum-speed').textContent = speed ? formatRate(speed) : "-";
         renderQueueSummary(data.summary);
         document.getElementById('bw-source').textContent = data.bandwidth?.source || '-';
         document.getElementById('bw-down').textContent = data.bandwidth?.source === 'networkquality'
           ? `Downlink ${formatMbps(data.bandwidth.downlink_mbps)}${data.bandwidth.partial ? ' (partial capture)' : ''}`
-          : 'No networkquality probe available';
-        document.getElementById('bw-cap').textContent = data.bandwidth?.cap_mbps ? formatMbps(data.bandwidth.cap_mbps) : '-';
+          : `No networkquality probe available${data.bandwidth?.reason ? ` · ${data.bandwidth.reason}` : ''}`;
+        document.getElementById('bw-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || '-');
         document.getElementById('bw-global').textContent = data.bandwidth_global?.limit ? `Global limit ${data.bandwidth_global.limit}` : 'Global option unavailable';
         document.getElementById('bw-live').textContent = active.status || 'idle';
         document.getElementById('bw-live-detail').textContent = active.downloadSpeed
@@ -852,6 +919,7 @@ INDEX_HTML = """<!doctype html>
       if (actionLog) actionLog.innerHTML = renderActionLog(data.items || []);
     }
     document.getElementById('action-filter')?.addEventListener('change', refreshActionLog);
+    initTheme();
     refresh();
     setInterval(refresh, 2000);
     loadDeclaration();
