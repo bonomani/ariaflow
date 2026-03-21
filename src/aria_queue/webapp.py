@@ -572,7 +572,7 @@ INDEX_HTML = """<!doctype html>
       renderQueueSummary(data.summary);
       document.getElementById('bw-source').textContent = data.bandwidth?.source || '-';
       document.getElementById('bw-down').textContent = data.bandwidth?.source === 'networkquality'
-        ? `Downlink ${formatMbps(data.bandwidth.downlink_mbps)}`
+        ? `Downlink ${formatMbps(data.bandwidth.downlink_mbps)}${data.bandwidth.partial ? ' (partial capture)' : ''}`
         : 'No networkquality probe available';
       document.getElementById('bw-cap').textContent = data.bandwidth?.cap_mbps ? formatMbps(data.bandwidth.cap_mbps) : '-';
       document.getElementById('bw-global').textContent = data.bandwidth_global?.limit ? `Global limit ${data.bandwidth_global.limit}` : 'Global option unavailable';
@@ -582,7 +582,7 @@ INDEX_HTML = """<!doctype html>
         : 'No active transfer';
       document.getElementById('bw-probe-mode').textContent = data.bandwidth?.source || '-';
       document.getElementById('bw-probe-detail').textContent = data.bandwidth?.source === 'networkquality'
-        ? `Measured ${formatMbps(data.bandwidth.downlink_mbps)} and capped at ${formatMbps(data.bandwidth.cap_mbps)}`
+        ? `Measured ${formatMbps(data.bandwidth.downlink_mbps)} and capped at ${formatMbps(data.bandwidth.cap_mbps)}${data.bandwidth.partial ? ' from partial output' : ''}`
         : 'Using default floor because no probe was available';
     }
     async function loadLifecycle() {

@@ -144,12 +144,20 @@ def probe_bandwidth(percent: float = 0.8, floor_mbps: int = 2) -> dict[str, Any]
                 break
     if cmd:
         try:
-            out = subprocess.check_output([cmd], text=True, stderr=subprocess.DEVNULL)
+            completed = subprocess.run([cmd], text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=12)
+            out = completed.stdout
             match = re.search(r"Downlink:\s+([\d.]+)\s+Mbps", out)
             if match:
                 downlink = float(match.group(1))
                 cap = max(floor_mbps, int(downlink * percent))
                 return {"source": "networkquality", "downlink_mbps": downlink, "cap_mbps": cap}
+        except subprocess.TimeoutExpired as exc:
+            out = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
+            match = re.search(r"Downlink:\s+([\d.]+)\s+Mbps", out)
+            if match:
+                downlink = float(match.group(1))
+                cap = max(floor_mbps, int(downlink * percent))
+                return {"source": "networkquality", "downlink_mbps": downlink, "cap_mbps": cap, "partial": True}
         except Exception:
             pass
     return {"source": "default", "downlink_mbps": None, "cap_mbps": floor_mbps}
