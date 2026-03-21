@@ -19,6 +19,7 @@ from .core import (
     load_queue,
     load_state,
     pause_active_transfer,
+    record_action,
     resume_active_transfer,
     save_state,
     start_background_process,
@@ -631,6 +632,8 @@ INDEX_HTML = """<!doctype html>
           entry.action ? `Action: ${entry.action}` : null,
           entry.target ? `Target: ${entry.target}` : null,
           entry.reason ? `Reason: ${entry.reason}` : null,
+          entry.observed_before ? `Before: ${JSON.stringify(entry.observed_before)}` : null,
+          entry.observed_after ? `After: ${JSON.stringify(entry.observed_after)}` : null,
           entry.message ? `Message: ${entry.message}` : null,
         ].filter(Boolean).join(" · ");
         return `
@@ -792,11 +795,18 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('result').textContent = "Declaration saved";
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
     }
+    async function refreshActionLog() {
+      const r = await fetch('/api/status');
+      const data = await r.json();
+      const actionLog = document.getElementById('action-log');
+      if (actionLog) actionLog.innerHTML = renderActionLog(data.action_log || []);
+    }
     refresh();
     setInterval(refresh, 2000);
     loadDeclaration();
     loadLifecycle();
     preflightRun();
+    refreshActionLog();
     applyPage();
   </script>
 </body>
@@ -864,47 +874,51 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/preflight":
+            before = {"state": load_state(), "queue": summarize_queue(load_queue())}
             result = preflight()
             result["aria2"] = aria_status()
             result["bandwidth"] = current_bandwidth()
             result["action_log"] = load_action_log()
-            from .core import append_action_log
-            append_action_log({
-                "action": "preflight",
-                "target": "system",
-                "outcome": "converged" if result.get("status") == "pass" else "blocked",
-                "observation": "ok",
-                "reason": result.get("status", "unknown"),
-                "result": result,
-            })
+            record_action(
+                action="preflight",
+                target="system",
+                outcome="converged" if result.get("status") == "pass" else "blocked",
+                reason=result.get("status", "unknown"),
+                before=before,
+                after={"state": load_state(), "queue": summarize_queue(load_queue()), "preflight": result},
+                detail=result,
+            )
             self._send_json(result)
             return
 
         if path == "/api/run":
+            before = {"state": load_state(), "queue": summarize_queue(load_queue())}
             result = start_background_process()
-            from .core import append_action_log
-            append_action_log({
-                "action": "run",
-                "target": "queue",
-                "outcome": "changed" if result.get("started") else "unchanged",
-                "observation": "ok",
-                "reason": result.get("reason", "unknown"),
-                "result": result,
-            })
+            record_action(
+                action="run",
+                target="queue",
+                outcome="changed" if result.get("started") else "unchanged",
+                reason=result.get("reason", "unknown"),
+                before=before,
+                after={"state": load_state(), "queue": summarize_queue(load_queue()), "runner": result},
+                detail=result,
+            )
             self._send_json(result)
             return
 
         if path == "/api/ucc":
+            before = {"state": load_state(), "queue": summarize_queue(load_queue())}
             result = run_ucc()
-            from .core import append_action_log
-            append_action_log({
-                "action": "ucc",
-                "target": "queue",
-                "outcome": result.get("result", {}).get("outcome", "unknown"),
-                "observation": result.get("result", {}).get("observation", "unknown"),
-                "reason": result.get("result", {}).get("reason", "unknown"),
-                "result": result,
-            })
+            record_action(
+                action="ucc",
+                target="queue",
+                outcome=result.get("result", {}).get("outcome", "unknown"),
+                observation=result.get("result", {}).get("observation", "unknown"),
+                reason=result.get("result", {}).get("reason", "unknown"),
+                before=before,
+                after={"state": load_state(), "queue": summarize_queue(load_queue()), "ucc": result},
+                detail=result,
+            )
             self._send_json(result)
             return
 
@@ -915,30 +929,32 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/lifecycle/install":
+            before = {"lifecycle": status_all()}
             result = install_all(dry_run=True, include_web=False)
-            from .core import append_action_log
-            append_action_log({
-                "action": "lifecycle_install_preview",
-                "target": "system",
-                "outcome": "converged",
-                "observation": "ok",
-                "reason": "preview",
-                "result": result,
-            })
+            record_action(
+                action="lifecycle_install_preview",
+                target="system",
+                outcome="converged",
+                reason="preview",
+                before=before,
+                after={"lifecycle": status_all(), "preview": result},
+                detail=result,
+            )
             self._send_json(result)
             return
 
         if path == "/api/lifecycle/uninstall":
+            before = {"lifecycle": status_all()}
             result = uninstall_all(dry_run=True, include_web=False)
-            from .core import append_action_log
-            append_action_log({
-                "action": "lifecycle_uninstall_preview",
-                "target": "system",
-                "outcome": "converged",
-                "observation": "ok",
-                "reason": "preview",
-                "result": result,
-            })
+            record_action(
+                action="lifecycle_uninstall_preview",
+                target="system",
+                outcome="converged",
+                reason="preview",
+                before=before,
+                after={"lifecycle": status_all(), "preview": result},
+                detail=result,
+            )
             self._send_json(result)
             return
 

@@ -33,7 +33,9 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertTrue(item.id)
         self.assertEqual(item.status, "queued")
         log = load_action_log()
-        self.assertTrue(any(entry.get("action") == "add" for entry in log))
+        add_entry = next(entry for entry in reversed(log) if entry.get("action") == "add")
+        self.assertIn("observed_before", add_entry)
+        self.assertIn("observed_after", add_entry)
 
     def test_preflight_emits_gate_results(self) -> None:
         result = preflight()
