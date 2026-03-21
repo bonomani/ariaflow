@@ -6,7 +6,6 @@ import json
 from . import __version__
 from .contracts import preflight, run_ucc
 from .core import add_queue_item, load_queue
-from .install import install_all, status_all, uninstall_all
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -109,16 +108,22 @@ def main() -> int:
         return 0
 
     if args.command == "install":
+        from .install import install_all
+
         result = install_all(dry_run=args.dry_run, include_web=args.with_web)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
     if args.command == "uninstall":
+        from .install import uninstall_all
+
         result = uninstall_all(dry_run=args.dry_run, include_web=args.with_web)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
     if args.command == "lifecycle":
+        from .install import status_all
+
         print(json.dumps(status_all(), indent=2, sort_keys=True))
         return 0
 

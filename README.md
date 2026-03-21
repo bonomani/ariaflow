@@ -87,6 +87,7 @@ Install options:
 - `ariaflow install --with-web` also installs the optional web launchd service
 - `pip install .` installs the headless core
 - `pip install .[web]` installs the same core with the web extra declared
+- `pip install .[launchd]` declares the launchd boundary explicitly for packaging
 
 Run it with:
 
