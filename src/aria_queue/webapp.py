@@ -387,7 +387,7 @@ INDEX_HTML = """<!doctype html>
           <option value="1500">1.5s</option>
           <option value="3000">3s</option>
           <option value="5000">5s</option>
-          <option value="10000">10s</option>
+          <option value="10000" selected>10s</option>
           <option value="30000">30s</option>
           <option value="0">Off</option>
         </select>
@@ -591,7 +591,7 @@ INDEX_HTML = """<!doctype html>
     let lastLifecycle = null;
     let lastResult = null;
     let refreshTimer = null;
-    let refreshInterval = Number(localStorage.getItem('ariaflow.refresh_interval') || '2000');
+    let refreshInterval = Number(localStorage.getItem('ariaflow.refresh_interval') || '10000');
     let lastDeclaration = null;
     const path = window.location.pathname.replace(/[/]+$/, "");
     const page = path === "/bandwidth" ? "bandwidth" : path === "/lifecycle" ? "lifecycle" : path === "/log" ? "log" : "dashboard";
@@ -1316,7 +1316,7 @@ INDEX_HTML = """<!doctype html>
     initTheme();
     syncRefreshControl();
     refresh();
-    setRefreshInterval(refreshInterval || 2000);
+    setRefreshInterval(refreshInterval || 10000);
     if (page === 'lifecycle') loadLifecycle();
     if (page === 'options') loadDeclaration();
     if (page === 'log') {
