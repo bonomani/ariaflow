@@ -392,6 +392,7 @@ INDEX_HTML = """<!doctype html>
           <option value="0">Off</option>
         </select>
       </label>
+      <button class="secondary" id="refresh-btn" onclick="refresh()">Refresh now</button>
       <button class="secondary" id="theme-btn" onclick="toggleTheme()">Theme</button>
     </div>
     <div class="hero">
@@ -878,9 +879,9 @@ INDEX_HTML = """<!doctype html>
       const totalLength = live.totalLength || item.totalLength;
       const completedLength = live.completedLength || item.completedLength;
       const displayUrl = item.url || live.url || "";
-      const recoveredBadge = item.recovered ? `<span class="badge warn">recovered</span>` : "";
-      const recoveryBadge = item.recovery_session_id ? `<span class="badge">recovery batch</span>` : "";
-      const sourceBadge = item.recovered && item.url ? `<span class="badge">queue source</span>` : "";
+      const recoveryBadge = item.recovered
+        ? `<span class="badge warn">${item.recovery_session_id ? 'recovered · recovery batch' : 'recovered'}</span>`
+        : "";
       const ariaBadge = liveStatus ? `<span class="badge ${badgeClass(liveStatus)}">aria2: ${liveStatus}</span>` : "";
       const pauseButton = activeish
         ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="${status === 'paused' ? 'Resume' : 'Pause'}">${status === 'paused' ? '▶' : '⏸'}</button>`
@@ -902,14 +903,12 @@ INDEX_HTML = """<!doctype html>
           ${totalLength ? `<span>Total ${formatBytes(totalLength)}</span>` : ""}
           ${completedLength ? `<span>Done ${formatBytes(completedLength)}</span>` : ""}
           ${item.gid ? `<span>GID ${item.gid}</span>` : ""}
-          ${recoveredBadge}
           ${recoveryBadge}
-          ${sourceBadge}
           ${item.recovered_at ? `<span>Recovered ${item.recovered_at}</span>` : ""}
           ${item.error_message ? `<span class="mono">${item.error_message}</span>` : ""}
         </div>
       ` : "";
-      const stateLabel = liveStatus ? `${status} · aria2:${liveStatus}` : (item.recovered ? `${status} · recovered` : status);
+      const stateLabel = liveStatus ? `${status} · aria2:${liveStatus}` : status;
       return `
         <div class="item compact ${activeish ? 'active-item' : ''}">
         <div class="item-top">
