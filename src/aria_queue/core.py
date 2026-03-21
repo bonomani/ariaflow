@@ -503,6 +503,11 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             time.sleep(2)
             if load_state().get("paused"):
                 item["status"] = "paused"
+                save_queue(items)
+                state["paused"] = True
+                state["active_gid"] = gid
+                state["active_url"] = item.get("url")
+                save_state(state)
                 break
             info = status(gid, port=port)
             log_transfer_poll(gid=gid, item=item, info=info, cap_mbps=cap)
@@ -536,8 +541,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "error_code": item.get("error_code"), "error_message": item.get("error_message")},
                 )
                 break
-        state["active_gid"] = None
-        state["active_url"] = None
+        if item.get("status") in {"done", "error"}:
+            state["active_gid"] = None
+            state["active_url"] = None
         save_state(state)
     save_queue(items)
     return items
