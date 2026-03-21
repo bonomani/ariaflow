@@ -40,3 +40,13 @@ jobs:
         with:
           files: release/*
           generate_release_notes: true
+
+      - name: Dispatch tap sync
+        env:
+          GH_TOKEN: ${{ secrets.ARIAFLOW_TAP_TOKEN }}
+        run: |
+          gh api \
+            --method POST \
+            /repos/bonomani/homebrew-ariaflow/dispatches \
+            -f event_type=sync-formula \
+            -f client_payload[tag]=${GITHUB_REF_NAME}
