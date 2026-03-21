@@ -96,7 +96,7 @@ def build_plan(current: str, next_version: str, tag: str, push: bool, run_tests:
         "write pyproject.toml and src/aria_queue/__init__.py",
         f"commit: Bump version for alpha {tag.split('.')[-1]}",
         f"tag: {tag}",
-        "if push: git push origin master --tags",
+        "if push: git push origin main --tags",
         "GitHub Actions will publish the prerelease and dispatch tap sync",
     ]
 
@@ -108,7 +108,7 @@ def main() -> int:
     parser.add_argument("--no-tests", action="store_true", help="Skip local tests before committing.")
     parser.add_argument("--allow-dirty", action="store_true", help="Allow uncommitted changes before releasing.")
     parser.add_argument("--dry-run", action="store_true", help="Print the planned release steps and exit.")
-    parser.add_argument("--push", action="store_true", help="Push master and tags after committing.")
+    parser.add_argument("--push", action="store_true", help="Push main and tags after committing.")
     args = parser.parse_args()
 
     current = read_version()
@@ -151,9 +151,9 @@ def main() -> int:
     run(["git", "tag", tag])
 
     if args.push:
-        run(["git", "push", "origin", "master", "--tags"])
+        run(["git", "push", "origin", "main", "--tags"])
     else:
-        print(f"Tagged {tag}. Push with: git push origin master --tags")
+        print(f"Tagged {tag}. Push with: git push origin main --tags")
 
     print(f"Prepared release tag: {tag}")
     return 0
