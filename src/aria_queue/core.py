@@ -206,11 +206,42 @@ def save_queue(items: list[dict[str, Any]]) -> None:
     write_json(queue_path(), {"items": items})
 
 
+def find_queue_item_by_url(url: str) -> dict[str, Any] | None:
+    for item in load_queue():
+        if item.get("url") == url and item.get("status") != "error":
+            return item
+    return None
+
+
 def add_queue_item(url: str, output: str | None = None, post_action_rule: str = "pending") -> QueueItem:
     from .contracts import load_declaration
 
     ensure_storage()
-    before = {"summary": summarize_queue(load_queue())}
+    items = load_queue()
+    before = {"summary": summarize_queue(items)}
+    existing = next((item for item in items if item.get("url") == url and item.get("status") != "error"), None)
+    if existing is not None:
+        record_action(
+            action="add",
+            target="queue",
+            outcome="unchanged",
+            reason="duplicate_url",
+            before=before,
+            after={"summary": summarize_queue(items), "item_id": existing.get("id")},
+            detail={"item_id": existing.get("id"), "url": url, "status": existing.get("status"), "gid": existing.get("gid")},
+        )
+        return QueueItem(
+            id=str(existing.get("id", "")),
+            url=str(existing.get("url", url)),
+            output=existing.get("output"),
+            post_action_rule=existing.get("post_action_rule", post_action_rule),
+            status=existing.get("status", "queued"),
+            created_at=existing.get("created_at", ""),
+            gid=existing.get("gid"),
+            error_code=existing.get("error_code"),
+            error_message=existing.get("error_message"),
+        )
+
     decl = load_declaration()
     default_rule = decl.get("uic", {}).get("preferences", [{}])[0].get("value", "pending")
     item = QueueItem(
@@ -220,7 +251,6 @@ def add_queue_item(url: str, output: str | None = None, post_action_rule: str = 
         post_action_rule=post_action_rule or default_rule,
         created_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     )
-    items = load_queue()
     items.append(asdict(item))
     save_queue(items)
     record_action(

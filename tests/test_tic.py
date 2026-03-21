@@ -38,6 +38,14 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertIn("observed_before", add_entry)
         self.assertIn("observed_after", add_entry)
 
+    def test_enqueue_reuses_duplicate_url(self) -> None:
+        first = add_queue_item("https://example.com/model.gguf")
+        second = add_queue_item("https://example.com/model.gguf")
+        self.assertEqual(first.id, second.id)
+        log = load_action_log()
+        duplicate_entry = next(entry for entry in reversed(log) if entry.get("reason") == "duplicate_url")
+        self.assertEqual(duplicate_entry["outcome"], "unchanged")
+
     def test_preflight_emits_gate_results(self) -> None:
         result = preflight()
         self.assertIn("gates", result)
