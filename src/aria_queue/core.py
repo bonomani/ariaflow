@@ -191,7 +191,7 @@ def ensure_aria_daemon(port: int = 6800) -> None:
 
 def add_download(item: dict[str, Any], cap_mbps: int, port: int = 6800) -> str:
     options = {
-        "max-overall-download-limit": f"{cap_mbps}M",
+        "max-download-limit": f"{cap_mbps}M",
         "allow-overwrite": "true",
         "continue": "true",
     }
