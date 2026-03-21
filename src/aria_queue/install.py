@@ -10,6 +10,29 @@ ARIA2_LABEL = "com.ariaflow.aria2"
 ARIAFLOW_LABEL = "com.ariaflow.serve"
 
 
+def ucc_record(
+    *,
+    observed: bool,
+    outcome: str,
+    completion: str | None = None,
+    reason: str = "aggregate",
+    detail: str | None = None,
+    commands: list[str] | None = None,
+) -> dict[str, object]:
+    record: dict[str, object] = {
+        "observation": "ok" if observed else "failed",
+        "outcome": outcome,
+        "reason": reason,
+    }
+    if completion is not None:
+        record["completion"] = completion
+    if detail is not None:
+        record["message"] = detail
+    if commands is not None:
+        record["commands"] = commands
+    return record
+
+
 def is_macos() -> bool:
     return os.uname().sysname.lower() == "darwin"
 
@@ -193,28 +216,89 @@ def uninstall_aria2_launchd(dry_run: bool = False) -> list[str]:
     return commands
 
 
-def install_all(dry_run: bool = False) -> dict[str, list[str]]:
+def install_all(dry_run: bool = False) -> dict[str, dict[str, object]]:
     if not dry_run and not is_macos():
         raise RuntimeError("install is only supported on macOS")
+    ariaflow_cmds = homebrew_install_ariaflow(dry_run=dry_run)
+    aria2_cmds = install_aria2_launchd(dry_run=dry_run)
+    serve_cmds = install_ariaflow_launchd(dry_run=dry_run)
     return {
-        "ariaflow": homebrew_install_ariaflow(dry_run=dry_run),
-        "aria2-launchd": install_aria2_launchd(dry_run=dry_run),
-        "ariaflow-serve-launchd": install_ariaflow_launchd(dry_run=dry_run),
+        "ariaflow": ucc_record(
+            observed=True,
+            outcome="changed",
+            completion="complete",
+            reason="install",
+            detail="ariaflow package installed or queued for installation",
+            commands=ariaflow_cmds,
+        ),
+        "aria2-launchd": ucc_record(
+            observed=True,
+            outcome="changed",
+            completion="complete",
+            reason="install",
+            detail="aria2 launchd service installed or queued for installation",
+            commands=aria2_cmds,
+        ),
+        "ariaflow-serve-launchd": ucc_record(
+            observed=True,
+            outcome="changed",
+            completion="complete",
+            reason="install",
+            detail="ariaflow web UI launchd service installed or queued for installation",
+            commands=serve_cmds,
+        ),
     }
 
 
-def status_all() -> dict[str, dict[str, bool]]:
+def status_all() -> dict[str, dict[str, object]]:
+    ariaflow_installed = brew_is_installed("ariaflow")
+    aria2 = aria2_status()
+    serve = ariaflow_status()
     return {
-        "ariaflow": {"installed": brew_is_installed("ariaflow")},
-        "aria2-launchd": aria2_status(),
-        "ariaflow-serve-launchd": ariaflow_status(),
+        "ariaflow": ucc_record(
+            observed=True,
+            outcome="converged" if ariaflow_installed else "unchanged",
+            completion="complete",
+            reason="match" if ariaflow_installed else "missing",
+            detail="ariaflow package installed" if ariaflow_installed else "ariaflow package absent",
+        ),
+        "aria2-launchd": ucc_record(
+            observed=True,
+            outcome="converged" if aria2["loaded"] else "unchanged",
+            completion="complete",
+            reason="match" if aria2["loaded"] else "missing",
+            detail="aria2 launchd loaded" if aria2["loaded"] else "aria2 launchd absent",
+        ),
+        "ariaflow-serve-launchd": ucc_record(
+            observed=True,
+            outcome="converged" if serve["loaded"] else "unchanged",
+            completion="complete",
+            reason="match" if serve["loaded"] else "missing",
+            detail="ariaflow web launchd loaded" if serve["loaded"] else "ariaflow web launchd absent",
+        ),
     }
 
 
-def uninstall_all(dry_run: bool = False) -> dict[str, list[str]]:
+def uninstall_all(dry_run: bool = False) -> dict[str, dict[str, object]]:
     if not dry_run and not is_macos():
         raise RuntimeError("uninstall is only supported on macOS")
+    serve_cmds = uninstall_ariaflow_launchd(dry_run=dry_run)
+    aria2_cmds = uninstall_aria2_launchd(dry_run=dry_run)
     return {
-        "ariaflow-serve-launchd": uninstall_ariaflow_launchd(dry_run=dry_run),
-        "aria2-launchd": uninstall_aria2_launchd(dry_run=dry_run),
+        "ariaflow-serve-launchd": ucc_record(
+            observed=True,
+            outcome="changed",
+            completion="complete",
+            reason="uninstall",
+            detail="ariaflow web launchd removed or queued for removal",
+            commands=serve_cmds,
+        ),
+        "aria2-launchd": ucc_record(
+            observed=True,
+            outcome="changed",
+            completion="complete",
+            reason="uninstall",
+            detail="aria2 launchd removed or queued for removal",
+            commands=aria2_cmds,
+        ),
     }

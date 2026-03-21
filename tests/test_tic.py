@@ -52,17 +52,21 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertIn("ariaflow", plan)
         self.assertIn("aria2-launchd", plan)
         self.assertIn("ariaflow-serve-launchd", plan)
+        self.assertEqual(plan["ariaflow"]["observation"], "ok")
+        self.assertEqual(plan["ariaflow"]["outcome"], "changed")
 
     def test_lifecycle_reports_status_shape(self) -> None:
         status = status_all()
         self.assertIn("ariaflow", status)
         self.assertIn("aria2-launchd", status)
         self.assertIn("ariaflow-serve-launchd", status)
+        self.assertIn(status["ariaflow"]["outcome"], ["converged", "unchanged"])
 
     def test_uninstall_dry_run_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True)
         self.assertIn("ariaflow-serve-launchd", plan)
         self.assertIn("aria2-launchd", plan)
+        self.assertEqual(plan["aria2-launchd"]["reason"], "uninstall")
 
 
 if __name__ == "__main__":
