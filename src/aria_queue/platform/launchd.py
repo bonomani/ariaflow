@@ -33,11 +33,17 @@ def _launchctl_list(label: str) -> bool:
 
 
 def _launchctl_unload(plist: Path) -> None:
+    uid = str(os.getuid())
+    subprocess.run(["launchctl", "bootout", f"gui/{uid}", str(plist)], check=False)
     subprocess.run(["launchctl", "unload", str(plist)], check=False)
 
 
 def _launchctl_load(plist: Path) -> None:
-    subprocess.run(["launchctl", "load", str(plist)], check=True)
+    uid = str(os.getuid())
+    try:
+        subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(plist)], check=True)
+    except subprocess.CalledProcessError:
+        subprocess.run(["launchctl", "load", str(plist)], check=True)
 
 
 def aria2_status() -> dict[str, bool]:
@@ -100,7 +106,7 @@ def install_aria2_launchd(dry_run: bool = False) -> list[str]:
         f"mkdir -p {aria2_session_dir()} {Path.home() / 'Downloads'} {launch_agents_dir()}",
         f"touch {aria2_session_dir() / 'session.txt'}",
         f"cat > {aria2_plist_path()} <<'PLIST'\n{plist}PLIST",
-        f"launchctl load {aria2_plist_path()}",
+        f"launchctl bootstrap gui/{os.getuid()} {aria2_plist_path()}",
     ]
     if dry_run:
         return commands
@@ -138,7 +144,7 @@ def install_ariaflow_launchd(dry_run: bool = False) -> list[str]:
     commands = [
         f"mkdir -p {launch_agents_dir()}",
         f"cat > {ariaflow_plist_path()} <<'PLIST'\n{plist}PLIST",
-        f"launchctl load {ariaflow_plist_path()}",
+        f"launchctl bootstrap gui/{os.getuid()} {ariaflow_plist_path()}",
     ]
     if dry_run:
         return commands

@@ -119,6 +119,18 @@ class TicAriaFlowTests(unittest.TestCase):
         save_queue.assert_called_once()
         record_action.assert_called_once()
 
+    def test_reconcile_live_queue_updates_old_session_item_in_place(self) -> None:
+        with patch("aria_queue.core.load_state", return_value={"session_id": "batch-2"}), \
+             patch("aria_queue.core.active_gids", return_value=[{"gid": "gid-9", "status": "active", "completedLength": "50", "totalLength": "100", "downloadSpeed": "10", "files": [{"uris": [{"uri": "https://example.com/file.gguf"}]}]}]), \
+             patch("aria_queue.core.load_queue", return_value=[{"id": "item-1", "url": "https://example.com/file.gguf", "status": "paused", "gid": "gid-old", "session_id": "batch-1"}]), \
+             patch("aria_queue.core.save_queue") as save_queue, \
+             patch("aria_queue.core.record_action") as record_action:
+            result = reconcile_live_queue()
+        self.assertTrue(result["changed"])
+        self.assertEqual(result["recovered"], 1)
+        save_queue.assert_called_once()
+        record_action.assert_called_once()
+
     def test_deduplicate_active_transfers_pauses_less_advanced_duplicates(self) -> None:
         active = [
             {

@@ -396,8 +396,11 @@ def _queue_item_for_active_info(info: dict[str, Any], items: list[dict[str, Any]
     url = _active_item_url(info)
     session_id = load_state().get("session_id")
     candidates = [item for item in items if item.get("status") not in {"done", "error"}]
+    session_candidates = candidates
     if session_id:
-        candidates = [item for item in candidates if not item.get("session_id") or item.get("session_id") == session_id]
+        session_candidates = [item for item in candidates if not item.get("session_id") or item.get("session_id") == session_id]
+        if session_candidates:
+            candidates = session_candidates
     if gid:
         for item in candidates:
             if item.get("gid") == gid:
@@ -411,6 +414,19 @@ def _queue_item_for_active_info(info: dict[str, Any], items: list[dict[str, Any]
             for item in candidates:
                 current = str(item.get("url") or "")
                 if current and (current == url or current.split("?")[0].rstrip("/").split("/")[-1] == url_tail):
+                    return item
+    if session_candidates is not candidates:
+        if gid:
+            for item in items:
+                if item.get("status") in {"done", "error"}:
+                    continue
+                if item.get("gid") == gid:
+                    return item
+        if url:
+            for item in items:
+                if item.get("status") in {"done", "error"}:
+                    continue
+                if item.get("url") == url:
                     return item
     return None
 
@@ -470,6 +486,12 @@ def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool
             changed = True
         if url and not item.get("url"):
             item["url"] = url
+            changed = True
+        if url and item.get("url") != url:
+            item["url"] = url
+            changed = True
+        if item.get("status") == "paused" and live_status == "active":
+            item["status"] = "downloading"
             changed = True
         if live_status:
             item["live_status"] = live_status
