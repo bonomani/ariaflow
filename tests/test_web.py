@@ -48,8 +48,10 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertIn("meta", lifecycle["ariaflow"])
                 install_preview = request_json("http://127.0.0.1:8765/api/lifecycle/install", method="POST")
                 self.assertIn("aria2-launchd", install_preview)
+                self.assertNotIn("ariaflow-serve-launchd", install_preview)
                 uninstall_preview = request_json("http://127.0.0.1:8765/api/lifecycle/uninstall", method="POST")
-                self.assertIn("ariaflow-serve-launchd", uninstall_preview)
+                self.assertIn("aria2-launchd", uninstall_preview)
+                self.assertNotIn("ariaflow-serve-launchd", uninstall_preview)
                 saved = request_json(
                     "http://127.0.0.1:8765/api/declaration",
                     method="POST",

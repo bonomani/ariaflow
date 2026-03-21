@@ -10,7 +10,7 @@ Cross-platform queue driver for `aria2c` with:
 - UIC pre-flight checks
 - UCC structured execution output
 - TIC-style tests
-- local web UI
+- optional local web UI
 
 Targets:
 
@@ -73,12 +73,17 @@ This is still a minimal compliance layer, not a full framework implementation.
 
 ## Web UI
 
-The web mode is intentionally local-only:
+The web frontend is optional and intentionally local-only:
 
 - binds to `127.0.0.1` by default
 - serves one page
 - exposes JSON endpoints under `/api/*`
 - keeps `aria2` as the download engine
+
+The default install path is headless:
+
+- `ariaflow install` installs the core and `aria2` launchd support
+- `ariaflow install --with-web` also installs the optional web launchd service
 
 Run it with:
 

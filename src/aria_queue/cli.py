@@ -7,7 +7,6 @@ from . import __version__
 from .contracts import preflight, run_ucc
 from .core import add_queue_item, load_queue
 from .install import install_all, status_all, uninstall_all
-from .web import serve
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -39,11 +38,13 @@ def build_parser() -> argparse.ArgumentParser:
     web.add_argument("--host", default="127.0.0.1")
     web.add_argument("--port", type=int, default=8000)
 
-    install = sub.add_parser("install", help="install ariaflow, aria2 launchd, and the web UI on macOS")
+    install = sub.add_parser("install", help="install ariaflow and aria2 launchd on macOS")
     install.add_argument("--dry-run", action="store_true")
+    install.add_argument("--with-web", action="store_true", help="also install the optional web UI launchd service")
 
-    uninstall = sub.add_parser("uninstall", help="remove ariaflow launchd services on macOS")
+    uninstall = sub.add_parser("uninstall", help="remove installed launchd services on macOS")
     uninstall.add_argument("--dry-run", action="store_true")
+    uninstall.add_argument("--with-web", action="store_true", help="also remove the optional web UI launchd service")
 
     lifecycle = sub.add_parser("lifecycle", help="show install and service status")
 
@@ -97,6 +98,8 @@ def main() -> int:
         return 0 if result["result"].get("failure_class") is None else 1
 
     if args.command == "serve":
+        from .web import serve
+
         server = serve(host=args.host, port=args.port)
         print(f"Serving on http://{args.host}:{args.port}")
         try:
@@ -106,12 +109,12 @@ def main() -> int:
         return 0
 
     if args.command == "install":
-        result = install_all(dry_run=args.dry_run)
+        result = install_all(dry_run=args.dry_run, include_web=args.with_web)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
     if args.command == "uninstall":
-        result = uninstall_all(dry_run=args.dry_run)
+        result = uninstall_all(dry_run=args.dry_run, include_web=args.with_web)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 

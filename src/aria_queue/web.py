@@ -218,11 +218,11 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/lifecycle/install":
-            self._send_json(install_all(dry_run=True))
+            self._send_json(install_all(dry_run=True, include_web=False))
             return
 
         if path == "/api/lifecycle/uninstall":
-            self._send_json(uninstall_all(dry_run=True))
+            self._send_json(uninstall_all(dry_run=True, include_web=False))
             return
 
         if path == "/api/pause":
