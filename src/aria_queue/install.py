@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from pathlib import Path
 
 from .platform.launchd import (
     aria2_status,
@@ -64,7 +65,15 @@ def ucc_record(
 
 
 def brew_is_installed(package: str) -> bool:
-    return shutil.which("brew") is not None and subprocess.call(["brew", "list", package], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+    brew = shutil.which("brew")
+    if brew is None:
+        for candidate in ("/opt/homebrew/bin/brew", "/usr/local/bin/brew"):
+            if Path(candidate).exists():
+                brew = candidate
+                break
+    if brew is None:
+        return False
+    return Path(brew).exists() and subprocess.call([brew, "list", package], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
 
 
 def homebrew_install_ariaflow(dry_run: bool = False) -> list[str]:

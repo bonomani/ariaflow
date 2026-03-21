@@ -195,7 +195,8 @@ def add_download(item: dict[str, Any], cap_mbps: int, port: int = 6800) -> str:
         "allow-overwrite": "true",
         "continue": "true",
     }
-    result = aria_rpc("aria2.addUri", [item["url"], options], port=port)
+    uris = [item["url"]]
+    result = aria_rpc("aria2.addUri", [uris, options], port=port)
     return result["result"]
 
 
