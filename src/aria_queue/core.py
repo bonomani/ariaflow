@@ -325,6 +325,68 @@ def status(gid: str, port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     return result["result"]
 
 
+def active_gids(port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
+    try:
+        result = aria_rpc("aria2.tellActive", port=port, timeout=timeout)
+        return list(result.get("result", []))
+    except Exception:
+        return []
+
+
+def queued_gids(port: int = 6800, offset: int = 0, num: int = 100, timeout: int = 5) -> list[dict[str, Any]]:
+    try:
+        result = aria_rpc("aria2.tellWaiting", [offset, num], port=port, timeout=timeout)
+        return list(result.get("result", []))
+    except Exception:
+        return []
+
+
+def discover_active_transfer(port: int = 6800, timeout: int = 5) -> dict[str, Any] | None:
+    state = load_state()
+    if state.get("active_gid"):
+        try:
+            info = status(state["active_gid"], port=port, timeout=timeout)
+            total = float(info.get("totalLength") or 0)
+            done = float(info.get("completedLength") or 0)
+            percent = round((done / total) * 100, 1) if total else 0
+            return {
+                "gid": state["active_gid"],
+                "url": state.get("active_url"),
+                "status": info.get("status"),
+                "errorCode": info.get("errorCode"),
+                "errorMessage": info.get("errorMessage"),
+                "downloadSpeed": info.get("downloadSpeed"),
+                "completedLength": info.get("completedLength"),
+                "totalLength": info.get("totalLength"),
+                "files": info.get("files"),
+                "percent": percent,
+            }
+        except Exception:
+            pass
+
+    for info in active_gids(port=port, timeout=timeout):
+        gid = info.get("gid")
+        if not gid:
+            continue
+        total = float(info.get("totalLength") or 0)
+        done = float(info.get("completedLength") or 0)
+        percent = round((done / total) * 100, 1) if total else 0
+        return {
+            "gid": gid,
+            "url": state.get("active_url"),
+            "status": info.get("status"),
+            "errorCode": info.get("errorCode"),
+            "errorMessage": info.get("errorMessage"),
+            "downloadSpeed": info.get("downloadSpeed"),
+            "completedLength": info.get("completedLength"),
+            "totalLength": info.get("totalLength"),
+            "files": info.get("files"),
+            "percent": percent,
+            "recovered": True,
+        }
+    return None
+
+
 def aria_status(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     try:
         version = aria_rpc("aria2.getVersion", port=port, timeout=timeout)["result"]["version"]
@@ -334,38 +396,7 @@ def aria_status(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
 
 
 def active_status(port: int = 6800, timeout: int = 5) -> dict[str, Any] | None:
-    state = load_state()
-    gid = state.get("active_gid")
-    if not gid:
-        return None
-    try:
-        info = status(gid, port=port, timeout=timeout)
-    except Exception as exc:
-        return {
-            "gid": gid,
-            "url": state.get("active_url"),
-            "status": "unknown",
-            "errorMessage": str(exc),
-            "downloadSpeed": None,
-            "completedLength": None,
-            "totalLength": None,
-            "percent": 0,
-        }
-    total = float(info.get("totalLength") or 0)
-    done = float(info.get("completedLength") or 0)
-    percent = round((done / total) * 100, 1) if total else 0
-    return {
-        "gid": gid,
-        "url": state.get("active_url"),
-        "status": info.get("status"),
-        "errorCode": info.get("errorCode"),
-        "errorMessage": info.get("errorMessage"),
-        "downloadSpeed": info.get("downloadSpeed"),
-        "completedLength": info.get("completedLength"),
-        "totalLength": info.get("totalLength"),
-        "files": info.get("files"),
-        "percent": percent,
-    }
+    return discover_active_transfer(port=port, timeout=timeout)
 
 
 def set_bandwidth(cap_mbps: int, port: int = 6800, timeout: int = 5) -> None:
@@ -485,21 +516,45 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             break
         if item.get("status") == "done":
             continue
-        item["status"] = "downloading"
-        gid = add_download(item, cap_mbps=cap, port=port)
-        item["gid"] = gid
-        record_action(
-            action="run",
-            target="queue_item",
-            outcome="changed",
-            reason="download_started",
-            before={"item": dict(item)},
-            after={"item": dict(item), "gid": gid, "cap_mbps": cap},
-            detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "cap_mbps": cap},
-        )
-        state["active_gid"] = gid
-        state["active_url"] = item.get("url")
-        save_state(state)
+        gid = item.get("gid")
+        info = None
+        if gid and item.get("status") in {"downloading", "paused"}:
+            try:
+                info = status(gid, port=port, timeout=5)
+                if info.get("status") not in {"complete", "error"}:
+                    record_action(
+                        action="resume",
+                        target="queue_item",
+                        outcome="changed",
+                        reason="adopt_existing_transfer",
+                        before={"item": dict(item)},
+                        after={"item": dict(item), "gid": gid, "adopted": True},
+                        detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "status": info.get("status")},
+                    )
+                    state["active_gid"] = gid
+                    state["active_url"] = item.get("url")
+                    save_state(state)
+                else:
+                    info = None
+            except Exception:
+                info = None
+
+        if info is None:
+            item["status"] = "downloading"
+            gid = add_download(item, cap_mbps=cap, port=port)
+            item["gid"] = gid
+            record_action(
+                action="run",
+                target="queue_item",
+                outcome="changed",
+                reason="download_started",
+                before={"item": dict(item)},
+                after={"item": dict(item), "gid": gid, "cap_mbps": cap},
+                detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "cap_mbps": cap},
+            )
+            state["active_gid"] = gid
+            state["active_url"] = item.get("url")
+            save_state(state)
         while True:
             time.sleep(2)
             if load_state().get("paused"):
@@ -510,7 +565,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 state["active_url"] = item.get("url")
                 save_state(state)
                 break
-            info = status(gid, port=port)
+            info = status(gid, port=port, timeout=5)
             log_transfer_poll(gid=gid, item=item, info=info, cap_mbps=cap)
             if info.get("errorCode") and info["errorCode"] != "0":
                 cap = max(1, int(cap * 0.75))

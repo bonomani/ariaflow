@@ -10,7 +10,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from aria_queue.contracts import preflight, run_ucc
-from aria_queue.core import add_queue_item, load_action_log, probe_bandwidth
+from aria_queue.core import add_queue_item, discover_active_transfer, load_action_log, probe_bandwidth
 from aria_queue.install import install_all, status_all, uninstall_all
 
 
@@ -50,6 +50,14 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertEqual(result["source"], "default")
         self.assertEqual(result["reason"], "probe_unavailable")
         self.assertIn("cap_mbps", result)
+
+    def test_discover_active_transfer_prefers_state_gid(self) -> None:
+        with patch("aria_queue.core.load_state", return_value={"active_gid": "gid-1", "active_url": "https://example.com/a.gguf"}), \
+             patch("aria_queue.core.status", return_value={"status": "active", "completedLength": "10", "totalLength": "100", "downloadSpeed": "5"}):
+            active = discover_active_transfer()
+        self.assertEqual(active["gid"], "gid-1")
+        self.assertEqual(active["status"], "active")
+        self.assertEqual(active["percent"], 10.0)
 
     def test_ucc_returns_structured_result(self) -> None:
         add_queue_item("https://example.com/model.gguf")

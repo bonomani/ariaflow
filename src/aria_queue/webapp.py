@@ -705,10 +705,11 @@ INDEX_HTML = """<!doctype html>
         const activePauseButton = state.paused
           ? `<button class="secondary icon-btn" onclick="resumeQueue()" title="Resume">▶</button>`
           : `<button class="secondary icon-btn" onclick="pauseQueue()" title="Pause">⏸</button>`;
+        const activeRecoveryBadge = active.recovered ? `<span class="badge warn">recovered</span>` : "";
         document.getElementById('active').innerHTML = `
           <div class="transfer-head">
             <div>
-              <div class="transfer-name">${activeName}</div>
+              <div class="transfer-name">${activeName} ${activeRecoveryBadge}</div>
               <div class="transfer-sub">${active.url || "No active download"}</div>
             </div>
             <div class="action-strip">
