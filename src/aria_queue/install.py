@@ -11,6 +11,7 @@ from .platform.launchd import (
     install_aria2_launchd,
     install_ariaflow_launchd,
     is_macos,
+    restart_ariaflow_launchd,
     uninstall_aria2_launchd,
     uninstall_ariaflow_launchd,
 )
@@ -189,6 +190,7 @@ def homebrew_install_ariaflow(dry_run: bool = False) -> list[str]:
         return [" ".join(cmd) for cmd in commands]
     for cmd in commands:
         subprocess.run(cmd, check=True)
+    restart_ariaflow_launchd(dry_run=False)
     return [" ".join(cmd) for cmd in commands]
 
 

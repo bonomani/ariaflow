@@ -164,6 +164,15 @@ def uninstall_ariaflow_launchd(dry_run: bool = False) -> list[str]:
     return commands
 
 
+def restart_ariaflow_launchd(dry_run: bool = False) -> list[str]:
+    commands = [f"launchctl kickstart -k gui/{os.getuid()}/{ARIAFLOW_LABEL}"]
+    if dry_run:
+        return commands
+    if ariaflow_plist_path().exists() or _launchctl_list(ARIAFLOW_LABEL):
+        subprocess.run(["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{ARIAFLOW_LABEL}"], check=False)
+    return commands
+
+
 def uninstall_aria2_launchd(dry_run: bool = False) -> list[str]:
     commands = [f"launchctl unload {aria2_plist_path()}", f"rm -f {aria2_plist_path()}", f"rm -rf {aria2_session_dir()}"]
     if dry_run:
