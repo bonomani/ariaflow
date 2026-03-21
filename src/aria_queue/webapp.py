@@ -333,8 +333,7 @@ INDEX_HTML = """<!doctype html>
             <button onclick="add()">Add to queue</button>
             <button class="secondary" onclick="preflightRun()">Preflight</button>
             <button class="secondary" onclick="runQueue()">Run</button>
-            <button class="secondary" onclick="pauseQueue()">Pause</button>
-            <button class="secondary" onclick="resumeQueue()">Resume</button>
+            <button class="secondary" id="toggle-btn" onclick="toggleQueue()">Pause</button>
           </div>
         </div>
       </div>
@@ -701,10 +700,12 @@ INDEX_HTML = """<!doctype html>
         document.getElementById('chip-speed').textContent = formatRate(active.downloadSpeed || null);
         document.getElementById('chip-cap').textContent = data.bandwidth?.cap_mbps ? formatMbps(data.bandwidth.cap_mbps) : (data.bandwidth?.limit || '-');
         document.getElementById('chip-aria2').textContent = data.aria2?.reachable ? `v${data.aria2.version}` : 'offline';
+        const toggleButton = document.getElementById('toggle-btn');
+        if (toggleButton) toggleButton.textContent = data.state && data.state.paused ? 'Resume' : 'Pause';
         const activeName = shortName(active.url || active.gid || "No active download");
         const activePauseButton = state.paused
-          ? `<button class="secondary icon-btn" onclick="resumeQueue()" title="Resume">▶</button>`
-          : `<button class="secondary icon-btn" onclick="pauseQueue()" title="Pause">⏸</button>`;
+          ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="Resume">▶</button>`
+          : `<button class="secondary icon-btn" onclick="toggleQueue()" title="Pause">⏸</button>`;
         const activeRecoveryBadge = active.recovered ? `<span class="badge warn">recovered</span>` : "";
         document.getElementById('active').innerHTML = `
           <div class="transfer-head">
@@ -776,6 +777,10 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('result').textContent = data.resumed ? "Queue resumed" : "Resume requested";
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
       await refresh();
+    }
+    async function toggleQueue() {
+      const paused = lastStatus?.state?.paused;
+      return paused ? resumeQueue() : pauseQueue();
     }
     async function add() {
       const url = document.getElementById('url').value.trim();
