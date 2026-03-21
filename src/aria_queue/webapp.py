@@ -1023,7 +1023,6 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             result = preflight()
             result["aria2"] = aria_status()
             result["bandwidth"] = current_bandwidth()
-            result["action_log"] = load_action_log()
             record_action(
                 action="preflight",
                 target="system",

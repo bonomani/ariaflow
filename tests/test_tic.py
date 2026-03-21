@@ -51,6 +51,7 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertIn("gates", result)
         self.assertIn("status", result)
         self.assertIn(result["exit_code"], [0, 1])
+        self.assertNotIn("action_log", result)
 
     def test_probe_fallback_reports_reason(self) -> None:
         with patch("aria_queue.core.shutil.which", return_value=None):
