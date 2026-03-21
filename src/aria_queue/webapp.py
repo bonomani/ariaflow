@@ -6,44 +6,39 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-from .contracts import load_declaration, preflight, run_ucc, save_declaration
-from .core import (
+from .api import (
     add_queue_item,
-    active_status,
     active_gids,
-    load_action_log,
+    active_status,
+    auto_preflight_on_run,
     aria_status,
     current_bandwidth,
     current_global_options,
-    format_bytes,
-    format_mbps,
-    format_rate,
     get_active_progress,
+    homebrew_install_ariaflow,
+    homebrew_uninstall_ariaflow,
+    install_aria2_launchd,
+    is_macos,
+    load_action_log,
+    load_declaration,
     load_queue,
     load_state,
     pause_active_transfer,
+    preflight,
     record_action,
     resume_active_transfer,
+    run_ucc,
+    save_declaration,
     save_state,
     start_background_process,
     start_new_state_session,
+    status_all,
     stop_background_process,
     summarize_queue,
-    auto_preflight_on_run,
-)
-from .install import (
-    homebrew_install_ariaflow,
-    homebrew_uninstall_ariaflow,
-    ucc_record,
-    status_all,
-)
-from .platform.launchd import (
-    install_aria2_launchd,
-    install_ariaflow_launchd,
-    is_macos,
     uninstall_aria2_launchd,
-    uninstall_ariaflow_launchd,
+    ucc_record,
 )
+from .core import format_bytes, format_mbps, format_rate
 
 
 STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
@@ -1018,14 +1013,6 @@ INDEX_HTML = """<!doctype html>
             { target: "aria2-launchd", action: "uninstall", label: "Unload" },
           ],
         },
-        {
-          name: "web auto-start",
-          record: data["ariaflow-serve-launchd"],
-          actions: [
-            { target: "ariaflow-serve-launchd", action: "install", label: "Load" },
-            { target: "ariaflow-serve-launchd", action: "uninstall", label: "Unload" },
-          ],
-        },
       ];
       const session = data?.session_id ? `
         <div class="item" style="margin-bottom:12px;">
@@ -1576,32 +1563,6 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                             commands=commands,
                         )
                     }
-                elif target == "ariaflow-serve-launchd" and action == "install":
-                    commands = install_ariaflow_launchd(dry_run=False)
-                    result = {
-                        "ariaflow-serve-launchd": ucc_record(
-                            target="ariaflow-serve-launchd",
-                            observed=True,
-                            outcome="changed",
-                            completion="complete",
-                            reason="install",
-                            detail="ariaflow web UI launchd service installed or queued for installation",
-                            commands=commands,
-                        )
-                    }
-                elif target == "ariaflow-serve-launchd" and action == "uninstall":
-                    commands = uninstall_ariaflow_launchd(dry_run=False)
-                    result = {
-                        "ariaflow-serve-launchd": ucc_record(
-                            target="ariaflow-serve-launchd",
-                            observed=True,
-                            outcome="changed",
-                            completion="complete",
-                            reason="uninstall",
-                            detail="ariaflow web UI launchd removed or queued for removal",
-                            commands=commands,
-                        )
-                    }
                 else:
                     self._send_json({"error": "unsupported_action", "target": target, "action": action}, status=400)
                     return
@@ -1671,10 +1632,5 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         return
 
 
-def serve(host: str = "127.0.0.1", port: int = 8000, connect_headless: bool = True) -> ThreadingHTTPServer:
-    if connect_headless:
-        try:
-            start_background_process()
-        except Exception:
-            pass
+def serve(host: str = "127.0.0.1", port: int = 8000) -> ThreadingHTTPServer:
     return ThreadingHTTPServer((host, port), AriaFlowHandler)

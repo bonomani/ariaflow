@@ -1,6 +1,6 @@
-# aria-queue
+# ariaflow
 
-Cross-platform queue driver for `aria2c` with:
+Headless queue driver for `aria2c` with:
 
 - simple URL enqueueing
 - sequential execution, one download at a time
@@ -10,8 +10,6 @@ Cross-platform queue driver for `aria2c` with:
 - UIC pre-flight checks
 - UCC structured execution output
 - TIC-style tests
-- optional local web frontend
-
 Targets:
 
 - Linux
@@ -26,7 +24,6 @@ ariaflow preflight
 ariaflow run
 ariaflow status
 ariaflow ucc
-ariaflow serve
 ```
 
 You can also run it as a module:
@@ -71,37 +68,12 @@ Define rules later in `config/post-actions.json`.
 
 This is still a minimal compliance layer, not a full framework implementation.
 
-## Web Frontend
-
-The web frontend is optional and intentionally local-only:
-
-- binds to `127.0.0.1` by default
-- serves one page
-- exposes JSON endpoints under `/api/*`
-- keeps `aria2` as the download engine
-- lives in a separate `webapp` module so the core stays headless
-
-Install options:
-
-- `ariaflow install` installs the core backend/frontend package and the required `aria2` dependency
-- `ariaflow install --with-web` also installs the optional web launchd service
-- `ariaflow install --with-aria2` also installs the `aria2` launchd service explicitly if you want to manage it as a separate launch agent
-- `pip install .` installs the headless core
-- `pip install .[web]` installs the same core with the web extra declared
-- `pip install .[launchd]` declares the launchd boundary explicitly for packaging
-
-Run it with:
-
-```bash
-ariaflow serve
-```
-
 ## Homebrew
 
 The intended macOS installation path is a Homebrew tap. The formula's `url`
 points at a versioned upstream archive. The default formula covers the
-`ariaflow` backend/frontend package and expects `aria2` to be present as the
-runtime engine. The optional web launch agent remains separate.
+`ariaflow` headless engine and expects `aria2` to be present as the runtime
+engine.
 When you publish a new version, update:
 
 - the formula `url`

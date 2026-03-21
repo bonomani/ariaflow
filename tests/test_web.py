@@ -31,9 +31,7 @@ class WebSmokeTests(unittest.TestCase):
     def test_local_web_server_smoke(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             os.environ["ARIA_QUEUE_DIR"] = tmp
-            with patch("aria_queue.webapp.start_background_process", return_value={"started": False, "reason": "already_running"}) as start_bg:
-                server = serve(host="127.0.0.1", port=8765)
-            start_bg.assert_called_once()
+            server = serve(host="127.0.0.1", port=8765)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             time.sleep(0.2)
@@ -76,9 +74,7 @@ class WebSmokeTests(unittest.TestCase):
                      patch("aria_queue.webapp.homebrew_install_ariaflow", return_value=["brew tap bonomani/ariaflow", "brew install ariaflow"]), \
                      patch("aria_queue.webapp.homebrew_uninstall_ariaflow", return_value=["brew uninstall ariaflow"]), \
                      patch("aria_queue.webapp.install_aria2_launchd", return_value=["load aria2"]), \
-                     patch("aria_queue.webapp.uninstall_aria2_launchd", return_value=["unload aria2"]), \
-                     patch("aria_queue.webapp.install_ariaflow_launchd", return_value=["load web"]), \
-                     patch("aria_queue.webapp.uninstall_ariaflow_launchd", return_value=["unload web"]):
+                     patch("aria_queue.webapp.uninstall_aria2_launchd", return_value=["unload aria2"]):
                     lifecycle_action = request_json(
                         "http://127.0.0.1:8765/api/lifecycle/action",
                         method="POST",

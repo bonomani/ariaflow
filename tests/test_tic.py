@@ -170,15 +170,9 @@ class TicAriaFlowTests(unittest.TestCase):
         plan = install_all(dry_run=True)
         self.assertIn("ariaflow", plan)
         self.assertIn("aria2-launchd", plan)
-        self.assertNotIn("ariaflow-serve-launchd", plan)
         self.assertEqual(plan["ariaflow"]["meta"]["contract"], "UCC")
         self.assertEqual(plan["ariaflow"]["result"]["observation"], "ok")
         self.assertEqual(plan["ariaflow"]["result"]["outcome"], "changed")
-
-    def test_install_dry_run_with_web_is_describable(self) -> None:
-        plan = install_all(dry_run=True, include_web=True)
-        self.assertIn("ariaflow-serve-launchd", plan)
-        self.assertEqual(plan["ariaflow-serve-launchd"]["result"]["reason"], "install")
 
     def test_install_dry_run_with_aria2_is_describable(self) -> None:
         plan = install_all(dry_run=True, include_aria2=True)
@@ -191,7 +185,6 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertIn("aria2", status)
         self.assertIn("networkquality", status)
         self.assertIn("aria2-launchd", status)
-        self.assertIn("ariaflow-serve-launchd", status)
         self.assertEqual(status["ariaflow"]["meta"]["contract"], "UCC")
         self.assertIn(status["ariaflow"]["result"]["outcome"], ["converged", "unchanged"])
 
@@ -200,27 +193,19 @@ class TicAriaFlowTests(unittest.TestCase):
              patch("aria_queue.install.brew_is_installed", return_value=True), \
              patch("aria_queue.install.brew_package_version", side_effect=["0.1.1-alpha.21", "0.8.2"]), \
              patch("aria_queue.install.networkquality_status", return_value={"installed": True, "usable": True, "version": None, "reason": "ready", "message": "networkquality available"}), \
-             patch("aria_queue.install.aria2_status", return_value={"loaded": True, "plist_exists": True, "session_exists": True, "version": "1.37.0"}), \
-             patch("aria_queue.install.ariaflow_status", return_value={"loaded": True, "plist_exists": True}):
+             patch("aria_queue.install.aria2_status", return_value={"loaded": True, "plist_exists": True, "session_exists": True, "version": "1.37.0"}):
             status = status_all()
         self.assertIn("0.1.1-alpha.21", status["ariaflow"]["result"]["message"])
         self.assertIn("0.8.2", status["aria2"]["result"]["message"])
         self.assertIn("networkquality available", status["networkquality"]["result"]["message"])
         self.assertIn("1.37.0", status["aria2-launchd"]["result"]["message"])
-        self.assertIn("9.9.9", status["ariaflow-serve-launchd"]["result"]["message"])
 
     def test_uninstall_dry_run_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True)
         self.assertIn("ariaflow", plan)
         self.assertIn("aria2-launchd", plan)
-        self.assertNotIn("ariaflow-serve-launchd", plan)
         self.assertEqual(plan["ariaflow"]["meta"]["contract"], "UCC")
         self.assertEqual(plan["ariaflow"]["result"]["reason"], "uninstall")
-
-    def test_uninstall_dry_run_with_web_is_describable(self) -> None:
-        plan = uninstall_all(dry_run=True, include_web=True)
-        self.assertIn("ariaflow-serve-launchd", plan)
-        self.assertEqual(plan["ariaflow-serve-launchd"]["result"]["reason"], "uninstall")
 
     def test_uninstall_dry_run_with_aria2_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True, include_aria2=True)

@@ -7,7 +7,6 @@ from pathlib import Path
 
 
 ARIA2_LABEL = "com.ariaflow.aria2"
-ARIAFLOW_LABEL = "com.ariaflow.serve"
 
 
 def launch_agents_dir() -> Path:
@@ -16,10 +15,6 @@ def launch_agents_dir() -> Path:
 
 def aria2_plist_path() -> Path:
     return launch_agents_dir() / f"{ARIA2_LABEL}.plist"
-
-
-def ariaflow_plist_path() -> Path:
-    return launch_agents_dir() / f"{ARIAFLOW_LABEL}.plist"
 
 
 def aria2_session_dir() -> Path:
@@ -60,13 +55,6 @@ def aria2_status() -> dict[str, bool]:
         "plist_exists": aria2_plist_path().exists(),
         "session_exists": (aria2_session_dir() / "session.txt").exists(),
         "version": version,
-    }
-
-
-def ariaflow_status() -> dict[str, bool]:
-    return {
-        "loaded": _launchctl_list(ARIAFLOW_LABEL),
-        "plist_exists": ariaflow_plist_path().exists(),
     }
 
 
@@ -114,62 +102,6 @@ def install_aria2_launchd(dry_run: bool = False) -> list[str]:
     (aria2_session_dir() / "session.txt").touch(exist_ok=True)
     aria2_plist_path().write_text(plist, encoding="utf-8")
     _launchctl_load(aria2_plist_path())
-    return commands
-
-
-def install_ariaflow_launchd(dry_run: bool = False) -> list[str]:
-    bin_path = shutil.which("ariaflow") or "/opt/homebrew/bin/ariaflow"
-    plist = f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>{ARIAFLOW_LABEL}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>{bin_path}</string>
-    <string>serve</string>
-    <string>--host</string>
-    <string>127.0.0.1</string>
-    <string>--port</string>
-    <string>8000</string>
-  </array>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-</dict>
-</plist>
-"""
-    commands = [
-        f"mkdir -p {launch_agents_dir()}",
-        f"cat > {ariaflow_plist_path()} <<'PLIST'\n{plist}PLIST",
-        f"launchctl bootstrap gui/{os.getuid()} {ariaflow_plist_path()}",
-    ]
-    if dry_run:
-        return commands
-    subprocess.run(["mkdir", "-p", str(launch_agents_dir())], check=True)
-    ariaflow_plist_path().write_text(plist, encoding="utf-8")
-    _launchctl_load(ariaflow_plist_path())
-    return commands
-
-
-def uninstall_ariaflow_launchd(dry_run: bool = False) -> list[str]:
-    commands = [f"launchctl unload {ariaflow_plist_path()}", f"rm -f {ariaflow_plist_path()}"]
-    if dry_run:
-        return commands
-    _launchctl_unload(ariaflow_plist_path())
-    if ariaflow_plist_path().exists():
-        ariaflow_plist_path().unlink()
-    return commands
-
-
-def restart_ariaflow_launchd(dry_run: bool = False) -> list[str]:
-    commands = [f"launchctl kickstart -k gui/{os.getuid()}/{ARIAFLOW_LABEL}"]
-    if dry_run:
-        return commands
-    if ariaflow_plist_path().exists() or _launchctl_list(ARIAFLOW_LABEL):
-        subprocess.run(["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{ARIAFLOW_LABEL}"], check=False)
     return commands
 
 

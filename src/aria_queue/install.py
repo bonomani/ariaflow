@@ -7,13 +7,9 @@ from pathlib import Path
 
 from .platform.launchd import (
     aria2_status,
-    ariaflow_status,
     install_aria2_launchd,
-    install_ariaflow_launchd,
     is_macos,
-    restart_ariaflow_launchd,
     uninstall_aria2_launchd,
-    uninstall_ariaflow_launchd,
 )
 
 
@@ -190,7 +186,6 @@ def homebrew_install_ariaflow(dry_run: bool = False) -> list[str]:
         return [" ".join(cmd) for cmd in commands]
     for cmd in commands:
         subprocess.run(cmd, check=True)
-    restart_ariaflow_launchd(dry_run=False)
     return [" ".join(cmd) for cmd in commands]
 
 
@@ -205,7 +200,6 @@ def homebrew_uninstall_ariaflow(dry_run: bool = False) -> list[str]:
 
 def install_all(
     dry_run: bool = False,
-    include_web: bool = False,
     include_aria2: bool = True,
 ) -> dict[str, dict[str, object]]:
     if not dry_run and not is_macos():
@@ -222,17 +216,6 @@ def install_all(
             commands=ariaflow_cmds,
         ),
     }
-    if include_web:
-        serve_cmds = install_ariaflow_launchd(dry_run=dry_run)
-        plan["ariaflow-serve-launchd"] = ucc_record(
-            target="ariaflow-serve-launchd",
-            observed=True,
-            outcome="changed",
-            completion="complete",
-            reason="install",
-            detail="ariaflow web UI launchd service installed or queued for installation",
-            commands=serve_cmds,
-        )
     if include_aria2:
         aria2_cmds = install_aria2_launchd(dry_run=dry_run)
         plan["aria2-launchd"] = ucc_record(
@@ -255,7 +238,6 @@ def status_all() -> dict[str, dict[str, object]]:
     aria2_version = brew_package_version("aria2")
     aria2 = aria2_status()
     networkquality = networkquality_status()
-    serve = ariaflow_status()
     plan = {
         "ariaflow": ucc_record(
             target="ariaflow",
@@ -302,34 +284,11 @@ def status_all() -> dict[str, dict[str, object]]:
             ),
         ),
     }
-    if serve["loaded"] or serve["plist_exists"]:
-        plan["ariaflow-serve-launchd"] = ucc_record(
-            target="ariaflow-serve-launchd",
-            observed=True,
-            outcome="converged" if serve["loaded"] else "unchanged",
-            completion="complete",
-            reason="match" if serve["loaded"] else "missing",
-            detail=(
-                f"ariaflow web launchd loaded for {current_version}"
-                if serve["loaded"]
-                else f"ariaflow web launchd absent; current production {current_version}"
-            ),
-        )
-    else:
-        plan["ariaflow-serve-launchd"] = ucc_record(
-            target="ariaflow-serve-launchd",
-            observed=True,
-            outcome="skipped",
-            completion="complete",
-            reason="optional",
-            detail=f"ariaflow web UI is optional and not installed by default; current production {current_version}",
-        )
     return plan
 
 
 def uninstall_all(
     dry_run: bool = False,
-    include_web: bool = False,
     include_aria2: bool = True,
 ) -> dict[str, dict[str, object]]:
     if not dry_run and not is_macos():
@@ -345,17 +304,6 @@ def uninstall_all(
             commands=homebrew_uninstall_ariaflow(dry_run=dry_run),
         ),
     }
-    if include_web:
-        serve_cmds = uninstall_ariaflow_launchd(dry_run=dry_run)
-        plan["ariaflow-serve-launchd"] = ucc_record(
-            target="ariaflow-serve-launchd",
-            observed=True,
-            outcome="changed",
-            completion="complete",
-            reason="uninstall",
-            detail="ariaflow web launchd removed or queued for removal",
-            commands=serve_cmds,
-        )
     if include_aria2:
         aria2_cmds = uninstall_aria2_launchd(dry_run=dry_run)
         plan["aria2-launchd"] = ucc_record(

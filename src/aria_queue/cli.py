@@ -33,18 +33,12 @@ def build_parser() -> argparse.ArgumentParser:
     ucc.add_argument("--port", type=int, default=6800)
     ucc.add_argument("--json", action="store_true")
 
-    web = sub.add_parser("serve", help="start the local web UI")
-    web.add_argument("--host", default="127.0.0.1")
-    web.add_argument("--port", type=int, default=8000)
-
     install = sub.add_parser("install", help="install ariaflow on macOS")
     install.add_argument("--dry-run", action="store_true")
-    install.add_argument("--with-web", action="store_true", help="also install the optional web UI launchd service")
     install.add_argument("--with-aria2", action="store_true", help="also install the optional aria2 launchd service")
 
     uninstall = sub.add_parser("uninstall", help="remove installed ariaflow components on macOS")
     uninstall.add_argument("--dry-run", action="store_true")
-    uninstall.add_argument("--with-web", action="store_true", help="also remove the optional web UI launchd service")
     uninstall.add_argument("--with-aria2", action="store_true", help="also remove the optional aria2 launchd service")
 
     lifecycle = sub.add_parser("lifecycle", help="show install and service status")
@@ -98,28 +92,17 @@ def main() -> int:
             print(json.dumps(result["result"], indent=2, sort_keys=True))
         return 0 if result["result"].get("failure_class") is None else 1
 
-    if args.command == "serve":
-        from .webapp import serve
-
-        server = serve(host=args.host, port=args.port)
-        print(f"Serving on http://{args.host}:{args.port}")
-        try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            server.server_close()
-        return 0
-
     if args.command == "install":
         from .install import install_all
 
-        result = install_all(dry_run=args.dry_run, include_web=args.with_web, include_aria2=args.with_aria2)
+        result = install_all(dry_run=args.dry_run, include_aria2=args.with_aria2)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
     if args.command == "uninstall":
         from .install import uninstall_all
 
-        result = uninstall_all(dry_run=args.dry_run, include_web=args.with_web, include_aria2=args.with_aria2)
+        result = uninstall_all(dry_run=args.dry_run, include_aria2=args.with_aria2)
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
