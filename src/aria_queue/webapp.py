@@ -157,6 +157,30 @@ INDEX_HTML = """<!doctype html>
     .statusline strong { color: var(--text); }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
     .declaration { display: grid; gap: 12px; }
+    details.debug {
+      margin-top: 12px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+    details.debug summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 0.9rem;
+      list-style: none;
+    }
+    details.debug summary::-webkit-details-marker { display: none; }
+    .debug-box {
+      margin-top: 10px;
+      padding: 12px;
+      background: rgba(2, 6, 23, 0.65);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 280px;
+      overflow: auto;
+      font-size: 0.9rem;
+    }
     .footer { color: var(--muted); font-size: 0.88rem; margin-top: 10px; }
     @media (max-width: 980px) {
       .hero, .summary { grid-template-columns: 1fr; }
@@ -183,6 +207,12 @@ INDEX_HTML = """<!doctype html>
         <div class="statusline">
           <span>Queue</span>
           <strong id="queue-label">0 items</strong>
+        </div>
+        <div class="summary" style="margin-top:14px;">
+          <div class="metric"><div class="label">Waiting</div><div class="value" id="sum-queued">0</div><div class="sub">queued items</div></div>
+          <div class="metric"><div class="label">Done</div><div class="value" id="sum-done">0</div><div class="sub">completed</div></div>
+          <div class="metric"><div class="label">Errors</div><div class="value" id="sum-error">0</div><div class="sub">failed items</div></div>
+          <div class="metric"><div class="label">Speed</div><div class="value" id="sum-speed">-</div><div class="sub">active transfer</div></div>
         </div>
       </div>
     </div>
@@ -240,6 +270,10 @@ INDEX_HTML = """<!doctype html>
             <div class="hint">Latest action output</div>
           </div>
           <div id="result" class="mono" style="white-space:pre-wrap;word-break:break-word;color:var(--text)">Idle</div>
+          <details class="debug">
+            <summary>Debug JSON</summary>
+            <div id="result-json" class="debug-box">Idle</div>
+          </details>
         </div>
       </div>
       <div class="span-6">
@@ -261,6 +295,11 @@ INDEX_HTML = """<!doctype html>
     </div>
   </div>
   <script>
+    let lastStatus = null;
+    let lastLifecycle = null;
+    let lastResult = null;
+    let lastDeclaration = null;
+
     function badgeClass(status) {
       if (["done", "converged", "ok", "complete"].includes(status)) return "badge good";
       if (["error", "failed", "missing"].includes(status)) return "badge bad";
@@ -305,11 +344,39 @@ INDEX_HTML = """<!doctype html>
         </div>
       `;
     }
+    function renderLifecycleSummary(data) {
+      const items = [
+        ["ariaflow", data.ariaflow],
+        ["aria2", data["aria2-launchd"]],
+        ["web", data["ariaflow-serve-launchd"]],
+      ].map(([name, record]) => {
+        const result = record && record.result ? record.result : {};
+        return `
+          <div class="item">
+            <div class="item-top">
+              <div class="item-url">${name}</div>
+              <span class="${badgeClass(result.outcome)}">${result.outcome || "unknown"}</span>
+            </div>
+            <div class="meta">
+              <span>${result.message || "No details"}</span>
+            </div>
+          </div>
+        `;
+      });
+      return items.join("");
+    }
+    function renderQueueSummary(summary) {
+      document.getElementById('sum-queued').textContent = summary?.queued ?? 0;
+      document.getElementById('sum-done').textContent = summary?.done ?? 0;
+      document.getElementById('sum-error').textContent = summary?.error ?? 0;
+    }
     async function refresh() {
       const r = await fetch('/api/status');
       const data = await r.json();
+      lastStatus = data;
       document.getElementById('queue').innerHTML = (data.items || []).length ? data.items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
       const active = data.active || {status: 'idle'};
+      const speed = active.downloadSpeed || data.state?.download_speed || "-";
       document.getElementById('active').innerHTML = `
         <div class="item">
           <div class="item-top">
@@ -317,7 +384,7 @@ INDEX_HTML = """<!doctype html>
             <span class="${badgeClass(active.status)}">${active.status || "idle"}</span>
           </div>
           <div class="meta">
-            <span>Progress ${(active.percent != null ? active.percent : 0).toFixed ? Number(active.percent || 0).toFixed(0) : (active.percent || 0)}%</span>
+            <span>Progress ${Math.round(Number(active.percent || 0))}%</span>
             ${active.downloadSpeed ? `<span>Speed ${active.downloadSpeed}</span>` : ""}
             ${active.totalLength ? `<span>Total ${active.totalLength}</span>` : ""}
             ${active.completedLength ? `<span>Done ${active.completedLength}</span>` : ""}
@@ -333,58 +400,86 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('mode-label').textContent = data.state && data.state.paused ? 'paused' : (data.state && data.state.running ? 'running' : 'idle');
       document.getElementById('active-label').textContent = active.url || 'none';
       document.getElementById('queue-label').textContent = `${(data.summary && data.summary.total) || 0} item(s)`;
+      document.getElementById('sum-speed').textContent = speed && speed !== "-" ? speed : "-";
+      renderQueueSummary(data.summary);
     }
     async function loadLifecycle() {
       const r = await fetch('/api/lifecycle');
       const data = await r.json();
-      document.getElementById('lifecycle').innerHTML = Object.entries(data).map(([name, record]) => renderLifecycleItem(name, record)).join("");
+      lastLifecycle = data;
+      document.getElementById('lifecycle').innerHTML = renderLifecycleSummary(data);
     }
     async function pauseQueue() {
       const r = await fetch('/api/pause', { method: 'POST' });
-      document.getElementById('result').textContent = JSON.stringify(await r.json(), null, 2);
+      const data = await r.json();
+      lastResult = data;
+      document.getElementById('result').textContent = data.paused ? "Queue paused" : "Queue not paused";
+      document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
       await refresh();
     }
     async function resumeQueue() {
       const r = await fetch('/api/resume', { method: 'POST' });
-      document.getElementById('result').textContent = JSON.stringify(await r.json(), null, 2);
+      const data = await r.json();
+      lastResult = data;
+      document.getElementById('result').textContent = data.paused ? "Queue paused" : "Queue resumed";
+      document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
       await refresh();
     }
     async function add() {
       const url = document.getElementById('url').value.trim();
       const r = await fetch('/api/add', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({url}) });
-      document.getElementById('result').textContent = JSON.stringify(await r.json(), null, 2);
+      const data = await r.json();
+      lastResult = data;
+      document.getElementById('result').textContent = `Queued: ${data.added?.url || url}`;
+      document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
       await refresh();
     }
     async function preflightRun() {
       const r = await fetch('/api/preflight', { method: 'POST' });
-      document.getElementById('result').textContent = JSON.stringify(await r.json(), null, 2);
+      const data = await r.json();
+      lastResult = data;
+      document.getElementById('result').textContent = data.status === 'pass' ? "Preflight passed" : "Preflight needs attention";
+      document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
     }
     async function runQueue() {
       const r = await fetch('/api/run', { method: 'POST' });
-      document.getElementById('result').textContent = JSON.stringify(await r.json(), null, 2);
+      const data = await r.json();
+      lastResult = data;
+      document.getElementById('result').textContent = data.started ? "Queue runner started" : "Queue runner already running";
+      document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
     }
     async function uccRun() {
       const r = await fetch('/api/ucc', { method: 'POST' });
-      document.getElementById('result').textContent = JSON.stringify(await r.json(), null, 2);
+      const data = await r.json();
+      lastResult = data;
+      const outcome = data.result && data.result.outcome ? data.result.outcome : "unknown";
+      document.getElementById('result').textContent = `UCC result: ${outcome}`;
+      document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
       await refresh();
     }
     async function previewInstall() {
       const r = await fetch('/api/lifecycle/install', { method: 'POST' });
-      document.getElementById('lifecycle').innerHTML = Object.entries(await r.json()).map(([name, record]) => renderLifecycleItem(name, record)).join("");
+      lastLifecycle = await r.json();
+      document.getElementById('lifecycle').innerHTML = renderLifecycleSummary(lastLifecycle);
     }
     async function previewUninstall() {
       const r = await fetch('/api/lifecycle/uninstall', { method: 'POST' });
-      document.getElementById('lifecycle').innerHTML = Object.entries(await r.json()).map(([name, record]) => renderLifecycleItem(name, record)).join("");
+      lastLifecycle = await r.json();
+      document.getElementById('lifecycle').innerHTML = renderLifecycleSummary(lastLifecycle);
     }
     async function loadDeclaration() {
       const r = await fetch('/api/declaration');
-      document.getElementById('declaration').value = JSON.stringify(await r.json(), null, 2);
+      lastDeclaration = await r.json();
+      document.getElementById('declaration').value = JSON.stringify(lastDeclaration, null, 2);
     }
     async function saveDeclaration() {
       const value = document.getElementById('declaration').value;
       const parsed = JSON.parse(value);
       const r = await fetch('/api/declaration', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(parsed) });
-      document.getElementById('result').textContent = JSON.stringify(await r.json(), null, 2);
+      const data = await r.json();
+      lastResult = data;
+      document.getElementById('result').textContent = "Declaration saved";
+      document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
     }
     refresh();
     setInterval(refresh, 2000);
