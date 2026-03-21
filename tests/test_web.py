@@ -42,10 +42,13 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertIn("Bandwidth", bandwidth_page)
                 lifecycle_page = urllib.request.urlopen("http://127.0.0.1:8765/lifecycle", timeout=5).read().decode("utf-8")
                 self.assertIn("Lifecycle", lifecycle_page)
+                options_page = urllib.request.urlopen("http://127.0.0.1:8765/options", timeout=5).read().decode("utf-8")
+                self.assertIn("Options", options_page)
                 log_page = urllib.request.urlopen("http://127.0.0.1:8765/log", timeout=5).read().decode("utf-8")
                 self.assertIn("Log", log_page)
                 self.assertIn("action-filter", log_page)
                 self.assertIn("target-filter", log_page)
+                self.assertIn("session-filter", log_page)
                 status = request_json("http://127.0.0.1:8765/api/status")
                 self.assertIn("items", status)
                 self.assertIn("state", status)
@@ -54,9 +57,19 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertIn("items", log_data)
                 declaration = request_json("http://127.0.0.1:8765/api/declaration")
                 self.assertIn("uic", declaration)
+                options = request_json("http://127.0.0.1:8765/api/options")
+                self.assertIn("uic", options)
                 lifecycle = request_json("http://127.0.0.1:8765/api/lifecycle")
                 self.assertIn("ariaflow", lifecycle)
                 self.assertIn("meta", lifecycle["ariaflow"])
+                self.assertIn("session_id", lifecycle)
+                session = request_json(
+                    "http://127.0.0.1:8765/api/session",
+                    method="POST",
+                    payload={"action": "new"},
+                )
+                self.assertTrue(session["ok"])
+                self.assertIn("session", session)
                 with patch("aria_queue.webapp.is_macos", return_value=True), \
                      patch("aria_queue.webapp.homebrew_install_ariaflow", return_value=["brew tap bonomani/ariaflow", "brew install ariaflow"]), \
                      patch("aria_queue.webapp.homebrew_uninstall_ariaflow", return_value=["brew uninstall ariaflow"]), \
@@ -83,6 +96,13 @@ class WebSmokeTests(unittest.TestCase):
                     payload={"url": "https://example.com/file.gguf"},
                 )
                 self.assertEqual(added["added"]["url"], "https://example.com/file.gguf")
+                added_many = request_json(
+                    "http://127.0.0.1:8765/api/add",
+                    method="POST",
+                    payload={"url": "https://example.com/one.gguf\nhttps://example.com/two.gguf"},
+                )
+                self.assertIsInstance(added_many["added"], list)
+                self.assertEqual(len(added_many["added"]), 2)
                 paused = request_json("http://127.0.0.1:8765/api/pause", method="POST")
                 self.assertIn("paused", paused)
                 resumed = request_json("http://127.0.0.1:8765/api/resume", method="POST")

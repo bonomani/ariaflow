@@ -10,6 +10,7 @@ from .contracts import load_declaration, preflight, run_ucc, save_declaration
 from .core import (
     add_queue_item,
     active_status,
+    active_gids,
     load_action_log,
     aria_status,
     current_bandwidth,
@@ -24,6 +25,7 @@ from .core import (
     resume_active_transfer,
     save_state,
     start_background_process,
+    start_new_state_session,
     stop_background_process,
     summarize_queue,
     auto_preflight_on_run,
@@ -45,6 +47,23 @@ from .platform.launchd import (
 
 STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
 STATUS_CACHE_TTL = 2.0
+
+
+def _session_fields() -> dict[str, object]:
+    state = load_state()
+    return {
+        "session_id": state.get("session_id"),
+        "session_started_at": state.get("session_started_at"),
+        "session_last_seen_at": state.get("session_last_seen_at"),
+        "session_closed_at": state.get("session_closed_at"),
+        "session_closed_reason": state.get("session_closed_reason"),
+    }
+
+
+def _lifecycle_payload() -> dict[str, object]:
+    lifecycle = status_all()
+    lifecycle.update(_session_fields())
+    return lifecycle
 
 
 INDEX_HTML = """<!doctype html>
@@ -344,6 +363,7 @@ INDEX_HTML = """<!doctype html>
     body.page-dashboard .show-dashboard,
     body.page-bandwidth .show-bandwidth,
     body.page-lifecycle .show-lifecycle,
+    body.page-options .show-options,
     body.page-log .show-log { display: block; }
     @media (max-width: 980px) {
       .hero, .summary { grid-template-columns: 1fr; }
@@ -358,6 +378,7 @@ INDEX_HTML = """<!doctype html>
       <a href="/" data-page="dashboard">Dashboard</a>
       <a href="/bandwidth" data-page="bandwidth">Bandwidth</a>
       <a href="/lifecycle" data-page="lifecycle">Lifecycle</a>
+      <a href="/options" data-page="options">Options</a>
       <a href="/log" data-page="log">Log</a>
       <div class="spacer"></div>
       <label class="refresh-control" for="refresh-interval">
@@ -388,6 +409,7 @@ INDEX_HTML = """<!doctype html>
           <div class="chip">Runner <strong id="chip-runner">idle</strong></div>
           <div class="chip">Cap <strong id="chip-cap">-</strong></div>
           <div class="chip">Last issue <strong id="chip-error">none</strong></div>
+        <div class="chip">Batch <strong id="chip-session">-</strong></div>
         </div>
         <div class="summary" style="margin-top:10px;">
           <div class="metric"><div class="label">Waiting</div><div class="value" id="sum-queued">0</div><div class="sub">queued items</div></div>
@@ -400,7 +422,7 @@ INDEX_HTML = """<!doctype html>
       <div class="span-12 show-dashboard page-only">
         <div class="panel toolbar">
           <div class="row">
-            <input id="url" placeholder="Paste download URL">
+            <textarea id="url" rows="3" placeholder="Paste one or more URLs, one per line"></textarea>
             <button onclick="add()">Add to queue</button>
           </div>
         </div>
@@ -426,7 +448,7 @@ INDEX_HTML = """<!doctype html>
         <div class="panel">
           <div class="section-title">
             <h2>Queue</h2>
-            <div class="hint">One download at a time</div>
+            <div class="hint">Multiple items supported; live transfer shown in the row</div>
           </div>
           <div id="queue" class="list">Loading...</div>
         </div>
@@ -461,12 +483,29 @@ INDEX_HTML = """<!doctype html>
         <div class="panel">
           <div class="section-title">
             <h2>Lifecycle</h2>
-            <div class="hint">Installed, current, and autostart state</div>
+            <div class="hint">Installed, current, autostart, and updater state</div>
           </div>
           <div class="row" style="margin-bottom:12px;">
             <button class="secondary" onclick="loadLifecycle()">Refresh lifecycle</button>
+            <button class="secondary" onclick="newSession()">Start new batch</button>
+          </div>
+          <div class="item" style="margin-bottom:12px;">
+            <div class="item-top">
+              <div class="item-url">Update policy</div>
+              <span class="badge">Homebrew tap</span>
+            </div>
+            <div class="meta"><span>ariaflow updates are applied through the Homebrew tap, not in-place by the running app.</span></div>
           </div>
           <div id="lifecycle" class="list">Loading...</div>
+        </div>
+      </div>
+      <div class="span-6 show-options page-only">
+        <div class="panel">
+          <div class="section-title">
+            <h2>Options</h2>
+            <div class="hint">Operator policies and toggles</div>
+          </div>
+          <div class="list" id="options-panel">Loading...</div>
         </div>
       </div>
       <div class="span-6 show-log page-only">
@@ -520,6 +559,10 @@ INDEX_HTML = """<!doctype html>
               <option value="queue_item">Queue item</option>
               <option value="active_transfer">Active transfer</option>
               <option value="system">System</option>
+            </select>
+            <select id="session-filter" onchange="refreshActionLog()">
+              <option value="all">All sessions</option>
+              <option value="current" selected>Current batch</option>
             </select>
           </div>
           <div id="action-log" class="list">Loading...</div>
@@ -610,6 +653,60 @@ INDEX_HTML = """<!doctype html>
       const pref = prefs.find((item) => item.name === name);
       return pref ? pref.value : undefined;
     }
+    function renderOptionCard(title, value, hint, widget) {
+      return `
+        <div class="item">
+          <div class="item-top">
+            <div class="item-url">${title}</div>
+            ${widget || `<span class="badge">${value ?? '-'}</span>`}
+          </div>
+          <div class="meta"><span>${hint}</span></div>
+        </div>
+      `;
+    }
+    function renderOptionsPanel(declaration) {
+      const prefs = declaration?.uic?.preferences || [];
+      const autoPreflight = prefs.find((item) => item.name === 'auto_preflight_on_run');
+      const dedup = prefs.find((item) => item.name === 'duplicate_active_transfer_action');
+      const concurrency = prefs.find((item) => item.name === 'max_simultaneous_downloads');
+      const postAction = prefs.find((item) => item.name === 'post_action_rule');
+      return [
+        renderOptionCard(
+          'Auto preflight',
+          autoPreflight?.value ? 'enabled' : 'disabled',
+          'Run UIC preflight automatically before starting the queue.',
+          `<label class="refresh-control"><input type="checkbox" ${autoPreflight?.value ? 'checked' : ''} onchange="setAutoPreflightPreference(this.checked)">Toggle</label>`
+        ),
+        renderOptionCard(
+          'Duplicate active transfer',
+          dedup?.value || 'pause',
+          'When aria2 exposes duplicate active jobs for the same URL, choose the action.',
+          `<select onchange="setDuplicateAction(this.value)">
+            <option value="pause" ${dedup?.value === 'pause' ? 'selected' : ''}>Pause duplicates</option>
+            <option value="remove" ${dedup?.value === 'remove' ? 'selected' : ''}>Remove duplicates</option>
+            <option value="ignore" ${dedup?.value === 'ignore' ? 'selected' : ''}>Ignore duplicates</option>
+          </select>`
+        ),
+        renderOptionCard(
+          'Simultaneous downloads',
+          Number(concurrency?.value || 0) === 0 ? 'unlimited' : `${concurrency?.value || 0} jobs`,
+          'Limit how many downloads ariaflow may keep active at once. Use 0 for no limit.',
+          `<label class="refresh-control" style="justify-content:flex-start;">
+            <span>Max</span>
+            <input type="number" min="0" step="1" value="${Number(concurrency?.value || 0)}" oninput="setSimultaneousLimit(this.value)" style="width:110px; padding:0 8px; height:32px;">
+            <span>jobs</span>
+          </label>`
+        ),
+        renderOptionCard(
+          'Post-action rule',
+          postAction?.value || 'pending',
+          'Placeholder policy used after a download finishes.',
+          `<select onchange="setPostActionRule(this.value)">
+            <option value="pending" ${postAction?.value === 'pending' ? 'selected' : ''}>Pending</option>
+          </select>`
+        ),
+      ].join('');
+    }
     async function setAutoPreflightPreference(enabled) {
       const r = await fetch('/api/declaration');
       const data = await r.json();
@@ -622,6 +719,54 @@ INDEX_HTML = """<!doctype html>
       data.uic.preferences = prefs;
       const save = await fetch('/api/declaration', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
       lastDeclaration = await save.json();
+      const options = document.getElementById('options-panel');
+      if (options) options.innerHTML = renderOptionsPanel(lastDeclaration);
+    }
+    async function setDuplicateAction(value) {
+      const r = await fetch('/api/declaration');
+      const data = await r.json();
+      const prefs = Array.isArray(data?.uic?.preferences) ? data.uic.preferences : [];
+      const idx = prefs.findIndex((item) => item.name === 'duplicate_active_transfer_action');
+      const next = { name: 'duplicate_active_transfer_action', value: value, options: ['pause', 'remove', 'ignore'], rationale: 'default dedup policy' };
+      if (idx >= 0) prefs[idx] = next;
+      else prefs.push(next);
+      data.uic = data.uic || {};
+      data.uic.preferences = prefs;
+      const save = await fetch('/api/declaration', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      lastDeclaration = await save.json();
+      const options = document.getElementById('options-panel');
+      if (options) options.innerHTML = renderOptionsPanel(lastDeclaration);
+    }
+    async function setSimultaneousLimit(value) {
+      const r = await fetch('/api/declaration');
+      const data = await r.json();
+      const prefs = Array.isArray(data?.uic?.preferences) ? data.uic.preferences : [];
+      const idx = prefs.findIndex((item) => item.name === 'max_simultaneous_downloads');
+      const limit = Math.max(0, parseInt(value, 10) || 0);
+      const next = { name: 'max_simultaneous_downloads', value: limit, options: [0], rationale: '0 means unlimited' };
+      if (idx >= 0) prefs[idx] = next;
+      else prefs.push(next);
+      data.uic = data.uic || {};
+      data.uic.preferences = prefs;
+      const save = await fetch('/api/declaration', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      lastDeclaration = await save.json();
+      const options = document.getElementById('options-panel');
+      if (options) options.innerHTML = renderOptionsPanel(lastDeclaration);
+    }
+    async function setPostActionRule(value) {
+      const r = await fetch('/api/declaration');
+      const data = await r.json();
+      const prefs = Array.isArray(data?.uic?.preferences) ? data.uic.preferences : [];
+      const idx = prefs.findIndex((item) => item.name === 'post_action_rule');
+      const next = { name: 'post_action_rule', value: value, options: ['pending'], rationale: 'default placeholder' };
+      if (idx >= 0) prefs[idx] = next;
+      else prefs.push(next);
+      data.uic = data.uic || {};
+      data.uic.preferences = prefs;
+      const save = await fetch('/api/declaration', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      lastDeclaration = await save.json();
+      const options = document.getElementById('options-panel');
+      if (options) options.innerHTML = renderOptionsPanel(lastDeclaration);
     }
     function setRefreshInterval(value) {
       refreshInterval = Number(value) || 0;
@@ -690,21 +835,27 @@ INDEX_HTML = """<!doctype html>
       if (state?.running) return name;
       return "none";
     }
+    function sessionLabel(state) {
+      if (state?.session_id && !state?.session_closed_at) return `current ${String(state.session_id).slice(0, 8)}`;
+      if (state?.session_id && state?.session_closed_at) return `closed ${String(state.session_id).slice(0, 8)}`;
+      return "-";
+    }
     function enrichQueueItems(items, active, state) {
-      const live = active && active.gid ? {
-        percent: active.percent,
-        downloadSpeed: active.downloadSpeed,
-        totalLength: active.totalLength,
-        completedLength: active.completedLength,
-        errorMessage: active.errorMessage,
-        recovered: active.recovered,
-        url: active.url,
-        status: active.status,
-        gid: active.gid,
-      } : null;
+      const liveItems = Array.isArray(active) ? active : (active ? [active] : []);
       return (items || []).map((item) => {
-        const matchesActive = live && (item.gid === active.gid || (state?.active_gid && item.gid === state.active_gid));
-        if (!matchesActive) return item;
+        const matches = liveItems.find((live) => live && (item.gid === live.gid || (state?.active_gid && item.gid === state.active_gid) || (item.url && live.url && item.url === live.url)));
+        if (!matches) return item;
+        const live = {
+          percent: matches.percent,
+          downloadSpeed: matches.downloadSpeed,
+          totalLength: matches.totalLength,
+          completedLength: matches.completedLength,
+          errorMessage: matches.errorMessage,
+          recovered: matches.recovered,
+          url: matches.url,
+          status: matches.status,
+          gid: matches.gid,
+        };
         return { ...item, live, url: item.url || live.url };
       });
     }
@@ -789,6 +940,19 @@ INDEX_HTML = """<!doctype html>
         if (reason === "missing") return "absent";
         return result.outcome || "unknown";
       }
+      if (name === "aria2") {
+        if (reason === "match") return "installed · current";
+        if (reason === "missing") return "absent";
+        return result.outcome || "unknown";
+      }
+      if (name === "networkquality") {
+        if (reason === "ready") return "installed · usable";
+        if (reason === "timeout") return "installed · slow";
+        if (reason === "no_output") return "installed · no parse";
+        if (reason === "missing") return "absent";
+        if (reason === "error") return "installed · error";
+        return result.outcome || "unknown";
+      }
       if (reason === "match") return "loaded";
       if (reason === "missing") return "not loaded";
       return result.outcome || "unknown";
@@ -828,6 +992,16 @@ INDEX_HTML = """<!doctype html>
           ],
         },
         {
+          name: "aria2",
+          record: data.aria2,
+          actions: [],
+        },
+        {
+          name: "networkquality",
+          record: data.networkquality,
+          actions: [],
+        },
+        {
           name: "aria2 auto-start",
           record: data["aria2-launchd"],
           actions: [
@@ -844,7 +1018,21 @@ INDEX_HTML = """<!doctype html>
           ],
         },
       ];
-      return rows.map((row) => renderLifecycleItem(row.name, row.record, row.actions)).join("");
+      const session = data?.session_id ? `
+        <div class="item" style="margin-bottom:12px;">
+          <div class="item-top">
+            <div class="item-url">Batch</div>
+            <span class="badge ${data.session_closed_at ? 'warn' : 'good'}">${data.session_closed_at ? 'closed' : 'current'}</span>
+          </div>
+          <div class="meta"><span class="mono">${data.session_id}</span></div>
+          <div class="meta">
+            <span>${data.session_started_at ? `Started ${data.session_started_at}` : 'Start time unknown'}</span>
+            <span>${data.session_last_seen_at ? `Last seen ${data.session_last_seen_at}` : 'Last seen unknown'}</span>
+            ${data.session_closed_at ? `<span>Closed ${data.session_closed_at}${data.session_closed_reason ? ` · ${data.session_closed_reason}` : ''}</span>` : ""}
+          </div>
+        </div>
+      ` : "";
+      return `${session}${rows.map((row) => renderLifecycleItem(row.name, row.record, row.actions)).join("")}`;
     }
     function renderQueueSummary(summary) {
       document.getElementById('sum-queued').textContent = summary?.queued ?? 0;
@@ -910,15 +1098,19 @@ INDEX_HTML = """<!doctype html>
       if (!entries || !entries.length) return "<div class='item'>No action log yet.</div>";
       const currentFilter = document.getElementById('action-filter')?.value || 'all';
       const currentTarget = document.getElementById('target-filter')?.value || 'all';
+      const currentSession = document.getElementById('session-filter')?.value || 'all';
+      const sessionId = lastStatus?.state?.session_id || lastLifecycle?.session_id || lastDeclaration?.session_id || null;
       return entries
         .filter((entry) => currentFilter === 'all' ? true : (entry.action || 'unknown') === currentFilter)
         .filter((entry) => currentTarget === 'all' ? true : (entry.target || 'unknown') === currentTarget)
+        .filter((entry) => currentSession === 'all' ? true : (currentSession === 'current' ? (sessionId ? entry.session_id === sessionId : false) : true))
         .slice()
         .reverse()
         .map((entry) => {
         const status = entry.outcome || entry.status || "unknown";
         const lines = [
           entry.timestamp ? `At ${entry.timestamp}` : null,
+          entry.session_id ? `Session: ${entry.session_id}` : null,
           entry.action ? `Action: ${entry.action}` : null,
           entry.target ? `Target: ${entry.target}` : null,
           entry.reason ? `Reason: ${entry.reason}` : null,
@@ -947,13 +1139,15 @@ INDEX_HTML = """<!doctype html>
         const data = await r.json();
         lastStatus = data;
         const active = data.active || {status: 'idle'};
+        const actives = Array.isArray(data.actives) ? data.actives : (data.active ? [data.active] : []);
         const speed = active.downloadSpeed || data.state?.download_speed || null;
         const state = data.state || {};
-        const items = enrichQueueItems(data.items || [], active, state);
+        const items = enrichQueueItems(data.items || [], actives, state);
         document.getElementById('queue').innerHTML = items.length ? items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
         document.getElementById('chip-error').textContent = state.last_error || data.bandwidth?.reason || 'none';
         document.getElementById('chip-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || data.bandwidth_global?.limit || '-');
         document.getElementById('chip-runner').textContent = data.state && data.state.running ? 'running' : 'idle';
+        document.getElementById('chip-session').textContent = sessionLabel(state);
         const toggleButton = document.getElementById('toggle-btn');
         if (toggleButton) toggleButton.textContent = data.state && data.state.paused ? 'Resume' : 'Pause';
         const runnerButton = document.getElementById('runner-btn');
@@ -1007,11 +1201,16 @@ INDEX_HTML = """<!doctype html>
       return paused ? resumeQueue() : pauseQueue();
     }
     async function add() {
-      const url = document.getElementById('url').value.trim();
-      const r = await fetch('/api/add', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({url}) });
+      const raw = document.getElementById('url').value.trim();
+      const urls = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const payload = urls.length > 1 ? { urls } : { url: urls[0] || "" };
+      const r = await fetch('/api/add', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       const data = await r.json();
       lastResult = data;
-      document.getElementById('result').textContent = `Queued: ${data.added?.url || url}`;
+      const queued = Array.isArray(data.added) ? data.added.length : (data.added ? 1 : 0);
+      document.getElementById('result').textContent = queued > 1
+        ? `Queued ${queued} items`
+        : `Queued: ${data.added?.url || urls[0] || raw}`;
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
       await refresh();
     }
@@ -1062,6 +1261,20 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('result').textContent = `${target} ${action} requested`;
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
     }
+    async function newSession() {
+      const r = await fetch('/api/session', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ action: 'new' }),
+      });
+      const data = await r.json();
+      lastResult = data;
+      document.getElementById('result').textContent = data.ok ? 'New session started' : 'Session change requested';
+      document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
+      await refresh();
+      if (page === 'lifecycle') loadLifecycle();
+      if (page === 'log') refreshActionLog();
+    }
     async function loadDeclaration() {
       const r = await fetch('/api/declaration');
       lastDeclaration = await r.json();
@@ -1069,6 +1282,10 @@ INDEX_HTML = """<!doctype html>
       if (declarationBox) declarationBox.value = JSON.stringify(lastDeclaration, null, 2);
       const checkbox = document.getElementById('auto-preflight');
       if (checkbox) checkbox.checked = !!getDeclarationPreference('auto_preflight_on_run');
+      const options = document.getElementById('options-panel');
+      if (options) options.innerHTML = renderOptionsPanel(lastDeclaration);
+      const limit = document.querySelector('input[oninput="setSimultaneousLimit(this.value)"]');
+      if (limit) limit.value = String(getDeclarationPreference('max_simultaneous_downloads') ?? 0);
     }
     async function saveDeclaration() {
       const value = document.getElementById('declaration').value;
@@ -1081,17 +1298,21 @@ INDEX_HTML = """<!doctype html>
     }
     async function refreshActionLog() {
       if (page !== 'log') return;
+      const sessionFilter = document.getElementById('session-filter');
+      if (sessionFilter && !sessionFilter.value) sessionFilter.value = 'current';
       const r = await fetch('/api/log?limit=120');
       const data = await r.json();
       const actionLog = document.getElementById('action-log');
       if (actionLog) actionLog.innerHTML = renderActionLog(data.items || []);
     }
     document.getElementById('action-filter')?.addEventListener('change', refreshActionLog);
+    document.getElementById('session-filter')?.addEventListener('change', refreshActionLog);
     initTheme();
     syncRefreshControl();
     refresh();
     setRefreshInterval(refreshInterval || 2000);
     if (page === 'lifecycle') loadLifecycle();
+    if (page === 'options') loadDeclaration();
     if (page === 'log') {
       loadDeclaration();
       refreshActionLog();
@@ -1131,6 +1352,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         active = active_status(timeout=3)
         if active:
             payload["active"] = active
+        actives = active_gids(timeout=3)
+        if actives:
+            payload["actives"] = actives
         STATUS_CACHE["ts"] = now
         STATUS_CACHE["payload"] = payload
         return payload
@@ -1146,7 +1370,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = parsed.path
-        if path in {"/", "/index.html", "/bandwidth", "/lifecycle", "/log"}:
+        if path in {"/", "/index.html", "/bandwidth", "/lifecycle", "/options", "/log"}:
             body = INDEX_HTML.encode("utf-8")
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -1169,8 +1393,11 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if path == "/api/declaration":
             self._send_json(load_declaration())
             return
+        if path == "/api/options":
+            self._send_json(load_declaration())
+            return
         if path == "/api/lifecycle":
-            self._send_json(status_all())
+            self._send_json(_lifecycle_payload())
             return
         self._send_json({"error": "not_found"}, status=404)
 
@@ -1181,13 +1408,18 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         payload = json.loads(raw or "{}")
 
         if path == "/api/add":
-            url = payload.get("url", "").strip()
-            if not url:
+            raw_urls = payload.get("urls")
+            if isinstance(raw_urls, list):
+                urls = [str(url).strip() for url in raw_urls if str(url).strip()]
+            else:
+                raw_url = str(payload.get("url", "")).strip()
+                urls = [line.strip() for line in raw_url.splitlines() if line.strip()]
+            if not urls:
                 self._send_json({"error": "missing_url"}, status=400)
                 return
-            item = add_queue_item(url)
+            added = [add_queue_item(url).__dict__ for url in urls]
             self._invalidate_status_cache()
-            self._send_json({"added": item.__dict__})
+            self._send_json({"added": added[0] if len(added) == 1 else added})
             return
 
         if path == "/api/preflight":
@@ -1385,7 +1617,29 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 detail={"target": target, "action": action, "result": result},
             )
             self._invalidate_status_cache()
-            self._send_json({"ok": True, "target": target, "action": action, "lifecycle": status_all(), "result": result})
+            self._send_json({"ok": True, "target": target, "action": action, "lifecycle": _lifecycle_payload(), "result": result})
+            return
+
+        if path == "/api/session":
+            action = str(payload.get("action", "")).strip()
+            if action != "new":
+                self._send_json({"error": "unsupported_action", "action": action}, status=400)
+                return
+            before = {"state": load_state(), "queue": summarize_queue(load_queue())}
+            state = start_new_state_session(reason="manual_new_session")
+            self._invalidate_status_cache()
+            after = {"state": load_state(), "queue": summarize_queue(load_queue())}
+            result = {"ok": True, "session": state}
+            record_action(
+                action="session",
+                target="system",
+                outcome="changed",
+                reason="new_session",
+                before=before,
+                after=after,
+                detail={"session_id": state.get("session_id"), "session_started_at": state.get("session_started_at")},
+            )
+            self._send_json(result)
             return
 
         if path == "/api/pause":

@@ -17,7 +17,9 @@ DEFAULT_DECLARATION = {
         ],
         "preferences": [
             {"name": "post_action_rule", "value": "pending", "options": ["pending"], "rationale": "default placeholder"},
-            {"name": "auto_preflight_on_run", "value": False, "options": [True, False], "rationale": "default off"}
+            {"name": "auto_preflight_on_run", "value": False, "options": [True, False], "rationale": "default off"},
+            {"name": "duplicate_active_transfer_action", "value": "pause", "options": ["pause", "remove", "ignore"], "rationale": "default dedup policy"},
+            {"name": "max_simultaneous_downloads", "value": 0, "options": [0], "rationale": "0 means unlimited"}
         ],
         "policies": [],
     },

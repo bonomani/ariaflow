@@ -41,18 +41,41 @@ def ensure_storage() -> None:
 def read_json(path: Path, default: Any) -> Any:
     if not path.exists():
         return default
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        time.sleep(0.05)
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return default
 
 
 def write_json(path: Path, value: Any) -> None:
     ensure_storage()
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        tmp.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        tmp.replace(path)
+    except FileNotFoundError:
+        return
 
 
 def append_action_log(entry: dict[str, Any]) -> None:
     ensure_storage()
     payload = dict(entry)
     payload.setdefault("timestamp", time.strftime("%Y-%m-%dT%H:%M:%S%z"))
+    try:
+        state = load_state()
+        session_id = state.get("session_id")
+    except Exception:
+        state = None
+        session_id = None
+    if session_id:
+        payload.setdefault("session_id", session_id)
+        if state is not None:
+            state["session_last_seen_at"] = payload["timestamp"]
+            save_state(state)
     with action_log_path().open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(payload, sort_keys=True) + "\n")
 
@@ -138,7 +161,18 @@ def log_transfer_poll(
 def load_state() -> dict[str, Any]:
     return read_json(
         state_path(),
-        {"paused": False, "active_gid": None, "active_url": None, "running": False, "stop_requested": False},
+        {
+            "paused": False,
+            "active_gid": None,
+            "active_url": None,
+            "running": False,
+            "stop_requested": False,
+            "session_id": None,
+            "session_started_at": None,
+            "session_last_seen_at": None,
+            "session_closed_at": None,
+            "session_closed_reason": None,
+        },
     )
 
 
@@ -146,13 +180,58 @@ def save_state(state: dict[str, Any]) -> None:
     write_json(state_path(), state)
 
 
-def start_background_process(port: int = 6800) -> dict[str, Any]:
+def ensure_state_session() -> dict[str, Any]:
     state = load_state()
+    if not state.get("session_id") or state.get("session_closed_at"):
+        state["session_id"] = str(uuid4())
+        state["session_started_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        state["session_last_seen_at"] = state["session_started_at"]
+        state["session_closed_at"] = None
+        state["session_closed_reason"] = None
+        save_state(state)
+    return state
+
+
+def touch_state_session() -> dict[str, Any]:
+    state = load_state()
+    if state.get("session_id"):
+        state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        save_state(state)
+    return state
+
+
+def close_state_session(reason: str = "closed") -> dict[str, Any]:
+    state = load_state()
+    if state.get("session_id") and not state.get("session_closed_at"):
+        now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        state["session_closed_at"] = now
+        state["session_closed_reason"] = reason
+        state["session_last_seen_at"] = now
+        save_state(state)
+    return state
+
+
+def start_new_state_session(reason: str = "manual_new_session") -> dict[str, Any]:
+    close_state_session(reason=reason)
+    state = load_state()
+    state["session_id"] = str(uuid4())
+    now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    state["session_started_at"] = now
+    state["session_last_seen_at"] = now
+    state["session_closed_at"] = None
+    state["session_closed_reason"] = None
+    save_state(state)
+    return state
+
+
+def start_background_process(port: int = 6800) -> dict[str, Any]:
+    state = ensure_state_session()
     if state.get("running"):
         return {"started": False, "reason": "already_running"}
 
     state["stop_requested"] = False
     state["running"] = True
+    state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     save_state(state)
 
     def _runner() -> None:
@@ -205,6 +284,7 @@ def stop_background_process(port: int = 6800) -> dict[str, Any]:
                     break
             save_queue(items)
     after = {"state": load_state(), "queue": summarize_queue(load_queue())}
+    close_state_session(reason="stop_requested")
     record_action(
         action="stop",
         target="queue",
@@ -226,6 +306,7 @@ class QueueItem:
     status: str = "queued"
     created_at: str = ""
     gid: str | None = None
+    session_id: str | None = None
     error_code: str | None = None
     error_message: str | None = None
 
@@ -264,10 +345,139 @@ def find_queue_item_by_gid(gid: str) -> dict[str, Any] | None:
     return None
 
 
+def dedup_active_transfer_action() -> str:
+    from .contracts import load_declaration
+
+    declaration = load_declaration()
+    for pref in declaration.get("uic", {}).get("preferences", []):
+        if pref.get("name") == "duplicate_active_transfer_action":
+            value = str(pref.get("value", "pause")).strip().lower()
+            if value in {"pause", "remove", "ignore"}:
+                return value
+    return "pause"
+
+
+def max_simultaneous_downloads() -> int:
+    from .contracts import load_declaration
+
+    declaration = load_declaration()
+    for pref in declaration.get("uic", {}).get("preferences", []):
+        if pref.get("name") == "max_simultaneous_downloads":
+            try:
+                value = int(pref.get("value", 0))
+            except (TypeError, ValueError):
+                return 0
+            return max(0, value)
+    return 0
+
+
+def _active_item_url(info: dict[str, Any]) -> str | None:
+    files = info.get("files") or []
+    if not files:
+        return None
+    first = files[0] if isinstance(files, list) and files else None
+    if not isinstance(first, dict):
+        return None
+    uris = first.get("uris") or []
+    if isinstance(uris, list):
+        for uri_info in uris:
+            if isinstance(uri_info, dict) and uri_info.get("uri"):
+                return str(uri_info["uri"])
+    if first.get("path"):
+        return str(first["path"])
+    return None
+
+
+def _queue_item_for_active_info(info: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, Any] | None:
+    gid = str(info.get("gid") or "")
+    url = _active_item_url(info)
+    session_id = load_state().get("session_id")
+    candidates = [item for item in items if item.get("status") not in {"done", "error"}]
+    if session_id:
+        candidates = [item for item in candidates if not item.get("session_id") or item.get("session_id") == session_id]
+    if gid:
+        for item in candidates:
+            if item.get("gid") == gid:
+                return item
+    if url:
+        for item in candidates:
+            if item.get("url") == url:
+                return item
+        url_tail = url.split("?")[0].rstrip("/").split("/")[-1]
+        if url_tail:
+            for item in candidates:
+                current = str(item.get("url") or "")
+                if current and (current == url or current.split("?")[0].rstrip("/").split("/")[-1] == url_tail):
+                    return item
+    return None
+
+
+def deduplicate_active_transfers(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
+    active = active_gids(port=port, timeout=timeout)
+    if len(active) < 2:
+        return {"changed": False, "kept": [], "paused": []}
+    action = dedup_active_transfer_action()
+    if action == "ignore":
+        return {"changed": False, "kept": [str(info.get("gid") or "") for info in active if info.get("gid")], "paused": []}
+
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for info in active:
+        url = _active_item_url(info) or str(info.get("gid") or "")
+        if not url:
+            continue
+        grouped.setdefault(url, []).append(info)
+
+    kept: list[str] = []
+    paused: list[str] = []
+    changed = False
+    for url, jobs in grouped.items():
+        if len(jobs) < 2:
+            continue
+        ranked = sorted(
+            jobs,
+            key=lambda info: (
+                float(info.get("completedLength") or 0) / max(float(info.get("totalLength") or 1), 1.0),
+                float(info.get("completedLength") or 0),
+                float(info.get("downloadSpeed") or 0),
+            ),
+            reverse=True,
+        )
+        keeper = ranked[0]
+        keeper_gid = str(keeper.get("gid") or "")
+        if keeper_gid:
+            kept.append(keeper_gid)
+        for duplicate in ranked[1:]:
+            gid = str(duplicate.get("gid") or "")
+            if not gid:
+                continue
+            try:
+                if action == "remove":
+                    aria_rpc("aria2.remove", [gid], port=port, timeout=timeout)
+                else:
+                    aria_rpc("aria2.pause", [gid], port=port, timeout=timeout)
+                paused.append(gid)
+                changed = True
+            except Exception:
+                continue
+    if changed:
+        record_action(
+            action="deduplicate",
+            target="active_transfer",
+            outcome="changed",
+            reason="duplicate_active_transfer",
+            before={"active": [info.get("gid") for info in active]},
+            after={"kept": kept, "paused": paused, "action": action},
+            detail={"kept": kept, "paused": paused, "group_count": len(grouped), "action": action},
+        )
+    return {"changed": changed, "kept": kept, "paused": paused, "action": action}
+
+
 def add_queue_item(url: str, output: str | None = None, post_action_rule: str = "pending") -> QueueItem:
     from .contracts import load_declaration
 
     ensure_storage()
+    state = ensure_state_session()
+    touch_state_session()
     items = load_queue()
     before = {"summary": summarize_queue(items)}
     existing = next((item for item in items if item.get("url") == url and item.get("status") != "error"), None)
@@ -289,6 +499,7 @@ def add_queue_item(url: str, output: str | None = None, post_action_rule: str = 
             status=existing.get("status", "queued"),
             created_at=existing.get("created_at", ""),
             gid=existing.get("gid"),
+            session_id=existing.get("session_id") or state.get("session_id"),
             error_code=existing.get("error_code"),
             error_message=existing.get("error_message"),
         )
@@ -301,6 +512,7 @@ def add_queue_item(url: str, output: str | None = None, post_action_rule: str = 
         output=output,
         post_action_rule=post_action_rule or default_rule,
         created_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        session_id=state.get("session_id"),
     )
     items.append(asdict(item))
     save_queue(items)
@@ -318,6 +530,10 @@ def add_queue_item(url: str, output: str | None = None, post_action_rule: str = 
             "post_action_rule": item.post_action_rule,
         },
     )
+    try:
+        deduplicate_active_transfers()
+    except Exception:
+        pass
     return item
 
 
@@ -449,11 +665,23 @@ def discover_active_transfer(port: int = 6800, timeout: int = 5) -> dict[str, An
         except Exception:
             pass
 
-    for info in active_gids(port=port, timeout=timeout):
+    active_infos = active_gids(port=port, timeout=timeout)
+    ranked_infos = sorted(
+        active_infos,
+        key=lambda info: (
+            float(info.get("completedLength") or 0) / max(float(info.get("totalLength") or 1), 1.0),
+            float(info.get("completedLength") or 0),
+            float(info.get("downloadSpeed") or 0),
+        ),
+        reverse=True,
+    )
+    for info in ranked_infos:
         gid = info.get("gid")
         if not gid:
             continue
         queue_item = find_queue_item_by_gid(gid)
+        if queue_item is None:
+            queue_item = _queue_item_for_active_info(info, load_queue())
         if queue_item:
             state["active_gid"] = gid
             state["active_url"] = queue_item.get("url")
@@ -507,44 +735,65 @@ def current_bandwidth(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
 
 def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
     state = load_state()
-    gid = state.get("active_gid")
-    if not gid:
+    active_jobs = active_gids(port=port, timeout=5)
+    gids = [str(info.get("gid") or "") for info in active_jobs if info.get("gid")]
+    queue_gids = [str(item.get("gid") or "") for item in load_queue() if item.get("gid") and item.get("status") in {"downloading", "paused"}]
+    if not gids and not state.get("active_gid") and not queue_gids:
         return {"paused": False, "reason": "no_active_transfer"}
-    before = {"state": state, "active": active_status(port=port, timeout=5)}
-    result = aria_rpc("aria2.pause", [gid], port=port, timeout=5)
+    before = {"state": state, "active": active_jobs}
+    paused: list[str] = []
+    for gid in gids or queue_gids or [str(state.get("active_gid") or "")]:
+        if not gid:
+            continue
+        try:
+            aria_rpc("aria2.pause", [gid], port=port, timeout=5)
+            paused.append(gid)
+        except Exception:
+            continue
     state["paused"] = True
     save_state(state)
-    payload = {"paused": True, "gid": gid, "result": result.get("result")}
+    payload = {"paused": bool(paused), "gids": paused, "result": {"paused": paused}}
     record_action(
         action="pause",
         target="active_transfer",
         outcome="changed",
         reason="user_pause",
         before=before,
-        after={"state": load_state(), "active": active_status(port=port, timeout=5)},
-        detail={"gid": gid, "result": payload},
+        after={"state": load_state(), "active": active_gids(port=port, timeout=5)},
+        detail={"gids": paused, "result": payload},
     )
     return payload
 
 
 def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
     state = load_state()
-    gid = state.get("active_gid")
-    if not gid:
+    active_jobs = active_gids(port=port, timeout=5)
+    queued_items = [item for item in load_queue() if item.get("gid") and item.get("status") == "paused"]
+    gids = [str(info.get("gid") or "") for info in active_jobs if info.get("gid")]
+    if not gids and not state.get("active_gid") and not queued_items:
         return {"resumed": False, "reason": "no_active_transfer"}
-    before = {"state": state, "active": active_status(port=port, timeout=5)}
-    result = aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
+    before = {"state": state, "active": active_jobs}
+    resumed: list[str] = []
+    resume_targets = gids or [str(item.get("gid") or "") for item in queued_items if item.get("gid")] or [str(state.get("active_gid") or "")]
+    for gid in resume_targets:
+        if not gid:
+            continue
+        try:
+            aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
+            resumed.append(gid)
+        except Exception:
+            continue
     state["paused"] = False
     save_state(state)
-    payload = {"resumed": True, "gid": gid, "result": result.get("result")}
+    payload = {"resumed": bool(resumed), "gids": resumed, "result": {"resumed": resumed}}
     record_action(
         action="resume",
         target="active_transfer",
         outcome="changed",
         reason="user_resume",
         before=before,
-        after={"state": load_state(), "active": active_status(port=port, timeout=5)},
-        detail={"gid": gid, "result": payload},
+        after={"state": load_state(), "active": active_gids(port=port, timeout=5)},
+        detail={"gids": resumed, "result": payload},
     )
     return payload
 
@@ -586,7 +835,12 @@ def post_action(item: dict[str, Any]) -> dict[str, Any]:
 
 def process_queue(port: int = 6800) -> list[dict[str, Any]]:
     ensure_storage()
+    ensure_state_session()
     ensure_aria_daemon(port=port)
+    try:
+        deduplicate_active_transfers(port=port)
+    except Exception:
+        pass
     probe = probe_bandwidth()
     cap = int(probe["cap_mbps"])
     record_action(
@@ -598,78 +852,53 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         after={"probe": probe, "cap_mbps": cap},
         detail=probe,
     )
-    items = load_queue()
     state = load_state()
+    state["running"] = True
+    state["stop_requested"] = False
+    state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    save_state(state)
 
-    for item in items:
-        if load_state().get("stop_requested"):
-            break
-        if load_state().get("paused"):
-            break
-        if item.get("status") == "done":
-            continue
-        gid = item.get("gid")
-        info = None
-        if gid and item.get("status") in {"downloading", "paused"}:
-            try:
-                info = status(gid, port=port, timeout=5)
-                if info.get("status") not in {"complete", "error"}:
-                    record_action(
-                        action="resume",
-                        target="queue_item",
-                        outcome="changed",
-                        reason="adopt_existing_transfer",
-                        before={"item": dict(item)},
-                        after={"item": dict(item), "gid": gid, "adopted": True},
-                        detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "status": info.get("status")},
-                    )
-                    state["active_gid"] = gid
-                    state["active_url"] = item.get("url")
-                    save_state(state)
-                else:
-                    info = None
-            except Exception:
-                info = None
+    limit = max_simultaneous_downloads()
 
-        if info is None:
-            item["status"] = "downloading"
-            gid = add_download(item, cap_mbps=cap, port=port)
+    def _finalize_primary_state(items_snapshot: list[dict[str, Any]], active_infos: list[dict[str, Any]]) -> None:
+        current = load_state()
+        current["running"] = bool(current.get("running"))
+        current["paused"] = bool(current.get("paused"))
+        current["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        if active_infos:
+            best = sorted(
+                active_infos,
+                key=lambda info: (
+                    float(info.get("completedLength") or 0) / max(float(info.get("totalLength") or 1), 1.0),
+                    float(info.get("completedLength") or 0),
+                    float(info.get("downloadSpeed") or 0),
+                ),
+                reverse=True,
+            )[0]
+            current["active_gid"] = best.get("gid")
+            match = _queue_item_for_active_info(best, items_snapshot)
+            current["active_url"] = match.get("url") if match else _active_item_url(best)
+        else:
+            current["active_gid"] = None
+            current["active_url"] = None
+        save_state(current)
+
+    def _poll_active_jobs(items_snapshot: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        active_infos = active_gids(port=port, timeout=5)
+        active_pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        for info in active_infos:
+            item = _queue_item_for_active_info(info, items_snapshot)
+            if item is None:
+                continue
+            gid = str(info.get("gid") or "")
+            if gid:
+                active_pairs.append((info, item))
+        for info, item in active_pairs:
+            gid = str(info.get("gid") or "")
+            if not gid:
+                continue
             item["gid"] = gid
-            record_action(
-                action="run",
-                target="queue_item",
-                outcome="changed",
-                reason="download_started",
-                before={"item": dict(item)},
-                after={"item": dict(item), "gid": gid, "cap_mbps": cap},
-                detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "cap_mbps": cap},
-            )
-            state["active_gid"] = gid
-            state["active_url"] = item.get("url")
-            save_state(state)
-        while True:
-            time.sleep(2)
-            if load_state().get("stop_requested"):
-                item["status"] = "paused"
-                state["running"] = False
-                state["stop_requested"] = False
-                state["paused"] = False
-                save_state(state)
-                save_queue(items)
-                return items
-            if load_state().get("paused"):
-                item["status"] = "paused"
-                save_queue(items)
-                state["paused"] = True
-                state["active_gid"] = gid
-                state["active_url"] = item.get("url")
-                save_state(state)
-                break
-            info = status(gid, port=port, timeout=5)
-            log_transfer_poll(gid=gid, item=item, info=info, cap_mbps=cap)
-            if info.get("errorCode") and info["errorCode"] != "0":
-                cap = max(1, int(cap * 0.75))
-                set_bandwidth(cap, port=port)
+            item["status"] = info.get("status") or item.get("status") or "downloading"
             if info.get("status") == "complete":
                 item["status"] = "done"
                 item["post_action"] = post_action(item)
@@ -682,7 +911,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     after={"item": dict(item), "post_action": item.get("post_action")},
                     detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "result": item.get("post_action")},
                 )
-                break
+                continue
             if info.get("status") == "error":
                 item["status"] = "error"
                 item["error_code"] = info.get("errorCode")
@@ -696,14 +925,87 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     after={"item": dict(item), "error_code": item.get("error_code"), "error_message": item.get("error_message")},
                     detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "error_code": item.get("error_code"), "error_message": item.get("error_message")},
                 )
-                break
-        if item.get("status") in {"done", "error"}:
+                continue
+            log_transfer_poll(gid=gid, item=item, info=info, cap_mbps=cap)
+            if info.get("errorCode") and info["errorCode"] != "0":
+                cap_local = max(1, int(cap * 0.75))
+                set_bandwidth(cap_local, port=port)
+        return [info for info, _item in active_pairs]
+
+    while True:
+        items = load_queue()
+        state = load_state()
+        if state.get("stop_requested"):
+            active_infos = active_gids(port=port, timeout=5)
+            for info in active_infos:
+                gid = str(info.get("gid") or "")
+                if not gid:
+                    continue
+                try:
+                    aria_rpc("aria2.pause", [gid], port=port, timeout=5)
+                except Exception:
+                    pass
+            state["running"] = False
+            state["stop_requested"] = False
+            state["paused"] = False
             state["active_gid"] = None
             state["active_url"] = None
-        state["running"] = bool(load_state().get("running"))
-        save_state(state)
-    save_queue(items)
-    return items
+            close_state_session(reason="stop_requested")
+            save_state(state)
+            save_queue(items)
+            return items
+
+        active_infos = _poll_active_jobs(items)
+        _finalize_primary_state(items, active_infos)
+
+        state = load_state()
+        active_count = len(active_infos)
+        if not state.get("paused"):
+            slots = None if limit == 0 else max(limit - active_count, 0)
+            if slots is None or slots > 0:
+                started = 0
+                for item in items:
+                    if item.get("status") not in {"queued", "paused"}:
+                        continue
+                    if item.get("gid") and item.get("status") == "paused":
+                        try:
+                            info = status(str(item.get("gid")), port=port, timeout=5)
+                            if info.get("status") in {"active", "paused"}:
+                                if info.get("status") == "active":
+                                    item["status"] = "downloading"
+                                active_infos.append(info)
+                                continue
+                        except Exception:
+                            pass
+                    if slots is not None and started >= slots:
+                        break
+                    item["status"] = "downloading"
+                    gid = add_download(item, cap_mbps=cap, port=port)
+                    item["gid"] = gid
+                    record_action(
+                        action="run",
+                        target="queue_item",
+                        outcome="changed",
+                        reason="download_started",
+                        before={"item": dict(item)},
+                        after={"item": dict(item), "gid": gid, "cap_mbps": cap},
+                        detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "cap_mbps": cap},
+                    )
+                    started += 1
+        save_queue(items)
+        _finalize_primary_state(items, active_gids(port=port, timeout=5))
+
+        if not any(item.get("status") in {"queued", "downloading", "paused"} for item in items):
+            current = load_state()
+            current["running"] = False
+            current["stop_requested"] = False
+            current["active_gid"] = None
+            current["active_url"] = None
+            save_state(current)
+            save_queue(items)
+            return items
+
+        time.sleep(2)
 
 
 def auto_preflight_on_run() -> bool:
