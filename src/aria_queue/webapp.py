@@ -268,6 +268,17 @@ INDEX_HTML = """<!doctype html>
       border-radius: 999px;
       line-height: 1;
     }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
     .statusline { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 0.92rem; margin-top: 10px; }
     .statusline strong { color: var(--text); }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
@@ -431,7 +442,7 @@ INDEX_HTML = """<!doctype html>
           </div>
           <div class="row">
             <button class="secondary" onclick="preflightRun()">Preflight</button>
-            <button class="secondary" id="runner-btn" onclick="toggleRunner()">Run</button>
+            <button class="secondary" id="runner-btn" onclick="toggleRunner()">Start engine</button>
             <button class="secondary" id="toggle-btn" onclick="toggleQueue()">Pause</button>
             <button class="secondary" onclick="newSession()">Start new run</button>
           </div>
@@ -870,8 +881,8 @@ INDEX_HTML = """<!doctype html>
         item.gid ? `GID ${item.gid}` : null,
         item.error_message ? item.error_message : null,
       ].filter(Boolean).join(" · ");
-      const shortUrl = item.output || (item.url ? item.url.split('/').pop() : '(no url)');
       const live = item.live || {};
+      const shortUrl = shortName(item.output || item.url || live.url || '(no url)');
       const activeish = ["downloading", "paused", "recovered"].includes(status) || item.recovered;
       const liveStatus = live.status || null;
       const speed = live.downloadSpeed || item.downloadSpeed;
@@ -883,14 +894,15 @@ INDEX_HTML = """<!doctype html>
         : (Number(totalLength || 0) > 0 ? (Number(completedLength || 0) / Number(totalLength || 1)) * 100 : 0);
       const displayUrl = item.url || live.url || "";
       const ariaBadge = liveStatus ? `<span class="badge ${badgeClass(liveStatus)}">aria2: ${liveStatus}</span>` : "";
+      const pauseLabel = status === 'paused' ? 'Resume queue' : 'Pause queue';
       const pauseButton = activeish
-        ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="${status === 'paused' ? 'Resume' : 'Pause'}">${status === 'paused' ? '▶' : '⏸'}</button>`
+        ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="${pauseLabel}" aria-label="${pauseLabel}">${status === 'paused' ? '▶' : '⏸'}<span class="sr-only">${pauseLabel}</span></button>`
         : "";
       const actionButtons = activeish ? `
         <div class="action-strip">
           ${pauseButton}
-          <button class="secondary icon-btn" onclick="preflightRun()" title="Preflight">✓</button>
-          <button class="secondary icon-btn" onclick="runQueue()" title="Run">⟳</button>
+          <button class="secondary icon-btn" onclick="preflightRun()" title="Run preflight" aria-label="Run preflight">✓<span class="sr-only">Run preflight</span></button>
+          <button class="secondary icon-btn" onclick="runQueue()" title="Start run" aria-label="Start run">⟳<span class="sr-only">Start run</span></button>
         </div>
       ` : "";
       const activePanel = activeish ? `
@@ -935,6 +947,12 @@ INDEX_HTML = """<!doctype html>
         const parts = value.split("/").filter(Boolean);
         return parts.length ? parts[parts.length - 1] : value;
       }
+    }
+    function activeTransfer(items, active, state) {
+      const liveItems = Array.isArray(items) ? items : [];
+      return liveItems.find((item) => item && (item.gid === active?.gid || (state?.active_gid && item.gid === state.active_gid) || (active?.url && item.url && active.url === item.url)))
+        || active
+        || null;
     }
     function lifecycleStateLabel(name, record) {
       const result = record && record.result ? record.result : {};
@@ -1135,10 +1153,11 @@ INDEX_HTML = """<!doctype html>
         const data = await r.json();
         lastStatus = data;
         backendGlobalOptions = data.aria2_global_options || {};
+        const state = data.state || {};
         const active = data.active || {status: 'idle'};
         const actives = Array.isArray(data.actives) ? data.actives : (data.active ? [data.active] : []);
-        const speed = active.downloadSpeed || data.state?.download_speed || null;
-        const state = data.state || {};
+        const liveActive = activeTransfer(actives, active, state);
+        const speed = liveActive?.downloadSpeed || active.downloadSpeed || data.state?.download_speed || null;
         const items = enrichQueueItems(data.items || [], actives, state);
         document.getElementById('queue').innerHTML = items.length ? items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
         document.getElementById('chip-error').textContent = state.last_error || data.bandwidth?.reason || 'none';
@@ -1148,9 +1167,9 @@ INDEX_HTML = """<!doctype html>
         const toggleButton = document.getElementById('toggle-btn');
         if (toggleButton) toggleButton.textContent = data.state && data.state.paused ? 'Resume' : 'Pause';
         const runnerButton = document.getElementById('runner-btn');
-        if (runnerButton) runnerButton.textContent = data.state && data.state.running ? 'Stop' : 'Run';
-        document.getElementById('mode-label').textContent = activeStateLabel(active, state);
-        document.getElementById('active-label').textContent = summarizeActiveItem(active, state, items);
+        if (runnerButton) runnerButton.textContent = data.state && data.state.running ? 'Stop engine' : 'Start engine';
+        document.getElementById('mode-label').textContent = activeStateLabel(liveActive, state);
+        document.getElementById('active-label').textContent = summarizeActiveItem(liveActive, state, items);
         document.getElementById('sum-speed').textContent = speed ? formatRate(speed) : "idle";
         renderQueueSummary(data.summary);
         document.getElementById('bw-source').textContent = data.bandwidth?.source || '-';
@@ -1159,9 +1178,9 @@ INDEX_HTML = """<!doctype html>
           : `No networkquality probe available${data.bandwidth?.reason ? ` · ${data.bandwidth.reason}` : ''}`;
         document.getElementById('bw-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || '-');
         document.getElementById('bw-global').textContent = data.bandwidth_global?.limit ? `Global limit ${data.bandwidth_global.limit}` : 'Global option unavailable';
-        document.getElementById('bw-live').textContent = activeStateLabel(active, state);
-        document.getElementById('bw-live-detail').textContent = active.downloadSpeed
-          ? `Speed ${formatRate(active.downloadSpeed)}${active.completedLength ? ` · ${formatBytes(active.completedLength)}/${formatBytes(active.totalLength || 0)}` : ''}`
+        document.getElementById('bw-live').textContent = activeStateLabel(liveActive, state);
+        document.getElementById('bw-live-detail').textContent = liveActive?.downloadSpeed
+          ? `Speed ${formatRate(liveActive.downloadSpeed)}${liveActive.completedLength ? ` · ${formatBytes(liveActive.completedLength)}/${formatBytes(liveActive.totalLength || 0)}` : ''}`
           : 'No active transfer';
         document.getElementById('bw-probe-mode').textContent = data.bandwidth?.source || '-';
         document.getElementById('bw-probe-detail').textContent = data.bandwidth?.source === 'networkquality'
