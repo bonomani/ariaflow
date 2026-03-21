@@ -50,3 +50,23 @@ jobs:
             /repos/bonomani/homebrew-ariaflow/dispatches \
             -f event_type=sync-formula \
             -f client_payload[tag]=${GITHUB_REF_NAME}
+
+      - name: Verify tap sync
+        env:
+          GH_TOKEN: ${{ secrets.ARIAFLOW_TAP_TOKEN }}
+        run: |
+          expected="${GITHUB_REF_NAME#v}"
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            current=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
+              https://raw.githubusercontent.com/bonomani/homebrew-ariaflow/master/Formula/ariaflow.rb \
+              | python3 -c 'import re,sys; text=sys.stdin.read(); m=re.search(r"^version \"([^\"]+)\"$", text, re.M); print(m.group(1) if m else "")'
+            )
+            if [ "$current" = "$expected" ]; then
+              echo "Tap synced to ${current}"
+              exit 0
+            fi
+            echo "Tap still at ${current:-unknown}; waiting..."
+            sleep 15
+          done
+          echo "Tap did not sync to ${expected}"
+          exit 1
