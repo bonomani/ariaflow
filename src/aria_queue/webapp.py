@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
@@ -26,6 +27,10 @@ from .core import (
     summarize_queue,
 )
 from .install import install_all, status_all, uninstall_all
+
+
+STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
+STATUS_CACHE_TTL = 2.0
 
 
 INDEX_HTML = """<!doctype html>
@@ -854,6 +859,34 @@ INDEX_HTML = """<!doctype html>
 
 
 class AriaFlowHandler(BaseHTTPRequestHandler):
+    def _invalidate_status_cache(self) -> None:
+        STATUS_CACHE["ts"] = 0.0
+        STATUS_CACHE["payload"] = None
+
+    def _status_payload(self, force: bool = False) -> dict:
+        now = time.time()
+        cached = STATUS_CACHE.get("payload")
+        if not force and cached is not None and now - float(STATUS_CACHE.get("ts", 0.0)) < STATUS_CACHE_TTL:
+            return cached  # type: ignore[return-value]
+
+        state = load_state()
+        items = load_queue()
+        bandwidth = current_bandwidth(timeout=3)
+        payload = {
+            "items": items,
+            "state": state,
+            "summary": summarize_queue(items),
+            "aria2": aria_status(timeout=3),
+            "bandwidth": bandwidth,
+            "bandwidth_global": bandwidth,
+        }
+        active = active_status(timeout=3)
+        if active:
+            payload["active"] = active
+        STATUS_CACHE["ts"] = now
+        STATUS_CACHE["payload"] = payload
+        return payload
+
     def _send_json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
         self.send_response(status)
@@ -873,20 +906,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
         if path == "/api/status":
-            state = load_state()
-            items = load_queue()
-            payload = {
-                "items": items,
-                "state": state,
-                "summary": summarize_queue(items),
-                "aria2": aria_status(),
-                "bandwidth": current_bandwidth(),
-                "bandwidth_global": current_bandwidth(),
-            }
-            active = active_status()
-            if active:
-                payload["active"] = active
-            self._send_json(payload)
+            self._send_json(self._status_payload())
             return
         if path == "/api/log":
             self._send_json({"items": load_action_log()})
@@ -911,6 +931,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "missing_url"}, status=400)
                 return
             item = add_queue_item(url)
+            self._invalidate_status_cache()
             self._send_json({"added": item.__dict__})
             return
 
@@ -929,6 +950,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 after={"state": load_state(), "queue": summarize_queue(load_queue()), "preflight": result},
                 detail=result,
             )
+            self._invalidate_status_cache()
             self._send_json(result)
             return
 
@@ -944,6 +966,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 after={"state": load_state(), "queue": summarize_queue(load_queue()), "runner": result},
                 detail=result,
             )
+            self._invalidate_status_cache()
             self._send_json(result)
             return
 
@@ -960,12 +983,14 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 after={"state": load_state(), "queue": summarize_queue(load_queue()), "ucc": result},
                 detail=result,
             )
+            self._invalidate_status_cache()
             self._send_json(result)
             return
 
         if path == "/api/declaration":
             declaration = payload if isinstance(payload, dict) else {}
             saved = save_declaration(declaration)
+            self._invalidate_status_cache()
             self._send_json({"saved": True, "declaration": saved})
             return
 
@@ -981,6 +1006,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 after={"lifecycle": status_all(), "preview": result},
                 detail=result,
             )
+            self._invalidate_status_cache()
             self._send_json(result)
             return
 
@@ -996,16 +1022,19 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 after={"lifecycle": status_all(), "preview": result},
                 detail=result,
             )
+            self._invalidate_status_cache()
             self._send_json(result)
             return
 
         if path == "/api/pause":
             result = pause_active_transfer()
+            self._invalidate_status_cache()
             self._send_json(result)
             return
 
         if path == "/api/resume":
             result = resume_active_transfer()
+            self._invalidate_status_cache()
             self._send_json(result)
             return
 
