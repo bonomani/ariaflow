@@ -9,6 +9,7 @@ import time
 import urllib.request
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -56,12 +57,20 @@ class WebSmokeTests(unittest.TestCase):
                 lifecycle = request_json("http://127.0.0.1:8765/api/lifecycle")
                 self.assertIn("ariaflow", lifecycle)
                 self.assertIn("meta", lifecycle["ariaflow"])
-                install_preview = request_json("http://127.0.0.1:8765/api/lifecycle/install", method="POST")
-                self.assertIn("aria2-launchd", install_preview)
-                self.assertNotIn("ariaflow-serve-launchd", install_preview)
-                uninstall_preview = request_json("http://127.0.0.1:8765/api/lifecycle/uninstall", method="POST")
-                self.assertIn("aria2-launchd", uninstall_preview)
-                self.assertNotIn("ariaflow-serve-launchd", uninstall_preview)
+                with patch("aria_queue.webapp.is_macos", return_value=True), \
+                     patch("aria_queue.webapp.homebrew_install_ariaflow", return_value=["brew tap bonomani/ariaflow", "brew install ariaflow"]), \
+                     patch("aria_queue.webapp.homebrew_uninstall_ariaflow", return_value=["brew uninstall ariaflow"]), \
+                     patch("aria_queue.webapp.install_aria2_launchd", return_value=["load aria2"]), \
+                     patch("aria_queue.webapp.uninstall_aria2_launchd", return_value=["unload aria2"]), \
+                     patch("aria_queue.webapp.install_ariaflow_launchd", return_value=["load web"]), \
+                     patch("aria_queue.webapp.uninstall_ariaflow_launchd", return_value=["unload web"]):
+                    lifecycle_action = request_json(
+                        "http://127.0.0.1:8765/api/lifecycle/action",
+                        method="POST",
+                        payload={"target": "ariaflow", "action": "install"},
+                    )
+                self.assertTrue(lifecycle_action["ok"])
+                self.assertIn("lifecycle", lifecycle_action)
                 saved = request_json(
                     "http://127.0.0.1:8765/api/declaration",
                     method="POST",

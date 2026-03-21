@@ -428,6 +428,9 @@ def discover_active_transfer(port: int = 6800, timeout: int = 5) -> dict[str, An
         try:
             info = status(state["active_gid"], port=port, timeout=timeout)
             queue_item = find_queue_item_by_gid(state["active_gid"])
+            if queue_item:
+                state["active_url"] = queue_item.get("url") or state.get("active_url")
+                save_state(state)
             total = float(info.get("totalLength") or 0)
             done = float(info.get("completedLength") or 0)
             percent = round((done / total) * 100, 1) if total else 0
@@ -451,6 +454,10 @@ def discover_active_transfer(port: int = 6800, timeout: int = 5) -> dict[str, An
         if not gid:
             continue
         queue_item = find_queue_item_by_gid(gid)
+        if queue_item:
+            state["active_gid"] = gid
+            state["active_url"] = queue_item.get("url")
+            save_state(state)
         total = float(info.get("totalLength") or 0)
         done = float(info.get("completedLength") or 0)
         percent = round((done / total) * 100, 1) if total else 0

@@ -28,7 +28,19 @@ from .core import (
     summarize_queue,
     auto_preflight_on_run,
 )
-from .install import install_all, status_all, uninstall_all
+from .install import (
+    homebrew_install_ariaflow,
+    homebrew_uninstall_ariaflow,
+    ucc_record,
+    status_all,
+)
+from .platform.launchd import (
+    install_aria2_launchd,
+    install_ariaflow_launchd,
+    is_macos,
+    uninstall_aria2_launchd,
+    uninstall_ariaflow_launchd,
+)
 
 
 STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
@@ -449,12 +461,10 @@ INDEX_HTML = """<!doctype html>
         <div class="panel">
           <div class="section-title">
             <h2>Lifecycle</h2>
-            <div class="hint">Install state and services</div>
+            <div class="hint">Installed, current, and autostart state</div>
           </div>
           <div class="row" style="margin-bottom:12px;">
             <button class="secondary" onclick="loadLifecycle()">Refresh lifecycle</button>
-            <button class="secondary" onclick="previewInstall()">Install preview</button>
-            <button class="secondary" onclick="previewUninstall()">Uninstall preview</button>
           </div>
           <div id="lifecycle" class="list">Loading...</div>
         </div>
@@ -502,8 +512,6 @@ INDEX_HTML = """<!doctype html>
               <option value="poll">Poll</option>
               <option value="complete">Complete</option>
               <option value="error">Error</option>
-              <option value="lifecycle_install_preview">Install preview</option>
-              <option value="lifecycle_uninstall_preview">Uninstall preview</option>
             </select>
             <select id="target-filter" onchange="refreshActionLog()">
               <option value="all">All targets</option>
@@ -667,8 +675,15 @@ INDEX_HTML = """<!doctype html>
       if (state?.running) return "running";
       return "idle";
     }
-    function summarizeActiveItem(active, state) {
-      const name = shortName(active?.url || active?.gid || "none");
+    function activeDisplayName(active, items) {
+      const match = (items || []).find((item) => active?.gid && item.gid === active.gid);
+      const url = active?.url || match?.url || "";
+      const name = shortName(url || active?.gid || "none");
+      return { name, url };
+    }
+    function summarizeActiveItem(active, state, items) {
+      const display = activeDisplayName(active, items);
+      const name = display.name;
       if (state?.paused && active?.recovered) return name;
       if (active?.recovered) return name;
       if (active?.status && active?.status !== "idle") return `${active.status} · ${name}`;
@@ -683,11 +698,14 @@ INDEX_HTML = """<!doctype html>
         completedLength: active.completedLength,
         errorMessage: active.errorMessage,
         recovered: active.recovered,
+        url: active.url,
+        status: active.status,
+        gid: active.gid,
       } : null;
       return (items || []).map((item) => {
         const matchesActive = live && (item.gid === active.gid || (state?.active_gid && item.gid === state.active_gid));
         if (!matchesActive) return item;
-        return { ...item, live };
+        return { ...item, live, url: item.url || live.url };
       });
     }
     function renderQueueItem(item) {
@@ -706,14 +724,13 @@ INDEX_HTML = """<!doctype html>
       const speed = live.downloadSpeed || item.downloadSpeed;
       const totalLength = live.totalLength || item.totalLength;
       const completedLength = live.completedLength || item.completedLength;
+      const displayUrl = item.url || live.url || "";
       const recoveredBadge = item.recovered ? `<span class="badge warn">recovered</span>` : "";
       const sourceBadge = item.recovered && item.url ? `<span class="badge">queue source</span>` : "";
-      const ariaBadge = liveStatus ? `<span class="badge ${badgeClass(liveStatus)}">aria2 ${liveStatus}</span>` : "";
-      const pauseButton = status === "paused"
-        ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="Resume">Resume</button>`
-        : activeish
-          ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="Pause">Pause</button>`
-          : "";
+      const ariaBadge = liveStatus ? `<span class="badge ${badgeClass(liveStatus)}">aria2: ${liveStatus}</span>` : "";
+      const pauseButton = activeish
+        ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="${status === 'paused' ? 'Resume' : 'Pause'}">${status === 'paused' ? '▶' : '⏸'}</button>`
+        : "";
       const actionButtons = activeish ? `
         <div class="action-strip">
           ${pauseButton}
@@ -736,7 +753,7 @@ INDEX_HTML = """<!doctype html>
           ${item.error_message ? `<span class="mono">${item.error_message}</span>` : ""}
         </div>
       ` : "";
-      const stateLabel = item.recovered ? `${status} · recovered` : status;
+      const stateLabel = liveStatus ? `${status} · aria2:${liveStatus}` : (item.recovered ? `${status} · recovered` : status);
       return `
         <div class="item compact ${activeish ? 'active-item' : ''}">
         <div class="item-top">
@@ -745,7 +762,7 @@ INDEX_HTML = """<!doctype html>
         </div>
         <div class="meta">
           ${ariaBadge}
-          ${item.url ? `<span title="${item.url}">${item.url}</span>` : ""}
+          ${displayUrl ? `<span title="${displayUrl}">${displayUrl}</span>` : ""}
           ${detail ? `<span class="mono">${detail}</span>` : ""}
         </div>
           ${actionButtons}
@@ -764,44 +781,70 @@ INDEX_HTML = """<!doctype html>
         return parts.length ? parts[parts.length - 1] : value;
       }
     }
-    function renderLifecycleItem(name, record) {
+    function lifecycleStateLabel(name, record) {
+      const result = record && record.result ? record.result : {};
+      const reason = result.reason || "";
+      if (name === "ariaflow") {
+        if (reason === "match") return "installed · current";
+        if (reason === "missing") return "absent";
+        return result.outcome || "unknown";
+      }
+      if (reason === "match") return "loaded";
+      if (reason === "missing") return "not loaded";
+      return result.outcome || "unknown";
+    }
+    function renderLifecycleItem(name, record, actions = []) {
       const result = record && record.result ? record.result : {};
       const lines = [];
       if (result.message) lines.push(result.message);
       if (result.reason) lines.push(`Reason: ${result.reason}`);
       if (result.completion) lines.push(`Completion: ${result.completion}`);
+      const buttons = actions.length ? `
+        <div class="action-strip" style="justify-content:flex-start; margin-top:8px;">
+          ${actions.map((action) => `<button class="secondary icon-btn" onclick="lifecycleAction('${action.target}','${action.action}')" title="${action.label}">${action.label}</button>`).join("")}
+        </div>
+      ` : "";
       return `
         <div class="item">
           <div class="item-top">
             <div class="item-url">${name}</div>
-            <span class="${badgeClass(result.outcome)}">${result.outcome || "unknown"}</span>
+            <span class="${badgeClass(result.outcome)}">${lifecycleStateLabel(name, record)}</span>
           </div>
           <div class="meta">
             <span>${lines.join(" · ") || "No details"}</span>
           </div>
+          ${buttons}
         </div>
       `;
     }
     function renderLifecycleSummary(data) {
-      const items = [
-        ["ariaflow", data.ariaflow],
-        ["aria2", data["aria2-launchd"]],
-        ["web", data["ariaflow-serve-launchd"]],
-      ].map(([name, record]) => {
-        const result = record && record.result ? record.result : {};
-        return `
-          <div class="item">
-            <div class="item-top">
-              <div class="item-url">${name}</div>
-              <span class="${badgeClass(result.outcome)}">${result.outcome || "unknown"}</span>
-            </div>
-            <div class="meta">
-              <span>${result.message || "No details"}</span>
-            </div>
-          </div>
-        `;
-      });
-      return items.join("");
+      const rows = [
+        {
+          name: "ariaflow",
+          record: data.ariaflow,
+          actions: [
+            { target: "ariaflow", action: "install", label: "Install / Update" },
+            { target: "ariaflow", action: "uninstall", label: "Remove" },
+          ],
+        },
+        {
+          name: "aria2 auto-start",
+          record: data["aria2-launchd"],
+          actions: [
+            { target: "aria2-launchd", action: "install", label: "Load" },
+            { target: "aria2-launchd", action: "uninstall", label: "Unload" },
+          ],
+        },
+        {
+          name: "web auto-start",
+          record: data["ariaflow-serve-launchd"],
+          actions: [
+            { target: "ariaflow-serve-launchd", action: "install", label: "Load" },
+            { target: "ariaflow-serve-launchd", action: "uninstall", label: "Unload" },
+          ],
+        },
+      ];
+      return rows.map((row) => renderLifecycleItem(row.name, row.record, row.actions)).join("");
     }
     function renderQueueSummary(summary) {
       document.getElementById('sum-queued').textContent = summary?.queued ?? 0;
@@ -916,7 +959,7 @@ INDEX_HTML = """<!doctype html>
         const runnerButton = document.getElementById('runner-btn');
         if (runnerButton) runnerButton.textContent = data.state && data.state.running ? 'Stop' : 'Run';
         document.getElementById('mode-label').textContent = activeStateLabel(active, state);
-        document.getElementById('active-label').textContent = summarizeActiveItem(active, state);
+        document.getElementById('active-label').textContent = summarizeActiveItem(active, state, items);
         document.getElementById('sum-speed').textContent = speed ? formatRate(speed) : "idle";
         renderQueueSummary(data.summary);
         document.getElementById('bw-source').textContent = data.bandwidth?.source || '-';
@@ -1006,15 +1049,18 @@ INDEX_HTML = """<!doctype html>
       if (actionLog && lastStatus) actionLog.innerHTML = renderActionLog(lastStatus.action_log || []);
       await refresh();
     }
-    async function previewInstall() {
-      const r = await fetch('/api/lifecycle/install', { method: 'POST' });
-      lastLifecycle = await r.json();
-      document.getElementById('lifecycle').innerHTML = renderLifecycleSummary(lastLifecycle);
-    }
-    async function previewUninstall() {
-      const r = await fetch('/api/lifecycle/uninstall', { method: 'POST' });
-      lastLifecycle = await r.json();
-      document.getElementById('lifecycle').innerHTML = renderLifecycleSummary(lastLifecycle);
+    async function lifecycleAction(target, action) {
+      const r = await fetch('/api/lifecycle/action', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ target, action }),
+      });
+      const data = await r.json();
+      const lifecycle = data.lifecycle || data;
+      lastLifecycle = lifecycle;
+      document.getElementById('lifecycle').innerHTML = renderLifecycleSummary(lifecycle);
+      document.getElementById('result').textContent = `${target} ${action} requested`;
+      document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
     }
     async function loadDeclaration() {
       const r = await fetch('/api/declaration');
@@ -1227,36 +1273,119 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self._send_json({"saved": True, "declaration": saved})
             return
 
-        if path == "/api/lifecycle/install":
+        if path == "/api/lifecycle/action":
+            if not is_macos():
+                self._send_json({"error": "macos_only"}, status=400)
+                return
+            target = str(payload.get("target", "")).strip()
+            action = str(payload.get("action", "")).strip()
             before = {"lifecycle": status_all()}
-            result = install_all(dry_run=True, include_web=False)
+            try:
+                if target == "ariaflow" and action == "install":
+                    commands = homebrew_install_ariaflow(dry_run=False)
+                    result = {
+                        "ariaflow": ucc_record(
+                            target="ariaflow",
+                            observed=True,
+                            outcome="changed",
+                            completion="complete",
+                            reason="install",
+                            detail="ariaflow package installed or updated",
+                            commands=commands,
+                        )
+                    }
+                elif target == "ariaflow" and action == "uninstall":
+                    commands = homebrew_uninstall_ariaflow(dry_run=False)
+                    result = {
+                        "ariaflow": ucc_record(
+                            target="ariaflow",
+                            observed=True,
+                            outcome="changed",
+                            completion="complete",
+                            reason="uninstall",
+                            detail="ariaflow package removed",
+                            commands=commands,
+                        )
+                    }
+                elif target == "aria2-launchd" and action == "install":
+                    commands = install_aria2_launchd(dry_run=False)
+                    result = {
+                        "aria2-launchd": ucc_record(
+                            target="aria2-launchd",
+                            observed=True,
+                            outcome="changed",
+                            completion="complete",
+                            reason="install",
+                            detail="aria2 launchd service installed or queued for installation",
+                            commands=commands,
+                        )
+                    }
+                elif target == "aria2-launchd" and action == "uninstall":
+                    commands = uninstall_aria2_launchd(dry_run=False)
+                    result = {
+                        "aria2-launchd": ucc_record(
+                            target="aria2-launchd",
+                            observed=True,
+                            outcome="changed",
+                            completion="complete",
+                            reason="uninstall",
+                            detail="aria2 launchd removed or queued for removal",
+                            commands=commands,
+                        )
+                    }
+                elif target == "ariaflow-serve-launchd" and action == "install":
+                    commands = install_ariaflow_launchd(dry_run=False)
+                    result = {
+                        "ariaflow-serve-launchd": ucc_record(
+                            target="ariaflow-serve-launchd",
+                            observed=True,
+                            outcome="changed",
+                            completion="complete",
+                            reason="install",
+                            detail="ariaflow web UI launchd service installed or queued for installation",
+                            commands=commands,
+                        )
+                    }
+                elif target == "ariaflow-serve-launchd" and action == "uninstall":
+                    commands = uninstall_ariaflow_launchd(dry_run=False)
+                    result = {
+                        "ariaflow-serve-launchd": ucc_record(
+                            target="ariaflow-serve-launchd",
+                            observed=True,
+                            outcome="changed",
+                            completion="complete",
+                            reason="uninstall",
+                            detail="ariaflow web UI launchd removed or queued for removal",
+                            commands=commands,
+                        )
+                    }
+                else:
+                    self._send_json({"error": "unsupported_action", "target": target, "action": action}, status=400)
+                    return
+            except Exception as exc:
+                record_action(
+                    action="lifecycle_action",
+                    target=target or "system",
+                    outcome="failed",
+                    reason="exception",
+                    before=before,
+                    after={"lifecycle": status_all(), "target": target, "action": action},
+                    detail={"error": str(exc), "target": target, "action": action},
+                )
+                self._invalidate_status_cache()
+                self._send_json({"error": "lifecycle_action_failed", "message": str(exc)}, status=500)
+                return
             record_action(
-                action="lifecycle_install_preview",
-                target="system",
-                outcome="converged",
-                reason="preview",
+                action="lifecycle_action",
+                target=target or "system",
+                outcome="changed",
+                reason=action or "lifecycle_action",
                 before=before,
-                after={"lifecycle": status_all(), "preview": result},
-                detail=result,
+                after={"lifecycle": status_all(), "target": target, "action": action, "result": result},
+                detail={"target": target, "action": action, "result": result},
             )
             self._invalidate_status_cache()
-            self._send_json(result)
-            return
-
-        if path == "/api/lifecycle/uninstall":
-            before = {"lifecycle": status_all()}
-            result = uninstall_all(dry_run=True, include_web=False)
-            record_action(
-                action="lifecycle_uninstall_preview",
-                target="system",
-                outcome="converged",
-                reason="preview",
-                before=before,
-                after={"lifecycle": status_all(), "preview": result},
-                detail=result,
-            )
-            self._invalidate_status_cache()
-            self._send_json(result)
+            self._send_json({"ok": True, "target": target, "action": action, "lifecycle": status_all(), "result": result})
             return
 
         if path == "/api/pause":
