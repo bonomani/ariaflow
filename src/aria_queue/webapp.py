@@ -24,7 +24,9 @@ from .core import (
     resume_active_transfer,
     save_state,
     start_background_process,
+    stop_background_process,
     summarize_queue,
+    auto_preflight_on_run,
 )
 from .install import install_all, status_all, uninstall_all
 
@@ -306,6 +308,26 @@ INDEX_HTML = """<!doctype html>
       border-radius: 999px;
       min-width: 110px;
     }
+    .refresh-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.85);
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    .refresh-control select {
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      outline: none;
+      appearance: none;
+      cursor: pointer;
+    }
     .page-only { display: none; }
     body.page-dashboard .show-dashboard,
     body.page-bandwidth .show-bandwidth,
@@ -326,6 +348,17 @@ INDEX_HTML = """<!doctype html>
       <a href="/lifecycle" data-page="lifecycle">Lifecycle</a>
       <a href="/log" data-page="log">Log</a>
       <div class="spacer"></div>
+      <label class="refresh-control" for="refresh-interval">
+        Refresh
+        <select id="refresh-interval" onchange="setRefreshInterval(this.value)">
+          <option value="1500">1.5s</option>
+          <option value="3000">3s</option>
+          <option value="5000">5s</option>
+          <option value="10000">10s</option>
+          <option value="30000">30s</option>
+          <option value="0">Off</option>
+        </select>
+      </label>
       <button class="secondary" id="theme-btn" onclick="toggleTheme()">Theme</button>
     </div>
     <div class="hero">
@@ -358,9 +391,13 @@ INDEX_HTML = """<!doctype html>
             <input id="url" placeholder="Paste download URL">
             <button onclick="add()">Add to queue</button>
             <button class="secondary" onclick="preflightRun()">Preflight</button>
-            <button class="secondary" onclick="runQueue()">Run</button>
+            <button class="secondary" id="runner-btn" onclick="toggleRunner()">Run</button>
             <button class="secondary" id="toggle-btn" onclick="toggleQueue()">Pause</button>
           </div>
+          <label class="refresh-control" style="justify-self:start; margin-top:-2px;">
+            <input type="checkbox" id="auto-preflight" onchange="setAutoPreflightPreference(this.checked)">
+            Run preflight before start
+          </label>
         </div>
       </div>
       <div class="span-12 show-dashboard page-only">
@@ -447,6 +484,7 @@ INDEX_HTML = """<!doctype html>
               <option value="add">Add</option>
               <option value="preflight">Preflight</option>
               <option value="run">Run</option>
+              <option value="stop">Stop</option>
               <option value="ucc">UCC</option>
               <option value="probe">Probe</option>
               <option value="pause">Pause</option>
@@ -491,6 +529,8 @@ INDEX_HTML = """<!doctype html>
     let lastStatus = null;
     let lastLifecycle = null;
     let lastResult = null;
+    let refreshTimer = null;
+    let refreshInterval = Number(localStorage.getItem('ariaflow.refresh_interval') || '2000');
     let lastDeclaration = null;
     const path = window.location.pathname.replace(/\/+$/, "");
     const page = path === "/bandwidth" ? "bandwidth" : path === "/lifecycle" ? "lifecycle" : path === "/log" ? "log" : "dashboard";
@@ -540,6 +580,41 @@ INDEX_HTML = """<!doctype html>
       const current = localStorage.getItem('ariaflow.theme') || 'system';
       const next = current === 'system' ? 'dark' : current === 'dark' ? 'light' : 'system';
       applyTheme(next);
+    }
+    function syncRefreshControl() {
+      const el = document.getElementById('refresh-interval');
+      if (!el) return;
+      const value = String(refreshInterval || 0);
+      if (el.value !== value) el.value = value;
+    }
+    function getDeclarationPreference(name) {
+      const prefs = lastDeclaration?.uic?.preferences || [];
+      const pref = prefs.find((item) => item.name === name);
+      return pref ? pref.value : undefined;
+    }
+    async function setAutoPreflightPreference(enabled) {
+      const r = await fetch('/api/declaration');
+      const data = await r.json();
+      const prefs = Array.isArray(data?.uic?.preferences) ? data.uic.preferences : [];
+      const idx = prefs.findIndex((item) => item.name === 'auto_preflight_on_run');
+      const next = { name: 'auto_preflight_on_run', value: !!enabled, options: [true, false], rationale: 'default off' };
+      if (idx >= 0) prefs[idx] = next;
+      else prefs.push(next);
+      data.uic = data.uic || {};
+      data.uic.preferences = prefs;
+      const save = await fetch('/api/declaration', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      lastDeclaration = await save.json();
+    }
+    function setRefreshInterval(value) {
+      refreshInterval = Number(value) || 0;
+      localStorage.setItem('ariaflow.refresh_interval', String(refreshInterval));
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
+      if (refreshInterval > 0) {
+        refreshTimer = setInterval(refresh, refreshInterval);
+      }
     }
 
     function badgeClass(status) {
@@ -623,9 +698,9 @@ INDEX_HTML = """<!doctype html>
       const recoveredBadge = item.recovered ? `<span class="badge warn">recovered</span>` : "";
       const sourceBadge = item.recovered && item.url ? `<span class="badge">queue source</span>` : "";
       const pauseButton = status === "paused"
-        ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="Resume">▶</button>`
+        ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="Resume">Resume</button>`
         : activeish
-          ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="Pause">⏸</button>`
+          ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="Pause">Pause</button>`
           : "";
       const actionButtons = activeish ? `
         <div class="action-strip">
@@ -825,6 +900,8 @@ INDEX_HTML = """<!doctype html>
         document.getElementById('chip-runner').textContent = data.state && data.state.running ? 'running' : 'idle';
         const toggleButton = document.getElementById('toggle-btn');
         if (toggleButton) toggleButton.textContent = data.state && data.state.paused ? 'Resume' : 'Pause';
+        const runnerButton = document.getElementById('runner-btn');
+        if (runnerButton) runnerButton.textContent = data.state && data.state.running ? 'Stop' : 'Run';
         document.getElementById('mode-label').textContent = activeStateLabel(active, state);
         document.getElementById('active-label').textContent = summarizeActiveItem(active, state);
         document.getElementById('sum-speed').textContent = speed ? formatRate(speed) : "idle";
@@ -892,11 +969,16 @@ INDEX_HTML = """<!doctype html>
       await refresh();
     }
     async function runQueue() {
-      const r = await fetch('/api/run', { method: 'POST' });
+      const autoPreflight = document.getElementById('auto-preflight')?.checked;
+      const r = await fetch('/api/run', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({auto_preflight_on_run: !!autoPreflight}) });
       const data = await r.json();
       lastResult = data;
-      document.getElementById('result').textContent = data.started ? "Queue runner started" : "Queue runner already running";
+      document.getElementById('result').textContent = data.started ? "Queue runner started" : data.stopped ? "Queue runner stopped" : "Queue runner already running";
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
+      await refresh();
+    }
+    async function toggleRunner() {
+      return runQueue();
     }
     async function uccRun() {
       const r = await fetch('/api/ucc', { method: 'POST' });
@@ -924,7 +1006,10 @@ INDEX_HTML = """<!doctype html>
     async function loadDeclaration() {
       const r = await fetch('/api/declaration');
       lastDeclaration = await r.json();
-      document.getElementById('declaration').value = JSON.stringify(lastDeclaration, null, 2);
+      const declarationBox = document.getElementById('declaration');
+      if (declarationBox) declarationBox.value = JSON.stringify(lastDeclaration, null, 2);
+      const checkbox = document.getElementById('auto-preflight');
+      if (checkbox) checkbox.checked = !!getDeclarationPreference('auto_preflight_on_run');
     }
     async function saveDeclaration() {
       const value = document.getElementById('declaration').value;
@@ -944,12 +1029,16 @@ INDEX_HTML = """<!doctype html>
     }
     document.getElementById('action-filter')?.addEventListener('change', refreshActionLog);
     initTheme();
+    syncRefreshControl();
     refresh();
-    setInterval(refresh, 2000);
+    setRefreshInterval(refreshInterval || 2000);
     if (page === 'lifecycle') loadLifecycle();
     if (page === 'log') {
       loadDeclaration();
       refreshActionLog();
+    }
+    if (page === 'dashboard') {
+      loadDeclaration().catch(() => {});
     }
     applyPage();
   </script>
@@ -1062,11 +1151,36 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
         if path == "/api/run":
             before = {"state": load_state(), "queue": summarize_queue(load_queue())}
-            result = start_background_process()
+            state = load_state()
+            if state.get("running"):
+                result = stop_background_process()
+            else:
+                if auto_preflight_on_run():
+                    preflight_result = preflight()
+                    record_action(
+                        action="preflight",
+                        target="system",
+                        outcome="converged" if preflight_result.get("status") == "pass" else "blocked",
+                        reason=preflight_result.get("status", "unknown"),
+                        before=before,
+                        after={"state": load_state(), "queue": summarize_queue(load_queue()), "preflight": preflight_result},
+                        detail=preflight_result,
+                    )
+                    if preflight_result.get("exit_code") != 0:
+                        self._invalidate_status_cache()
+                        self._send_json({
+                            "started": False,
+                            "stopped": False,
+                            "reason": "preflight_blocked",
+                            "preflight": preflight_result,
+                            "auto_preflight_on_run": True,
+                        })
+                        return
+                result = start_background_process()
             record_action(
                 action="run",
                 target="queue",
-                outcome="changed" if result.get("started") else "unchanged",
+                outcome="changed" if result.get("started") or result.get("stopped") else "unchanged",
                 reason=result.get("reason", "unknown"),
                 before=before,
                 after={"state": load_state(), "queue": summarize_queue(load_queue()), "runner": result},

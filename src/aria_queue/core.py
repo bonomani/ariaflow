@@ -136,7 +136,10 @@ def log_transfer_poll(
 
 
 def load_state() -> dict[str, Any]:
-    return read_json(state_path(), {"paused": False, "active_gid": None, "active_url": None})
+    return read_json(
+        state_path(),
+        {"paused": False, "active_gid": None, "active_url": None, "running": False, "stop_requested": False},
+    )
 
 
 def save_state(state: dict[str, Any]) -> None:
@@ -148,6 +151,7 @@ def start_background_process(port: int = 6800) -> dict[str, Any]:
     if state.get("running"):
         return {"started": False, "reason": "already_running"}
 
+    state["stop_requested"] = False
     state["running"] = True
     save_state(state)
 
@@ -164,6 +168,7 @@ def start_background_process(port: int = 6800) -> dict[str, Any]:
         finally:
             current = load_state()
             current["running"] = False
+            current["stop_requested"] = False
             current["active_gid"] = None
             current["active_url"] = None
             save_state(current)
@@ -171,6 +176,45 @@ def start_background_process(port: int = 6800) -> dict[str, Any]:
     thread = threading.Thread(target=_runner, daemon=True)
     thread.start()
     return {"started": True, "reason": "background"}
+
+
+def stop_background_process(port: int = 6800) -> dict[str, Any]:
+    state = load_state()
+    if not state.get("running"):
+        state["stop_requested"] = False
+        save_state(state)
+        return {"stopped": False, "reason": "not_running"}
+
+    before = {"state": dict(state), "queue": summarize_queue(load_queue())}
+    state["stop_requested"] = True
+    save_state(state)
+
+    gid = state.get("active_gid")
+    if gid:
+        try:
+            aria_rpc("aria2.pause", [gid], port=port, timeout=5)
+        except Exception:
+            pass
+        item = find_queue_item_by_gid(str(gid))
+        if item is not None:
+            item["status"] = "paused"
+            items = load_queue()
+            for current in items:
+                if current.get("gid") == gid:
+                    current["status"] = "paused"
+                    break
+            save_queue(items)
+    after = {"state": load_state(), "queue": summarize_queue(load_queue())}
+    record_action(
+        action="stop",
+        target="queue",
+        outcome="changed",
+        reason="user_stop",
+        before=before,
+        after=after,
+        detail={"gid": gid, "paused": bool(gid)},
+    )
+    return {"stopped": True, "reason": "stopping"}
 
 
 @dataclass
@@ -551,6 +595,8 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
     state = load_state()
 
     for item in items:
+        if load_state().get("stop_requested"):
+            break
         if load_state().get("paused"):
             break
         if item.get("status") == "done":
@@ -596,6 +642,14 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             save_state(state)
         while True:
             time.sleep(2)
+            if load_state().get("stop_requested"):
+                item["status"] = "paused"
+                state["running"] = False
+                state["stop_requested"] = False
+                state["paused"] = False
+                save_state(state)
+                save_queue(items)
+                return items
             if load_state().get("paused"):
                 item["status"] = "paused"
                 save_queue(items)
@@ -639,9 +693,20 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         if item.get("status") in {"done", "error"}:
             state["active_gid"] = None
             state["active_url"] = None
+        state["running"] = bool(load_state().get("running"))
         save_state(state)
     save_queue(items)
     return items
+
+
+def auto_preflight_on_run() -> bool:
+    from .contracts import load_declaration
+
+    declaration = load_declaration()
+    for pref in declaration.get("uic", {}).get("preferences", []):
+        if pref.get("name") == "auto_preflight_on_run":
+            return bool(pref.get("value", False))
+    return False
 
 
 def get_active_progress(port: int = 6800) -> dict[str, Any] | None:

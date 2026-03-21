@@ -53,6 +53,14 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertIn(result["exit_code"], [0, 1])
         self.assertNotIn("action_log", result)
 
+    def test_auto_preflight_default_is_disabled(self) -> None:
+        from aria_queue.contracts import load_declaration
+
+        declaration = load_declaration()
+        prefs = declaration.get("uic", {}).get("preferences", [])
+        auto = next((pref for pref in prefs if pref.get("name") == "auto_preflight_on_run"), {})
+        self.assertFalse(auto.get("value", True))
+
     def test_probe_fallback_reports_reason(self) -> None:
         with patch("aria_queue.core.shutil.which", return_value=None):
             result = probe_bandwidth()

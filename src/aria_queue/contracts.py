@@ -16,7 +16,8 @@ DEFAULT_DECLARATION = {
             {"name": "queue_readable", "class": "integrity", "blocking": "hard"},
         ],
         "preferences": [
-            {"name": "post_action_rule", "value": "pending", "options": ["pending"], "rationale": "default placeholder"}
+            {"name": "post_action_rule", "value": "pending", "options": ["pending"], "rationale": "default placeholder"},
+            {"name": "auto_preflight_on_run", "value": False, "options": [True, False], "rationale": "default off"}
         ],
         "policies": [],
     },
