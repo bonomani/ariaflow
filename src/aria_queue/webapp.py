@@ -701,12 +701,14 @@ INDEX_HTML = """<!doctype html>
       const shortUrl = item.output || (item.url ? item.url.split('/').pop() : '(no url)');
       const live = item.live || {};
       const activeish = ["downloading", "paused", "recovered"].includes(status) || item.recovered;
+      const liveStatus = live.status || null;
       const progress = live.percent != null ? live.percent : item.percent;
       const speed = live.downloadSpeed || item.downloadSpeed;
       const totalLength = live.totalLength || item.totalLength;
       const completedLength = live.completedLength || item.completedLength;
       const recoveredBadge = item.recovered ? `<span class="badge warn">recovered</span>` : "";
       const sourceBadge = item.recovered && item.url ? `<span class="badge">queue source</span>` : "";
+      const ariaBadge = liveStatus ? `<span class="badge ${badgeClass(liveStatus)}">aria2 ${liveStatus}</span>` : "";
       const pauseButton = status === "paused"
         ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="Resume">Resume</button>`
         : activeish
@@ -737,14 +739,15 @@ INDEX_HTML = """<!doctype html>
       const stateLabel = item.recovered ? `${status} · recovered` : status;
       return `
         <div class="item compact ${activeish ? 'active-item' : ''}">
-          <div class="item-top">
-            <div class="item-url">${shortUrl}</div>
-            <span class="${badgeClass(status)}">${stateLabel}</span>
-          </div>
-          <div class="meta">
-            ${item.url ? `<span title="${item.url}">${item.url}</span>` : ""}
-            ${detail ? `<span class="mono">${detail}</span>` : ""}
-          </div>
+        <div class="item-top">
+          <div class="item-url">${shortUrl}</div>
+          <span class="${badgeClass(status)}">${stateLabel}</span>
+        </div>
+        <div class="meta">
+          ${ariaBadge}
+          ${item.url ? `<span title="${item.url}">${item.url}</span>` : ""}
+          ${detail ? `<span class="mono">${detail}</span>` : ""}
+        </div>
           ${actionButtons}
           ${activePanel}
         </div>
