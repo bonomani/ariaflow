@@ -85,17 +85,6 @@ def homebrew_install_ariaflow(dry_run: bool = False) -> list[str]:
     return [" ".join(cmd) for cmd in commands]
 
 
-def homebrew_update_ariaflow(dry_run: bool = False) -> list[str]:
-    commands = [["brew", "upgrade", "ariaflow"]]
-    if dry_run:
-        return [" ".join(cmd) for cmd in commands]
-    try:
-        subprocess.run(commands[0], check=True)
-    except subprocess.CalledProcessError:
-        subprocess.run(["brew", "install", "ariaflow"], check=True)
-    return [" ".join(cmd) for cmd in commands]
-
-
 def install_all(dry_run: bool = False, include_web: bool = False) -> dict[str, dict[str, object]]:
     if not dry_run and not is_macos():
         raise RuntimeError("install is only supported on macOS")

@@ -463,7 +463,7 @@ INDEX_HTML = """<!doctype html>
     let lastResult = null;
     let lastDeclaration = null;
     const path = window.location.pathname.replace(/\/+$/, "");
-    const page = path === "/bandwidth" ? "bandwidth" : path === "/lifecycle" ? "lifecycle" : (path === "/log" || path === "/debug") ? "log" : "dashboard";
+    const page = path === "/bandwidth" ? "bandwidth" : path === "/lifecycle" ? "lifecycle" : path === "/log" ? "log" : "dashboard";
 
     function applyPage() {
       document.body.classList.add(`page-${page}`);
@@ -847,7 +847,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
-        if path in {"/", "/index.html", "/bandwidth", "/lifecycle", "/debug", "/log"}:
+        if path in {"/", "/index.html", "/bandwidth", "/lifecycle", "/log"}:
             body = INDEX_HTML.encode("utf-8")
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "text/html; charset=utf-8")
