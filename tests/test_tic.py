@@ -67,6 +67,14 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertEqual(active["status"], "active")
         self.assertEqual(active["percent"], 10.0)
 
+    def test_discover_active_transfer_recovers_url_from_queue(self) -> None:
+        with patch("aria_queue.core.load_state", return_value={"active_gid": "gid-1", "active_url": None}), \
+             patch("aria_queue.core.load_queue", return_value=[{"id": "item-1", "url": "https://example.com/recovered.gguf", "status": "paused", "gid": "gid-1"}]), \
+             patch("aria_queue.core.status", return_value={"status": "active", "completedLength": "10", "totalLength": "100", "downloadSpeed": "5"}):
+            active = discover_active_transfer()
+        self.assertEqual(active["gid"], "gid-1")
+        self.assertEqual(active["url"], "https://example.com/recovered.gguf")
+
     def test_ucc_returns_structured_result(self) -> None:
         add_queue_item("https://example.com/model.gguf")
         result = run_ucc()

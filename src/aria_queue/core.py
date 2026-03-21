@@ -213,6 +213,13 @@ def find_queue_item_by_url(url: str) -> dict[str, Any] | None:
     return None
 
 
+def find_queue_item_by_gid(gid: str) -> dict[str, Any] | None:
+    for item in load_queue():
+        if item.get("gid") == gid and item.get("status") != "error":
+            return item
+    return None
+
+
 def add_queue_item(url: str, output: str | None = None, post_action_rule: str = "pending") -> QueueItem:
     from .contracts import load_declaration
 
@@ -376,12 +383,13 @@ def discover_active_transfer(port: int = 6800, timeout: int = 5) -> dict[str, An
     if state.get("active_gid"):
         try:
             info = status(state["active_gid"], port=port, timeout=timeout)
+            queue_item = find_queue_item_by_gid(state["active_gid"])
             total = float(info.get("totalLength") or 0)
             done = float(info.get("completedLength") or 0)
             percent = round((done / total) * 100, 1) if total else 0
             return {
                 "gid": state["active_gid"],
-                "url": state.get("active_url"),
+                "url": state.get("active_url") or (queue_item.get("url") if queue_item else None),
                 "status": info.get("status"),
                 "errorCode": info.get("errorCode"),
                 "errorMessage": info.get("errorMessage"),
@@ -398,12 +406,13 @@ def discover_active_transfer(port: int = 6800, timeout: int = 5) -> dict[str, An
         gid = info.get("gid")
         if not gid:
             continue
+        queue_item = find_queue_item_by_gid(gid)
         total = float(info.get("totalLength") or 0)
         done = float(info.get("completedLength") or 0)
         percent = round((done / total) * 100, 1) if total else 0
         return {
             "gid": gid,
-            "url": state.get("active_url"),
+            "url": state.get("active_url") or (queue_item.get("url") if queue_item else None),
             "status": info.get("status"),
             "errorCode": info.get("errorCode"),
             "errorMessage": info.get("errorMessage"),
