@@ -204,7 +204,7 @@ def homebrew_uninstall_ariaflow(dry_run: bool = False) -> list[str]:
 def install_all(
     dry_run: bool = False,
     include_web: bool = False,
-    include_aria2: bool = False,
+    include_aria2: bool = True,
 ) -> dict[str, dict[str, object]]:
     if not dry_run and not is_macos():
         raise RuntimeError("install is only supported on macOS")
@@ -274,9 +274,9 @@ def status_all() -> dict[str, dict[str, object]]:
             completion="complete",
             reason="match" if aria2_installed else "missing",
             detail=(
-                f"aria2 installed {aria2_version or 'unknown'}; current production {aria2.get('version') or 'unknown'}; optional separate service"
+                f"aria2 installed {aria2_version or 'unknown'}; current production {aria2.get('version') or 'unknown'}; required dependency"
                 if aria2_installed
-                else f"aria2 package absent; current production {aria2.get('version') or 'unknown'}; optional separate service"
+                else f"aria2 package absent; current production {aria2.get('version') or 'unknown'}; required dependency"
             ),
         ),
         "networkquality": ucc_record(
@@ -294,9 +294,9 @@ def status_all() -> dict[str, dict[str, object]]:
             completion="complete",
             reason="match" if aria2["loaded"] else "missing",
             detail=(
-                f"aria2 launchd loaded ({aria2.get('version') or 'unknown'}); optional separate service"
+                f"aria2 launchd loaded ({aria2.get('version') or 'unknown'}); required dependency"
                 if aria2["loaded"]
-                else "aria2 launchd absent; optional separate service"
+                else "aria2 launchd absent; required dependency"
             ),
         ),
     }
@@ -328,7 +328,7 @@ def status_all() -> dict[str, dict[str, object]]:
 def uninstall_all(
     dry_run: bool = False,
     include_web: bool = False,
-    include_aria2: bool = False,
+    include_aria2: bool = True,
 ) -> dict[str, dict[str, object]]:
     if not dry_run and not is_macos():
         raise RuntimeError("uninstall is only supported on macOS")

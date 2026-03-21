@@ -169,7 +169,7 @@ class TicAriaFlowTests(unittest.TestCase):
     def test_install_dry_run_is_describable(self) -> None:
         plan = install_all(dry_run=True)
         self.assertIn("ariaflow", plan)
-        self.assertNotIn("aria2-launchd", plan)
+        self.assertIn("aria2-launchd", plan)
         self.assertNotIn("ariaflow-serve-launchd", plan)
         self.assertEqual(plan["ariaflow"]["meta"]["contract"], "UCC")
         self.assertEqual(plan["ariaflow"]["result"]["observation"], "ok")
@@ -212,7 +212,7 @@ class TicAriaFlowTests(unittest.TestCase):
     def test_uninstall_dry_run_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True)
         self.assertIn("ariaflow", plan)
-        self.assertNotIn("aria2-launchd", plan)
+        self.assertIn("aria2-launchd", plan)
         self.assertNotIn("ariaflow-serve-launchd", plan)
         self.assertEqual(plan["ariaflow"]["meta"]["contract"], "UCC")
         self.assertEqual(plan["ariaflow"]["result"]["reason"], "uninstall")
