@@ -70,18 +70,22 @@ This is still a minimal compliance layer, not a full framework implementation.
 
 ## Homebrew
 
-The intended macOS installation path is a Homebrew tap. The formula's `url`
-points at a versioned upstream archive. The default formula covers the
-`ariaflow` headless engine and expects `aria2` to be present as the runtime
-engine.
-When you publish a new version, update:
+The intended macOS installation path is a Homebrew tap.
 
-- the formula `url`
-- the formula `sha256`
-- the formula `version`
+- `ariaflow` installs the headless engine
+- `ariaflow-web` installs the local frontend
+- both are meant to run on the same Mac
 
-If the download location changes, you do not patch Homebrew globally; you update
-the tap formula for the new asset.
+`ariaflow` depends on `aria2` as the runtime engine. `ariaflow-web` depends on a
+running `ariaflow` backend and connects to it through `ARIAFLOW_API_URL`.
+
+When you publish a new version, update the matching tap formula:
+
+- `Formula/ariaflow.rb`
+- `Formula/ariaflow-web.rb`
+
+If the download location changes, update the tap formula for the new asset
+instead of patching Homebrew globally.
 
 ## Release Tooling
 
