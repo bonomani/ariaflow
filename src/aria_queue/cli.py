@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+import argparse
+import json
+
+from .contracts import preflight, run_ucc
+from .core import add_queue_item, load_queue
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="aria-queue")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    add = sub.add_parser("add", help="enqueue a URL")
+    add.add_argument("url")
+    add.add_argument("--output")
+    add.add_argument("--post-action-rule", default="pending")
+
+    run = sub.add_parser("run", help="process the queue sequentially")
+    run.add_argument("--port", type=int, default=6800)
+
+    status = sub.add_parser("status", help="show queue state")
+    status.add_argument("--json", action="store_true")
+
+    pre = sub.add_parser("preflight", help="run UIC pre-flight checks")
+    pre.add_argument("--json", action="store_true")
+
+    ucc = sub.add_parser("ucc", help="run a structured UCC execution cycle")
+    ucc.add_argument("--port", type=int, default=6800)
+    ucc.add_argument("--json", action="store_true")
+
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+
+    if args.command == "add":
+        item = add_queue_item(args.url, output=args.output, post_action_rule=args.post_action_rule)
+        print(f"Queued: {item.url}")
+        return 0
+
+    if args.command == "run":
+        result = run_ucc(port=args.port)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["result"].get("failure_class") is None else 1
+
+    if args.command == "status":
+        items = load_queue()
+        if args.json:
+            print(json.dumps({"items": items}, indent=2, sort_keys=True))
+        else:
+            for item in items:
+                print(f"{item.get('status', 'unknown'):>10}  {item.get('url')}")
+        return 0
+
+    if args.command == "preflight":
+        result = preflight()
+        if args.json:
+            print(json.dumps(result, indent=2, sort_keys=True))
+        else:
+            for gate in result["gates"]:
+                state = "satisfied" if gate["satisfied"] else "not_satisfied"
+                print(f"[GATE] {gate['name']} : {state} [{gate['blocking']}]")
+            for pref in result["preferences"]:
+                options = " | ".join(pref.get("options", []))
+                print(f"[PREFERENCE] {pref['name']} : {pref.get('value', 'undeclared')} — options: {options}")
+        return result["exit_code"]
+
+    if args.command == "ucc":
+        result = run_ucc(port=args.port)
+        if args.json:
+            print(json.dumps(result, indent=2, sort_keys=True))
+        else:
+            print(json.dumps(result["result"], indent=2, sort_keys=True))
+        return 0 if result["result"].get("failure_class") is None else 1
+
+    return 1

@@ -1,0 +1,64 @@
+# aria-queue
+
+Cross-platform queue driver for `aria2c` with:
+
+- simple URL enqueueing
+- sequential execution, one download at a time
+- pre-run bandwidth probing
+- runtime bandwidth adaptation through aria2 RPC
+- pluggable post-download actions
+- UIC pre-flight checks
+- UCC structured execution output
+- TIC-style tests
+
+Targets:
+
+- Linux
+- WSL
+- macOS
+
+## Commands
+
+```bash
+python -m aria_queue add <url>
+python -m aria_queue preflight
+python -m aria_queue run
+python -m aria_queue status
+python -m aria_queue ucc
+```
+
+## Goals
+
+- Prefer finishing one download before starting the next.
+- Start with a conservative bandwidth cap derived from a short probe.
+- Lower the cap when aria2 reports retries or errors.
+- Keep post-download handling policy-driven and separate from the queue engine.
+- Emit a structured UCC result for each run.
+
+## Storage
+
+Default files live under `~/.config/aria-queue/`:
+
+- `queue.json`
+- `state.json`
+- `aria2.log`
+
+## Post actions
+
+The post-action layer is intentionally not fixed yet. The tool exposes hooks for:
+
+- `move`
+- `rename`
+- `verify`
+- `import`
+- custom script execution
+
+Define rules later in `config/post-actions.json`.
+
+## UIC / UCC / TIC status
+
+- UIC: minimal pre-flight gate resolution exists.
+- UCC: structured result output exists for the main execution path.
+- TIC: tests declare intent in docstring form and verify observable result shapes.
+
+This is still a minimal compliance layer, not a full framework implementation.
