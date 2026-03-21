@@ -6,6 +6,7 @@ import json
 from . import __version__
 from .contracts import preflight, run_ucc
 from .core import add_queue_item, load_queue
+from .web import serve
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,6 +33,10 @@ def build_parser() -> argparse.ArgumentParser:
     ucc = sub.add_parser("ucc", help="run a structured UCC execution cycle")
     ucc.add_argument("--port", type=int, default=6800)
     ucc.add_argument("--json", action="store_true")
+
+    web = sub.add_parser("serve", help="start the local web UI")
+    web.add_argument("--host", default="127.0.0.1")
+    web.add_argument("--port", type=int, default=8000)
 
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
@@ -81,5 +86,14 @@ def main() -> int:
         else:
             print(json.dumps(result["result"], indent=2, sort_keys=True))
         return 0 if result["result"].get("failure_class") is None else 1
+
+    if args.command == "serve":
+        server = serve(host=args.host, port=args.port)
+        print(f"Serving on http://{args.host}:{args.port}")
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            server.server_close()
+        return 0
 
     return 1

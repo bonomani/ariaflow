@@ -10,6 +10,7 @@ Cross-platform queue driver for `aria2c` with:
 - UIC pre-flight checks
 - UCC structured execution output
 - TIC-style tests
+- local web UI
 
 Targets:
 
@@ -25,6 +26,7 @@ ariaflow preflight
 ariaflow run
 ariaflow status
 ariaflow ucc
+ariaflow serve
 ```
 
 You can also run it as a module:
@@ -68,6 +70,21 @@ Define rules later in `config/post-actions.json`.
 - TIC: tests declare intent in docstring form and verify observable result shapes.
 
 This is still a minimal compliance layer, not a full framework implementation.
+
+## Web UI
+
+The web mode is intentionally local-only:
+
+- binds to `127.0.0.1` by default
+- serves one page
+- exposes JSON endpoints under `/api/*`
+- keeps `aria2` as the download engine
+
+Run it with:
+
+```bash
+ariaflow serve
+```
 
 ## Homebrew
 
