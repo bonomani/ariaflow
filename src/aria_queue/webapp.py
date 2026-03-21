@@ -139,6 +139,11 @@ INDEX_HTML = """<!doctype html>
       border-radius: 14px;
       padding: 14px;
     }
+    .item.compact {
+      padding: 12px 14px;
+      display: grid;
+      gap: 8px;
+    }
     .item-top {
       display: flex;
       justify-content: space-between;
@@ -477,7 +482,7 @@ INDEX_HTML = """<!doctype html>
       ].filter(Boolean).join(" · ");
       const shortUrl = item.output || (item.url ? item.url.split('/').pop() : '(no url)');
       return `
-        <div class="item">
+        <div class="item compact">
           <div class="item-top">
             <div class="item-url">${shortUrl}</div>
             <span class="${badgeClass(status)}">${status}</span>
