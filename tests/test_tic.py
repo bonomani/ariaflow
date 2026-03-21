@@ -169,7 +169,7 @@ class TicAriaFlowTests(unittest.TestCase):
     def test_install_dry_run_is_describable(self) -> None:
         plan = install_all(dry_run=True)
         self.assertIn("ariaflow", plan)
-        self.assertIn("aria2-launchd", plan)
+        self.assertNotIn("aria2-launchd", plan)
         self.assertNotIn("ariaflow-serve-launchd", plan)
         self.assertEqual(plan["ariaflow"]["meta"]["contract"], "UCC")
         self.assertEqual(plan["ariaflow"]["result"]["observation"], "ok")
@@ -179,6 +179,11 @@ class TicAriaFlowTests(unittest.TestCase):
         plan = install_all(dry_run=True, include_web=True)
         self.assertIn("ariaflow-serve-launchd", plan)
         self.assertEqual(plan["ariaflow-serve-launchd"]["result"]["reason"], "install")
+
+    def test_install_dry_run_with_aria2_is_describable(self) -> None:
+        plan = install_all(dry_run=True, include_aria2=True)
+        self.assertIn("aria2-launchd", plan)
+        self.assertEqual(plan["aria2-launchd"]["result"]["reason"], "install")
 
     def test_lifecycle_reports_status_shape(self) -> None:
         status = status_all()
@@ -206,15 +211,21 @@ class TicAriaFlowTests(unittest.TestCase):
 
     def test_uninstall_dry_run_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True)
-        self.assertIn("aria2-launchd", plan)
+        self.assertIn("ariaflow", plan)
+        self.assertNotIn("aria2-launchd", plan)
         self.assertNotIn("ariaflow-serve-launchd", plan)
-        self.assertEqual(plan["aria2-launchd"]["meta"]["contract"], "UCC")
-        self.assertEqual(plan["aria2-launchd"]["result"]["reason"], "uninstall")
+        self.assertEqual(plan["ariaflow"]["meta"]["contract"], "UCC")
+        self.assertEqual(plan["ariaflow"]["result"]["reason"], "uninstall")
 
     def test_uninstall_dry_run_with_web_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True, include_web=True)
         self.assertIn("ariaflow-serve-launchd", plan)
         self.assertEqual(plan["ariaflow-serve-launchd"]["result"]["reason"], "uninstall")
+
+    def test_uninstall_dry_run_with_aria2_is_describable(self) -> None:
+        plan = uninstall_all(dry_run=True, include_aria2=True)
+        self.assertIn("aria2-launchd", plan)
+        self.assertEqual(plan["aria2-launchd"]["result"]["reason"], "uninstall")
 
 
 if __name__ == "__main__":

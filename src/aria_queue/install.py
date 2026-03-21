@@ -201,11 +201,14 @@ def homebrew_uninstall_ariaflow(dry_run: bool = False) -> list[str]:
     return [" ".join(cmd) for cmd in commands]
 
 
-def install_all(dry_run: bool = False, include_web: bool = False) -> dict[str, dict[str, object]]:
+def install_all(
+    dry_run: bool = False,
+    include_web: bool = False,
+    include_aria2: bool = False,
+) -> dict[str, dict[str, object]]:
     if not dry_run and not is_macos():
         raise RuntimeError("install is only supported on macOS")
     ariaflow_cmds = homebrew_install_ariaflow(dry_run=dry_run)
-    aria2_cmds = install_aria2_launchd(dry_run=dry_run)
     plan = {
         "ariaflow": ucc_record(
             target="ariaflow",
@@ -215,15 +218,6 @@ def install_all(dry_run: bool = False, include_web: bool = False) -> dict[str, d
             reason="install",
             detail="ariaflow package installed or queued for installation",
             commands=ariaflow_cmds,
-        ),
-        "aria2-launchd": ucc_record(
-            target="aria2-launchd",
-            observed=True,
-            outcome="changed",
-            completion="complete",
-            reason="install",
-            detail="aria2 launchd service installed or queued for installation",
-            commands=aria2_cmds,
         ),
     }
     if include_web:
@@ -236,6 +230,17 @@ def install_all(dry_run: bool = False, include_web: bool = False) -> dict[str, d
             reason="install",
             detail="ariaflow web UI launchd service installed or queued for installation",
             commands=serve_cmds,
+        )
+    if include_aria2:
+        aria2_cmds = install_aria2_launchd(dry_run=dry_run)
+        plan["aria2-launchd"] = ucc_record(
+            target="aria2-launchd",
+            observed=True,
+            outcome="changed",
+            completion="complete",
+            reason="install",
+            detail="aria2 launchd service installed or queued for installation",
+            commands=aria2_cmds,
         )
     return plan
 
@@ -320,19 +325,22 @@ def status_all() -> dict[str, dict[str, object]]:
     return plan
 
 
-def uninstall_all(dry_run: bool = False, include_web: bool = False) -> dict[str, dict[str, object]]:
+def uninstall_all(
+    dry_run: bool = False,
+    include_web: bool = False,
+    include_aria2: bool = False,
+) -> dict[str, dict[str, object]]:
     if not dry_run and not is_macos():
         raise RuntimeError("uninstall is only supported on macOS")
-    aria2_cmds = uninstall_aria2_launchd(dry_run=dry_run)
     plan = {
-        "aria2-launchd": ucc_record(
-            target="aria2-launchd",
+        "ariaflow": ucc_record(
+            target="ariaflow",
             observed=True,
             outcome="changed",
             completion="complete",
             reason="uninstall",
-            detail="aria2 launchd removed or queued for removal",
-            commands=aria2_cmds,
+            detail="ariaflow package removed or queued for removal",
+            commands=homebrew_uninstall_ariaflow(dry_run=dry_run),
         ),
     }
     if include_web:
@@ -345,5 +353,16 @@ def uninstall_all(dry_run: bool = False, include_web: bool = False) -> dict[str,
             reason="uninstall",
             detail="ariaflow web launchd removed or queued for removal",
             commands=serve_cmds,
+        )
+    if include_aria2:
+        aria2_cmds = uninstall_aria2_launchd(dry_run=dry_run)
+        plan["aria2-launchd"] = ucc_record(
+            target="aria2-launchd",
+            observed=True,
+            outcome="changed",
+            completion="complete",
+            reason="uninstall",
+            detail="aria2 launchd removed or queued for removal",
+            commands=aria2_cmds,
         )
     return plan
