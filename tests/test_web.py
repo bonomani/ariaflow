@@ -6,6 +6,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 import unittest
@@ -38,19 +39,21 @@ class WebSmokeTests(unittest.TestCase):
             time.sleep(0.2)
             try:
                 base = f"http://127.0.0.1:{port}"
-                page = urllib.request.urlopen(f"{base}/", timeout=5).read().decode("utf-8")
-                self.assertIn("ariaflow", page)
-                bandwidth_page = urllib.request.urlopen(f"{base}/bandwidth", timeout=5).read().decode("utf-8")
-                self.assertIn("Bandwidth", bandwidth_page)
-                lifecycle_page = urllib.request.urlopen(f"{base}/lifecycle", timeout=5).read().decode("utf-8")
-                self.assertIn("Service Status", lifecycle_page)
-                options_page = urllib.request.urlopen(f"{base}/options", timeout=5).read().decode("utf-8")
-                self.assertIn("Options", options_page)
-                log_page = urllib.request.urlopen(f"{base}/log", timeout=5).read().decode("utf-8")
-                self.assertIn("Log", log_page)
-                self.assertIn("action-filter", log_page)
-                self.assertIn("target-filter", log_page)
-                self.assertIn("session-filter", log_page)
+                with self.assertRaises(urllib.error.HTTPError) as html_error:
+                    urllib.request.urlopen(f"{base}/", timeout=5)
+                self.assertEqual(html_error.exception.code, 404)
+                with self.assertRaises(urllib.error.HTTPError) as bandwidth_error:
+                    urllib.request.urlopen(f"{base}/bandwidth", timeout=5)
+                self.assertEqual(bandwidth_error.exception.code, 404)
+                with self.assertRaises(urllib.error.HTTPError) as lifecycle_error:
+                    urllib.request.urlopen(f"{base}/lifecycle", timeout=5)
+                self.assertEqual(lifecycle_error.exception.code, 404)
+                with self.assertRaises(urllib.error.HTTPError) as options_error:
+                    urllib.request.urlopen(f"{base}/options", timeout=5)
+                self.assertEqual(options_error.exception.code, 404)
+                with self.assertRaises(urllib.error.HTTPError) as log_error:
+                    urllib.request.urlopen(f"{base}/log", timeout=5)
+                self.assertEqual(log_error.exception.code, 404)
                 status = request_json(f"{base}/api/status")
                 self.assertIn("items", status)
                 self.assertIn("state", status)
