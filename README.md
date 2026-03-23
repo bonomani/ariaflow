@@ -16,6 +16,12 @@ Targets:
 - WSL
 - macOS
 
+## Architecture
+
+The canonical engine architecture is documented in:
+
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+
 ## Commands
 
 ```bash
