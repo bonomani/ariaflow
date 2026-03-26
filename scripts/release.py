@@ -159,9 +159,10 @@ def main() -> int:
     run(["git", "tag", tag])
 
     if args.push:
-        run(["git", "push", "origin", "main", "--tags"])
+        run(["git", "push", "origin", "main"])
+        run(["git", "push", "origin", tag])
     else:
-        print(f"Tagged {tag}. Push with: git push origin main --tags")
+        print(f"Tagged {tag}. Push with: git push origin main && git push origin {tag}")
 
     print(f"Prepared release tag: {tag}")
     return 0
