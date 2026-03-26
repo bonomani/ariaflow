@@ -31,6 +31,8 @@ class HomebrewFormulaScriptTests(unittest.TestCase):
         self.assertIn('sha256 "abc123"', formula)
         self.assertIn('version "0.1.2"', formula)
         self.assertIn('head "https://github.com/bonomani/ariaflow.git", branch: "main"', formula)
+        self.assertIn('PYTHONPATH="#{libexec}/src:${PYTHONPATH}"', formula)
+        self.assertNotIn("#{PYTHONPATH}", formula)
 
 
 if __name__ == "__main__":
