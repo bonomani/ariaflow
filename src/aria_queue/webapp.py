@@ -1410,10 +1410,20 @@ INDEX_HTML = """<!doctype html>
     }
     async function runQueue() {
       const autoPreflight = document.getElementById('auto-preflight')?.checked;
-      const r = await fetch(apiPath('/api/run'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({auto_preflight_on_run: !!autoPreflight}) });
+      const stateRunning = !!lastStatus?.state?.running;
+      const action = stateRunning ? 'stop' : 'start';
+      const payload = action === 'start'
+        ? { action, auto_preflight_on_run: !!autoPreflight }
+        : { action };
+      const r = await fetch(apiPath('/api/run'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       const data = await r.json();
       lastResult = data;
-      document.getElementById('result').textContent = data.started ? "Queue runner started" : data.stopped ? "Queue runner stopped" : "Queue runner already running";
+      const result = data.result || {};
+      document.getElementById('result').textContent = result.started
+        ? "Queue runner started"
+        : result.stopped
+          ? "Queue runner stopped"
+          : (data.action === 'stop' ? "Queue runner already stopped" : "Queue runner already running");
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
       await refresh();
     }

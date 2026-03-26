@@ -182,6 +182,54 @@ class TicAriaFlowTests(unittest.TestCase):
         save_queue.assert_called_once()
         record_action.assert_called_once()
 
+    def test_reconcile_live_queue_collapses_duplicate_rows_for_same_live_download(self) -> None:
+        queue_items = [
+            {
+                "id": "item-1",
+                "url": "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso",
+                "status": "paused",
+                "gid": "gid-old",
+                "session_id": "batch-1",
+                "completedLength": "199400000",
+            },
+            {
+                "id": "item-2",
+                "url": "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso",
+                "status": "downloading",
+                "gid": "gid-9",
+                "session_id": "batch-2",
+                "completedLength": "230300000",
+                "recovered": True,
+            },
+        ]
+        live = [{
+            "gid": "gid-9",
+            "status": "active",
+            "completedLength": "230300000",
+            "totalLength": "3200000000",
+            "downloadSpeed": "10",
+            "files": [{"uris": [{"uri": "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso"}]}],
+        }]
+        saved_items: list[dict] = []
+
+        def capture_save(items: list[dict]) -> None:
+            saved_items[:] = items
+
+        with patch("aria_queue.core.load_state", return_value={"session_id": "batch-3"}), \
+             patch("aria_queue.core.active_gids", return_value=live), \
+             patch("aria_queue.core.load_queue", return_value=queue_items), \
+             patch("aria_queue.core.save_queue", side_effect=capture_save), \
+             patch("aria_queue.core.record_action") as record_action:
+            result = reconcile_live_queue()
+        self.assertTrue(result["changed"])
+        self.assertEqual(result["recovered"], 1)
+        self.assertEqual(len(saved_items), 1)
+        self.assertEqual(saved_items[0]["gid"], "gid-9")
+        self.assertEqual(saved_items[0]["url"], "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso")
+        self.assertEqual(saved_items[0]["completedLength"], "230300000")
+        self.assertTrue(saved_items[0]["recovered"])
+        record_action.assert_called_once()
+
     def test_deduplicate_active_transfers_pauses_less_advanced_duplicates(self) -> None:
         active = [
             {

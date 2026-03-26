@@ -453,6 +453,20 @@ def _queue_item_for_active_info(info: dict[str, Any], items: list[dict[str, Any]
     url = _active_item_url(info)
     session_id = load_state().get("session_id")
     candidates = [item for item in items if item.get("status") not in {"done", "error"}]
+    if gid:
+        for item in items:
+            if item.get("gid") == gid:
+                return item
+    if url:
+        for item in items:
+            if item.get("url") == url:
+                return item
+        url_tail = url.split("?")[0].rstrip("/").split("/")[-1]
+        if url_tail:
+            for item in items:
+                current = str(item.get("url") or "")
+                if current and (current == url or current.split("?")[0].rstrip("/").split("/")[-1] == url_tail):
+                    return item
     session_candidates = candidates
     if session_id:
         session_candidates = [item for item in candidates if not item.get("session_id") or item.get("session_id") == session_id]
@@ -471,19 +485,6 @@ def _queue_item_for_active_info(info: dict[str, Any], items: list[dict[str, Any]
             for item in candidates:
                 current = str(item.get("url") or "")
                 if current and (current == url or current.split("?")[0].rstrip("/").split("/")[-1] == url_tail):
-                    return item
-    if session_candidates is not candidates:
-        if gid:
-            for item in items:
-                if item.get("status") in {"done", "error"}:
-                    continue
-                if item.get("gid") == gid:
-                    return item
-        if url:
-            for item in items:
-                if item.get("status") in {"done", "error"}:
-                    continue
-                if item.get("url") == url:
                     return item
     return None
 
@@ -506,6 +507,36 @@ def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool
     now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     changed = False
     recovered = 0
+
+    def _collapse_duplicate_rows(primary: dict[str, Any], current_gid: str, current_url: str | None) -> None:
+        nonlocal changed
+        duplicate_keys = {key for key in ("downloadSpeed", "completedLength", "totalLength", "files") if primary.get(key) is not None}
+        survivors: list[dict[str, Any]] = []
+        for candidate in items:
+            if candidate is primary:
+                survivors.append(candidate)
+                continue
+            if candidate.get("status") in {"done", "error"}:
+                survivors.append(candidate)
+                continue
+            candidate_gid = str(candidate.get("gid") or "")
+            candidate_url = str(candidate.get("url") or "")
+            same_job = bool(current_gid and candidate_gid and candidate_gid == current_gid)
+            same_url = bool(current_url and candidate_url and candidate_url == current_url)
+            if not same_job and not same_url:
+                survivors.append(candidate)
+                continue
+            for key in ("output", "post_action_rule", "session_id", "recovery_session_id", "recovered_at", "error_code", "error_message"):
+                if not primary.get(key) and candidate.get(key):
+                    primary[key] = candidate.get(key)
+            if candidate.get("recovered"):
+                primary["recovered"] = True
+            for key in ("downloadSpeed", "completedLength", "totalLength", "files"):
+                if key not in duplicate_keys and candidate.get(key) is not None:
+                    primary[key] = candidate.get(key)
+            changed = True
+        if len(survivors) != len(items):
+            items[:] = survivors
 
     for info in active_infos:
         gid = str(info.get("gid") or "")
@@ -535,6 +566,7 @@ def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool
             continue
         if item is None:
             continue
+        _collapse_duplicate_rows(item, gid, url)
         if item.get("gid") != gid:
             item["gid"] = gid
             changed = True
