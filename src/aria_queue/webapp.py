@@ -62,6 +62,8 @@ def _lifecycle_payload() -> dict[str, object]:
     return lifecycle
 
 
+# Legacy snapshot only. The headless backend serves JSON under `/api/*`;
+# the active frontend lives in the separate `ariaflow-web` project.
 INDEX_HTML = """<!doctype html>
 <html>
 <head>

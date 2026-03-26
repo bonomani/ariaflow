@@ -5,7 +5,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
 
-from .core import aria_rpc, config_dir, get_active_progress, load_state, queue_path, summarize_queue
+from .core import aria_rpc, config_dir, get_active_progress, load_state, queue_path, storage_locked, summarize_queue
 
 
 DEFAULT_DECLARATION = {
@@ -19,7 +19,7 @@ DEFAULT_DECLARATION = {
             {"name": "post_action_rule", "value": "pending", "options": ["pending"], "rationale": "default placeholder"},
             {"name": "auto_preflight_on_run", "value": False, "options": [True, False], "rationale": "default off"},
             {"name": "duplicate_active_transfer_action", "value": "pause", "options": ["pause", "remove", "ignore"], "rationale": "default dedup policy"},
-            {"name": "max_simultaneous_downloads", "value": 0, "options": [0], "rationale": "0 means unlimited"}
+            {"name": "max_simultaneous_downloads", "value": 1, "options": [1], "rationale": "1 preserves the sequential default"}
         ],
         "policies": [],
     },
@@ -34,11 +34,12 @@ def declaration_path() -> Path:
 
 
 def ensure_declaration() -> dict[str, Any]:
-    path = declaration_path()
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(DEFAULT_DECLARATION, indent=2) + "\n", encoding="utf-8")
-    return json.loads(path.read_text(encoding="utf-8"))
+    with storage_locked():
+        path = declaration_path()
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(DEFAULT_DECLARATION, indent=2) + "\n", encoding="utf-8")
+        return json.loads(path.read_text(encoding="utf-8"))
 
 
 def load_declaration() -> dict[str, Any]:
@@ -46,10 +47,11 @@ def load_declaration() -> dict[str, Any]:
 
 
 def save_declaration(declaration: dict[str, Any]) -> dict[str, Any]:
-    path = declaration_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(declaration, indent=2) + "\n", encoding="utf-8")
-    return declaration
+    with storage_locked():
+        path = declaration_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(declaration, indent=2) + "\n", encoding="utf-8")
+        return declaration
 
 
 def preflight() -> dict[str, Any]:

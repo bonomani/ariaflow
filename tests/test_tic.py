@@ -10,7 +10,20 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from aria_queue.contracts import preflight, run_ucc
-from aria_queue.core import add_queue_item, deduplicate_active_transfers, discover_active_transfer, load_action_log, probe_bandwidth, reconcile_live_queue, start_new_state_session, load_state
+from aria_queue.core import (
+    add_queue_item,
+    deduplicate_active_transfers,
+    discover_active_transfer,
+    load_action_log,
+    load_queue,
+    load_state,
+    probe_bandwidth,
+    process_queue,
+    reconcile_live_queue,
+    save_queue,
+    save_state,
+    start_new_state_session,
+)
 from aria_queue.install import install_all, status_all, uninstall_all
 
 
@@ -76,13 +89,13 @@ class TicAriaFlowTests(unittest.TestCase):
         auto = next((pref for pref in prefs if pref.get("name") == "auto_preflight_on_run"), {})
         self.assertFalse(auto.get("value", True))
 
-    def test_concurrency_default_is_unlimited(self) -> None:
+    def test_concurrency_default_is_sequential(self) -> None:
         from aria_queue.contracts import load_declaration
 
         declaration = load_declaration()
         prefs = declaration.get("uic", {}).get("preferences", [])
         limit = next((pref for pref in prefs if pref.get("name") == "max_simultaneous_downloads"), {})
-        self.assertEqual(limit.get("value", 1), 0)
+        self.assertEqual(limit.get("value", 0), 1)
 
     def test_probe_fallback_reports_reason(self) -> None:
         with patch("aria_queue.core.shutil.which", return_value=None):
@@ -157,6 +170,83 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertIn("gid-keep", result["kept"])
         self.assertIn("gid-drop", result["paused"])
         rpc.assert_any_call("aria2.pause", ["gid-drop"], port=6800, timeout=5)
+
+    def test_process_queue_marks_completed_tracked_download_done(self) -> None:
+        add_queue_item("https://example.com/model.gguf")
+        complete = {
+            "status": "complete",
+            "errorCode": "0",
+            "errorMessage": "",
+            "downloadSpeed": "0",
+            "completedLength": "100",
+            "totalLength": "100",
+            "files": [{"uris": [{"uri": "https://example.com/model.gguf"}]}],
+        }
+        with patch("aria_queue.core.ensure_aria_daemon"), \
+             patch("aria_queue.core.deduplicate_active_transfers"), \
+             patch("aria_queue.core.reconcile_live_queue"), \
+             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2}), \
+             patch("aria_queue.core.current_bandwidth", return_value={}), \
+             patch("aria_queue.core.active_gids", return_value=[]), \
+             patch("aria_queue.core.add_download", return_value="gid-1"), \
+             patch("aria_queue.core.status", return_value=complete), \
+             patch("aria_queue.core.time.sleep", return_value=None):
+            result = process_queue()
+        self.assertEqual(result[0]["status"], "done")
+        self.assertEqual(result[0]["gid"], "gid-1")
+        self.assertIn("post_action", result[0])
+
+    def test_process_queue_resumes_paused_tracked_download(self) -> None:
+        add_queue_item("https://example.com/model.gguf")
+        items = load_queue()
+        items[0]["status"] = "paused"
+        items[0]["gid"] = "gid-1"
+        items[0]["live_status"] = "paused"
+        save_queue(items)
+        state = load_state()
+        state["paused"] = False
+        save_state(state)
+
+        status_responses = iter(
+            [
+                {
+                    "status": "paused",
+                    "errorCode": "0",
+                    "errorMessage": "",
+                    "downloadSpeed": "0",
+                    "completedLength": "10",
+                    "totalLength": "100",
+                    "files": [{"uris": [{"uri": "https://example.com/model.gguf"}]}],
+                },
+                {
+                    "status": "complete",
+                    "errorCode": "0",
+                    "errorMessage": "",
+                    "downloadSpeed": "0",
+                    "completedLength": "100",
+                    "totalLength": "100",
+                    "files": [{"uris": [{"uri": "https://example.com/model.gguf"}]}],
+                },
+            ]
+        )
+
+        def fake_status(_gid: str, port: int = 6800, timeout: int = 5) -> dict:
+            return next(status_responses)
+
+        with patch("aria_queue.core.ensure_aria_daemon"), \
+             patch("aria_queue.core.deduplicate_active_transfers"), \
+             patch("aria_queue.core.reconcile_live_queue"), \
+             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2}), \
+             patch("aria_queue.core.current_bandwidth", return_value={}), \
+             patch("aria_queue.core.active_gids", return_value=[]), \
+             patch("aria_queue.core.add_download") as add_download, \
+             patch("aria_queue.core.status", side_effect=fake_status), \
+             patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc, \
+             patch("aria_queue.core.time.sleep", return_value=None):
+            result = process_queue()
+        self.assertFalse(add_download.called)
+        rpc.assert_any_call("aria2.unpause", ["gid-1"], port=6800, timeout=5)
+        self.assertEqual(result[0]["status"], "done")
 
     def test_ucc_returns_structured_result(self) -> None:
         add_queue_item("https://example.com/model.gguf")

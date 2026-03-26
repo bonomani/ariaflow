@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 import json
 import os
 import re
@@ -9,9 +10,14 @@ import time
 import threading
 import urllib.request
 from dataclasses import dataclass, asdict
+import fcntl
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+
+
+_STORAGE_LOCK = threading.RLock()
+_STORAGE_LOCK_STATE = threading.local()
 
 
 def config_dir() -> Path:
@@ -34,8 +40,39 @@ def action_log_path() -> Path:
     return config_dir() / "actions.jsonl"
 
 
+def storage_lock_path() -> Path:
+    return config_dir() / ".storage.lock"
+
+
 def ensure_storage() -> None:
     config_dir().mkdir(parents=True, exist_ok=True)
+
+
+@contextmanager
+def storage_locked() -> Any:
+    ensure_storage()
+    with _STORAGE_LOCK:
+        depth = getattr(_STORAGE_LOCK_STATE, "depth", 0)
+        handle = getattr(_STORAGE_LOCK_STATE, "handle", None)
+        if depth == 0 or handle is None:
+            handle = storage_lock_path().open("a+", encoding="utf-8")
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            _STORAGE_LOCK_STATE.handle = handle
+        _STORAGE_LOCK_STATE.depth = depth + 1
+        try:
+            yield
+        finally:
+            next_depth = getattr(_STORAGE_LOCK_STATE, "depth", 1) - 1
+            _STORAGE_LOCK_STATE.depth = next_depth
+            if next_depth == 0:
+                current = getattr(_STORAGE_LOCK_STATE, "handle", None)
+                if current is not None:
+                    fcntl.flock(current.fileno(), fcntl.LOCK_UN)
+                    current.close()
+                if hasattr(_STORAGE_LOCK_STATE, "handle"):
+                    delattr(_STORAGE_LOCK_STATE, "handle")
+                if hasattr(_STORAGE_LOCK_STATE, "depth"):
+                    delattr(_STORAGE_LOCK_STATE, "depth")
 
 
 def read_json(path: Path, default: Any) -> Any:
@@ -62,38 +99,39 @@ def write_json(path: Path, value: Any) -> None:
 
 
 def append_action_log(entry: dict[str, Any]) -> None:
-    ensure_storage()
-    payload = dict(entry)
-    payload.setdefault("timestamp", time.strftime("%Y-%m-%dT%H:%M:%S%z"))
-    try:
-        state = load_state()
-        session_id = state.get("session_id")
-    except Exception:
-        state = None
-        session_id = None
-    if session_id:
-        payload.setdefault("session_id", session_id)
-        if state is not None:
-            state["session_last_seen_at"] = payload["timestamp"]
-            save_state(state)
-    with action_log_path().open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(payload, sort_keys=True) + "\n")
+    with storage_locked():
+        payload = dict(entry)
+        payload.setdefault("timestamp", time.strftime("%Y-%m-%dT%H:%M:%S%z"))
+        try:
+            state = load_state()
+            session_id = state.get("session_id")
+        except Exception:
+            state = None
+            session_id = None
+        if session_id:
+            payload.setdefault("session_id", session_id)
+            if state is not None:
+                state["session_last_seen_at"] = payload["timestamp"]
+                save_state(state)
+        with action_log_path().open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, sort_keys=True) + "\n")
 
 
 def load_action_log(limit: int = 200) -> list[dict[str, Any]]:
-    path = action_log_path()
-    if not path.exists():
-        return []
-    lines = path.read_text(encoding="utf-8").splitlines()
-    entries: list[dict[str, Any]] = []
-    for line in lines[-limit:]:
-        if not line.strip():
-            continue
-        try:
-            entries.append(json.loads(line))
-        except json.JSONDecodeError:
-            entries.append({"error": "invalid_log_entry", "raw": line})
-    return entries
+    with storage_locked():
+        path = action_log_path()
+        if not path.exists():
+            return []
+        lines = path.read_text(encoding="utf-8").splitlines()
+        entries: list[dict[str, Any]] = []
+        for line in lines[-limit:]:
+            if not line.strip():
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                entries.append({"error": "invalid_log_entry", "raw": line})
+        return entries
 
 
 def record_action(
@@ -159,80 +197,87 @@ def log_transfer_poll(
 
 
 def load_state() -> dict[str, Any]:
-    return read_json(
-        state_path(),
-        {
-            "paused": False,
-            "active_gid": None,
-            "active_url": None,
-            "running": False,
-            "stop_requested": False,
-            "session_id": None,
-            "session_started_at": None,
-            "session_last_seen_at": None,
-            "session_closed_at": None,
-            "session_closed_reason": None,
-        },
-    )
+    with storage_locked():
+        return read_json(
+            state_path(),
+            {
+                "paused": False,
+                "active_gid": None,
+                "active_url": None,
+                "running": False,
+                "stop_requested": False,
+                "session_id": None,
+                "session_started_at": None,
+                "session_last_seen_at": None,
+                "session_closed_at": None,
+                "session_closed_reason": None,
+            },
+        )
 
 
 def save_state(state: dict[str, Any]) -> None:
-    write_json(state_path(), state)
+    with storage_locked():
+        write_json(state_path(), state)
 
 
 def ensure_state_session() -> dict[str, Any]:
-    state = load_state()
-    if not state.get("session_id") or state.get("session_closed_at"):
-        state["session_id"] = str(uuid4())
-        state["session_started_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-        state["session_last_seen_at"] = state["session_started_at"]
-        state["session_closed_at"] = None
-        state["session_closed_reason"] = None
-        save_state(state)
-    return state
+    with storage_locked():
+        state = load_state()
+        if not state.get("session_id") or state.get("session_closed_at"):
+            state["session_id"] = str(uuid4())
+            state["session_started_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+            state["session_last_seen_at"] = state["session_started_at"]
+            state["session_closed_at"] = None
+            state["session_closed_reason"] = None
+            save_state(state)
+        return state
 
 
 def touch_state_session() -> dict[str, Any]:
-    state = load_state()
-    if state.get("session_id"):
-        state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-        save_state(state)
-    return state
+    with storage_locked():
+        state = load_state()
+        if state.get("session_id"):
+            state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+            save_state(state)
+        return state
 
 
 def close_state_session(reason: str = "closed") -> dict[str, Any]:
-    state = load_state()
-    if state.get("session_id") and not state.get("session_closed_at"):
-        now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-        state["session_closed_at"] = now
-        state["session_closed_reason"] = reason
-        state["session_last_seen_at"] = now
-        save_state(state)
-    return state
+    with storage_locked():
+        state = load_state()
+        if state.get("session_id") and not state.get("session_closed_at"):
+            now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+            state["session_closed_at"] = now
+            state["session_closed_reason"] = reason
+            state["session_last_seen_at"] = now
+            save_state(state)
+        return state
 
 
 def start_new_state_session(reason: str = "manual_new_session") -> dict[str, Any]:
-    close_state_session(reason=reason)
-    state = load_state()
-    state["session_id"] = str(uuid4())
-    now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-    state["session_started_at"] = now
-    state["session_last_seen_at"] = now
-    state["session_closed_at"] = None
-    state["session_closed_reason"] = None
-    save_state(state)
-    return state
+    with storage_locked():
+        close_state_session(reason=reason)
+        state = load_state()
+        state["session_id"] = str(uuid4())
+        now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        state["session_started_at"] = now
+        state["session_last_seen_at"] = now
+        state["session_closed_at"] = None
+        state["session_closed_reason"] = None
+        save_state(state)
+        return state
 
 
 def start_background_process(port: int = 6800) -> dict[str, Any]:
-    state = ensure_state_session()
-    if state.get("running"):
-        return {"started": False, "reason": "already_running"}
+    with storage_locked():
+        state = ensure_state_session()
+        if state.get("running"):
+            return {"started": False, "reason": "already_running"}
 
-    state["stop_requested"] = False
-    state["running"] = True
-    state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-    save_state(state)
+        state["stop_requested"] = False
+        state["running"] = True
+        state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        save_state(state)
 
     def _runner() -> None:
         try:
@@ -258,15 +303,16 @@ def start_background_process(port: int = 6800) -> dict[str, Any]:
 
 
 def stop_background_process(port: int = 6800) -> dict[str, Any]:
-    state = load_state()
-    if not state.get("running"):
-        state["stop_requested"] = False
-        save_state(state)
-        return {"stopped": False, "reason": "not_running"}
+    with storage_locked():
+        state = load_state()
+        if not state.get("running"):
+            state["stop_requested"] = False
+            save_state(state)
+            return {"stopped": False, "reason": "not_running"}
 
-    before = {"state": dict(state), "queue": summarize_queue(load_queue())}
-    state["stop_requested"] = True
-    save_state(state)
+        before = {"state": dict(state), "queue": summarize_queue(load_queue())}
+        state["stop_requested"] = True
+        save_state(state)
 
     gid = state.get("active_gid")
     if gid:
@@ -274,17 +320,16 @@ def stop_background_process(port: int = 6800) -> dict[str, Any]:
             aria_rpc("aria2.pause", [gid], port=port, timeout=5)
         except Exception:
             pass
-        item = find_queue_item_by_gid(str(gid))
-        if item is not None:
-            item["status"] = "paused"
+        with storage_locked():
             items = load_queue()
             for current in items:
                 if current.get("gid") == gid:
                     current["status"] = "paused"
+                    current["live_status"] = "paused"
                     break
             save_queue(items)
-    after = {"state": load_state(), "queue": summarize_queue(load_queue())}
     close_state_session(reason="stop_requested")
+    after = {"state": load_state(), "queue": summarize_queue(load_queue())}
     record_action(
         action="stop",
         target="queue",
@@ -315,8 +360,9 @@ class QueueItem:
 
 
 def load_queue() -> list[dict[str, Any]]:
-    data = read_json(queue_path(), {"items": []})
-    return list(data.get("items", []))
+    with storage_locked():
+        data = read_json(queue_path(), {"items": []})
+        return list(data.get("items", []))
 
 
 def summarize_queue(items: list[dict[str, Any]]) -> dict[str, int]:
@@ -331,7 +377,8 @@ def summarize_queue(items: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def save_queue(items: list[dict[str, Any]]) -> None:
-    write_json(queue_path(), {"items": items})
+    with storage_locked():
+        write_json(queue_path(), {"items": items})
 
 
 def find_queue_item_by_url(url: str) -> dict[str, Any] | None:
@@ -441,8 +488,10 @@ def _merge_active_status(status: str | None) -> str:
 
 def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool = True) -> dict[str, Any]:
     ensure_storage()
-    state = ensure_state_session()
-    items = load_queue()
+    with storage_locked():
+        state = ensure_state_session()
+        items = load_queue()
+        before_summary = summarize_queue(items)
     active_infos = active_gids(port=port, timeout=timeout)
     now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     changed = False
@@ -509,16 +558,17 @@ def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool
             recovered += 1
 
     if changed:
-        save_queue(items)
-        record_action(
-            action="reconcile",
-            target="queue",
-            outcome="changed",
-            reason="live_state_merged",
-            before={"summary": summarize_queue(load_queue())},
-            after={"summary": summarize_queue(items), "recovered": recovered, "active": [str(info.get("gid") or "") for info in active_infos if info.get("gid")]},
-            detail={"recovered": recovered, "active_count": len(active_infos), "adopt_missing": adopt_missing},
-        )
+        with storage_locked():
+            save_queue(items)
+            record_action(
+                action="reconcile",
+                target="queue",
+                outcome="changed",
+                reason="live_state_merged",
+                before={"summary": before_summary},
+                after={"summary": summarize_queue(items), "recovered": recovered, "active": [str(info.get("gid") or "") for info in active_infos if info.get("gid")]},
+                detail={"recovered": recovered, "active_count": len(active_infos), "adopt_missing": adopt_missing},
+            )
     return {"changed": changed, "recovered": recovered, "active_count": len(active_infos), "items": items}
 
 
@@ -586,60 +636,65 @@ def add_queue_item(url: str, output: str | None = None, post_action_rule: str = 
     from .contracts import load_declaration
 
     ensure_storage()
-    state = ensure_state_session()
-    touch_state_session()
-    items = load_queue()
-    before = {"summary": summarize_queue(items)}
-    existing = next((item for item in items if item.get("url") == url and item.get("status") != "error"), None)
-    if existing is not None:
+    with storage_locked():
+        state = ensure_state_session()
+        touch_state_session()
+        items = load_queue()
+        before = {"summary": summarize_queue(items)}
+        existing = next((item for item in items if item.get("url") == url and item.get("status") != "error"), None)
+        if existing is not None:
+            record_action(
+                action="add",
+                target="queue",
+                outcome="unchanged",
+                reason="duplicate_url",
+                before=before,
+                after={"summary": summarize_queue(items), "item_id": existing.get("id")},
+                detail={"item_id": existing.get("id"), "url": url, "status": existing.get("status"), "gid": existing.get("gid")},
+            )
+            return QueueItem(
+                id=str(existing.get("id", "")),
+                url=str(existing.get("url", url)),
+                output=existing.get("output"),
+                post_action_rule=existing.get("post_action_rule", post_action_rule),
+                status=existing.get("status", "queued"),
+                created_at=existing.get("created_at", ""),
+                gid=existing.get("gid"),
+                session_id=existing.get("session_id") or state.get("session_id"),
+                error_code=existing.get("error_code"),
+                error_message=existing.get("error_message"),
+            )
+
+        decl = load_declaration()
+        preferences = decl.get("uic", {}).get("preferences", [])
+        default_rule = next(
+            (str(pref.get("value", "pending")) for pref in preferences if pref.get("name") == "post_action_rule"),
+            "pending",
+        )
+        item = QueueItem(
+            id=str(uuid4()),
+            url=url,
+            output=output,
+            post_action_rule=post_action_rule or default_rule,
+            created_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            session_id=state.get("session_id"),
+        )
+        items.append(asdict(item))
+        save_queue(items)
         record_action(
             action="add",
             target="queue",
-            outcome="unchanged",
-            reason="duplicate_url",
+            outcome="changed",
+            reason="queue_item_created",
             before=before,
-            after={"summary": summarize_queue(items), "item_id": existing.get("id")},
-            detail={"item_id": existing.get("id"), "url": url, "status": existing.get("status"), "gid": existing.get("gid")},
+            after={"summary": summarize_queue(items), "item_id": item.id},
+            detail={
+                "item_id": item.id,
+                "url": url,
+                "output": output,
+                "post_action_rule": item.post_action_rule,
+            },
         )
-        return QueueItem(
-            id=str(existing.get("id", "")),
-            url=str(existing.get("url", url)),
-            output=existing.get("output"),
-            post_action_rule=existing.get("post_action_rule", post_action_rule),
-            status=existing.get("status", "queued"),
-            created_at=existing.get("created_at", ""),
-            gid=existing.get("gid"),
-            session_id=existing.get("session_id") or state.get("session_id"),
-            error_code=existing.get("error_code"),
-            error_message=existing.get("error_message"),
-        )
-
-    decl = load_declaration()
-    default_rule = decl.get("uic", {}).get("preferences", [{}])[0].get("value", "pending")
-    item = QueueItem(
-        id=str(uuid4()),
-        url=url,
-        output=output,
-        post_action_rule=post_action_rule or default_rule,
-        created_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        session_id=state.get("session_id"),
-    )
-    items.append(asdict(item))
-    save_queue(items)
-    record_action(
-        action="add",
-        target="queue",
-        outcome="changed",
-        reason="queue_item_created",
-        before=before,
-        after={"summary": summarize_queue(items), "item_id": item.id},
-        detail={
-            "item_id": item.id,
-            "url": url,
-            "output": output,
-            "post_action_rule": item.post_action_rule,
-        },
-    )
     try:
         deduplicate_active_transfers()
     except Exception:
@@ -852,10 +907,12 @@ def current_global_options(port: int = 6800, timeout: int = 5) -> dict[str, Any]
 
 
 def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
-    state = load_state()
+    with storage_locked():
+        state = load_state()
+        queue_items = load_queue()
     active_jobs = active_gids(port=port, timeout=5)
     gids = [str(info.get("gid") or "") for info in active_jobs if info.get("gid")]
-    queue_gids = [str(item.get("gid") or "") for item in load_queue() if item.get("gid") and item.get("status") in {"downloading", "paused"}]
+    queue_gids = [str(item.get("gid") or "") for item in queue_items if item.get("gid") and item.get("status") in {"downloading", "paused"}]
     if not gids and not state.get("active_gid") and not queue_gids:
         return {"paused": False, "reason": "no_active_transfer"}
     before = {"state": state, "active": active_jobs}
@@ -868,8 +925,16 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
             paused.append(gid)
         except Exception:
             continue
-    state["paused"] = True
-    save_state(state)
+    with storage_locked():
+        state = load_state()
+        state["paused"] = True
+        items = load_queue()
+        for item in items:
+            if str(item.get("gid") or "") in paused:
+                item["status"] = "paused"
+                item["live_status"] = "paused"
+        save_state(state)
+        save_queue(items)
     payload = {"paused": bool(paused), "gids": paused, "result": {"paused": paused}}
     record_action(
         action="pause",
@@ -884,9 +949,11 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
 
 
 def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
-    state = load_state()
+    with storage_locked():
+        state = load_state()
+        queue_items = load_queue()
     active_jobs = active_gids(port=port, timeout=5)
-    queued_items = [item for item in load_queue() if item.get("gid") and item.get("status") == "paused"]
+    queued_items = [item for item in queue_items if item.get("gid") and item.get("status") == "paused"]
     gids = [str(info.get("gid") or "") for info in active_jobs if info.get("gid")]
     if not gids and not state.get("active_gid") and not queued_items:
         return {"resumed": False, "reason": "no_active_transfer"}
@@ -901,8 +968,16 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
             resumed.append(gid)
         except Exception:
             continue
-    state["paused"] = False
-    save_state(state)
+    with storage_locked():
+        state = load_state()
+        state["paused"] = False
+        items = load_queue()
+        for item in items:
+            if str(item.get("gid") or "") in resumed:
+                item["status"] = "queued"
+                item["live_status"] = "waiting"
+        save_state(state)
+        save_queue(items)
     payload = {"resumed": bool(resumed), "gids": resumed, "result": {"resumed": resumed}}
     record_action(
         action="resume",
@@ -974,11 +1049,12 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         after={"probe": probe, "cap_mbps": cap},
         detail=probe,
     )
-    state = load_state()
-    state["running"] = True
-    state["stop_requested"] = False
-    state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-    save_state(state)
+    with storage_locked():
+        state = load_state()
+        state["running"] = True
+        state["stop_requested"] = False
+        state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        save_state(state)
 
     limit = max_simultaneous_downloads()
 
@@ -1005,36 +1081,76 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             current["active_url"] = None
         save_state(current)
 
-    def _poll_active_jobs(items_snapshot: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        active_infos = active_gids(port=port, timeout=5)
-        active_pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
-        for info in active_infos:
-            item = _queue_item_for_active_info(info, items_snapshot)
-            if item is None:
+    def _apply_transfer_fields(item: dict[str, Any], info: dict[str, Any]) -> None:
+        for key in ("downloadSpeed", "completedLength", "totalLength", "files"):
+            if key in info:
+                item[key] = info.get(key)
+
+    def _queued_info(item: dict[str, Any], gid: str, status_name: str) -> dict[str, Any]:
+        return {
+            "gid": gid,
+            "status": status_name,
+            "completedLength": str(item.get("completedLength") or "0"),
+            "totalLength": str(item.get("totalLength") or "0"),
+            "downloadSpeed": str(item.get("downloadSpeed") or "0"),
+            "files": [{"uris": [{"uri": item.get("url")}]}] if item.get("url") else [],
+        }
+
+    def _poll_tracked_jobs(items_snapshot: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        running_infos: list[dict[str, Any]] = []
+        for item in items_snapshot:
+            if item.get("status") in {"done", "error"}:
                 continue
-            gid = str(info.get("gid") or "")
-            if gid:
-                active_pairs.append((info, item))
-        for info, item in active_pairs:
-            gid = str(info.get("gid") or "")
+            gid = str(item.get("gid") or "")
             if not gid:
                 continue
+            before_item = dict(item)
+            try:
+                info = status(gid, port=port, timeout=5)
+            except Exception:
+                continue
+            remote_status = str(info.get("status") or "")
             item["gid"] = gid
-            item["status"] = info.get("status") or item.get("status") or "downloading"
-            if info.get("status") == "complete":
+            if remote_status:
+                item["live_status"] = remote_status
+            _apply_transfer_fields(item, info)
+            if remote_status == "active":
+                item["status"] = "downloading"
+                item["error_code"] = info.get("errorCode")
+                item["error_message"] = info.get("errorMessage")
+                running_infos.append(info)
+                log_transfer_poll(gid=gid, item=item, info=info, cap_mbps=cap)
+                if info.get("errorCode") and info["errorCode"] != "0":
+                    cap_local = max(1, int(cap * 0.75))
+                    set_bandwidth(cap_local, port=port)
+                continue
+            if remote_status == "waiting":
+                item["status"] = "queued"
+                item["error_code"] = info.get("errorCode")
+                item["error_message"] = info.get("errorMessage")
+                running_infos.append(info)
+                continue
+            if remote_status == "paused":
+                item["status"] = "paused"
+                item["error_code"] = info.get("errorCode")
+                item["error_message"] = info.get("errorMessage")
+                continue
+            if remote_status == "complete":
                 item["status"] = "done"
+                item["error_code"] = None
+                item["error_message"] = None
                 item["post_action"] = post_action(item)
                 record_action(
                     action="complete",
                     target="queue_item",
                     outcome="converged",
                     reason="download_complete",
-                    before={"item": dict(item), "status": "downloading"},
+                    before={"item": before_item},
                     after={"item": dict(item), "post_action": item.get("post_action")},
                     detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "result": item.get("post_action")},
                 )
                 continue
-            if info.get("status") == "error":
+            if remote_status == "error":
                 item["status"] = "error"
                 item["error_code"] = info.get("errorCode")
                 item["error_message"] = info.get("errorMessage")
@@ -1043,65 +1159,90 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     target="queue_item",
                     outcome="failed",
                     reason="download_error",
-                    before={"item": dict(item), "status": "downloading"},
+                    before={"item": before_item},
                     after={"item": dict(item), "error_code": item.get("error_code"), "error_message": item.get("error_message")},
                     detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "error_code": item.get("error_code"), "error_message": item.get("error_message")},
                 )
                 continue
-            log_transfer_poll(gid=gid, item=item, info=info, cap_mbps=cap)
-            if info.get("errorCode") and info["errorCode"] != "0":
-                cap_local = max(1, int(cap * 0.75))
-                set_bandwidth(cap_local, port=port)
-        return [info for info, _item in active_pairs]
+            if remote_status == "removed":
+                item["status"] = "queued"
+                item["gid"] = None
+                item["error_code"] = None
+                item["error_message"] = None
+        return running_infos
 
     while True:
-        items = load_queue()
-        state = load_state()
-        if state.get("stop_requested"):
-            active_infos = active_gids(port=port, timeout=5)
-            for info in active_infos:
-                gid = str(info.get("gid") or "")
-                if not gid:
-                    continue
-                try:
-                    aria_rpc("aria2.pause", [gid], port=port, timeout=5)
-                except Exception:
-                    pass
-            state["running"] = False
-            state["stop_requested"] = False
-            state["paused"] = False
-            state["active_gid"] = None
-            state["active_url"] = None
-            close_state_session(reason="stop_requested")
-            save_state(state)
-            save_queue(items)
-            return items
+        with storage_locked():
+            items = load_queue()
+            state = load_state()
+            if state.get("stop_requested"):
+                active_infos = active_gids(port=port, timeout=5)
+                for info in active_infos:
+                    gid = str(info.get("gid") or "")
+                    if not gid:
+                        continue
+                    try:
+                        aria_rpc("aria2.pause", [gid], port=port, timeout=5)
+                    except Exception:
+                        pass
+                    for item in items:
+                        if str(item.get("gid") or "") == gid:
+                            item["status"] = "paused"
+                            item["live_status"] = "paused"
+                            break
+                state["running"] = False
+                state["stop_requested"] = False
+                state["paused"] = False
+                state["active_gid"] = None
+                state["active_url"] = None
+                save_state(state)
+                save_queue(items)
+                close_state_session(reason="stop_requested")
+                return items
 
-        active_infos = _poll_active_jobs(items)
-        _finalize_primary_state(items, active_infos)
+            running_infos = _poll_tracked_jobs(items)
+            _finalize_primary_state(items, running_infos)
 
-        state = load_state()
-        active_count = len(active_infos)
-        if not state.get("paused"):
-            slots = None if limit == 0 else max(limit - active_count, 0)
-            if slots is None or slots > 0:
-                started = 0
+            state = load_state()
+            occupied = len(running_infos)
+            current_running_infos = list(running_infos)
+            if not state.get("paused"):
+                slots = None if limit == 0 else max(limit - occupied, 0)
+                allocated = 0
                 for item in items:
                     if item.get("status") not in {"queued", "paused"}:
                         continue
-                    if item.get("gid") and item.get("status") == "paused":
-                        try:
-                            info = status(str(item.get("gid")), port=port, timeout=5)
-                            if info.get("status") in {"active", "paused"}:
-                                if info.get("status") == "active":
-                                    item["status"] = "downloading"
-                                active_infos.append(info)
-                                continue
-                        except Exception:
-                            pass
-                    if slots is not None and started >= slots:
+                    if slots is not None and allocated >= slots:
                         break
+                    gid = str(item.get("gid") or "")
+                    live_status = str(item.get("live_status") or "")
+                    if gid:
+                        if live_status in {"active", "waiting"}:
+                            continue
+                        if item.get("status") == "paused":
+                            before_item = dict(item)
+                            try:
+                                aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
+                                item["status"] = "queued"
+                                item["live_status"] = "waiting"
+                                record_action(
+                                    action="run",
+                                    target="queue_item",
+                                    outcome="changed",
+                                    reason="download_resumed",
+                                    before={"item": before_item},
+                                    after={"item": dict(item), "gid": gid, "cap_mbps": cap},
+                                    detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "cap_mbps": cap},
+                                )
+                                current_running_infos.append(_queued_info(item, gid, "waiting"))
+                                allocated += 1
+                                continue
+                            except Exception:
+                                item["gid"] = None
+                                item.pop("live_status", None)
+                    before_item = dict(item)
                     item["status"] = "downloading"
+                    item.pop("live_status", None)
                     gid = add_download(item, cap_mbps=cap, port=port)
                     item["gid"] = gid
                     record_action(
@@ -1109,23 +1250,25 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                         target="queue_item",
                         outcome="changed",
                         reason="download_started",
-                        before={"item": dict(item)},
+                        before={"item": before_item},
                         after={"item": dict(item), "gid": gid, "cap_mbps": cap},
                         detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "cap_mbps": cap},
                     )
-                    started += 1
-        save_queue(items)
-        _finalize_primary_state(items, active_gids(port=port, timeout=5))
-
-        if not any(item.get("status") in {"queued", "downloading", "paused"} for item in items):
-            current = load_state()
-            current["running"] = False
-            current["stop_requested"] = False
-            current["active_gid"] = None
-            current["active_url"] = None
-            save_state(current)
+                    current_running_infos.append(_queued_info(item, gid, "waiting"))
+                    allocated += 1
             save_queue(items)
-            return items
+            _finalize_primary_state(items, current_running_infos)
+
+            if not any(item.get("status") in {"queued", "downloading", "paused"} for item in items):
+                current = load_state()
+                current["running"] = False
+                current["stop_requested"] = False
+                current["active_gid"] = None
+                current["active_url"] = None
+                save_state(current)
+                save_queue(items)
+                close_state_session(reason="queue_complete")
+                return items
 
         time.sleep(2)
 

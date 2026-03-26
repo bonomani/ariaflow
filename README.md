@@ -3,7 +3,7 @@
 Headless queue driver for `aria2c` with:
 
 - simple URL enqueueing
-- sequential execution, one download at a time
+- sequential execution by default, one download at a time
 - pre-run bandwidth probing
 - runtime bandwidth adaptation through aria2 RPC
 - pluggable post-download actions
@@ -28,6 +28,7 @@ The canonical engine architecture is documented in:
 ariaflow add <url>
 ariaflow preflight
 ariaflow run
+ariaflow serve
 ariaflow status
 ariaflow ucc
 ```
@@ -41,6 +42,7 @@ python -m aria_queue add <url>
 ## Goals
 
 - Prefer finishing one download before starting the next.
+- Allow operators to raise concurrency explicitly when they need it.
 - Start with a conservative bandwidth cap derived from a short probe.
 - Lower the cap when aria2 reports retries or errors.
 - Keep post-download handling policy-driven and separate from the queue engine.
@@ -81,6 +83,9 @@ The intended macOS installation path is a Homebrew tap.
 - `ariaflow` installs the headless engine
 - `ariaflow-web` installs the local frontend
 - both are meant to run on the same Mac
+
+The web UI lives in the separate `ariaflow-web` project and talks to this
+backend over the local `/api/*` HTTP surface.
 
 `ariaflow` depends on `aria2` as the runtime engine. `ariaflow-web` depends on a
 running `ariaflow` backend and connects to it through `ARIAFLOW_API_URL`.
