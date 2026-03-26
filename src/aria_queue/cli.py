@@ -4,6 +4,7 @@ import argparse
 import json
 
 from . import __version__
+from .bonjour import advertise_http_service
 from .contracts import preflight, run_ucc
 from .core import add_queue_item, load_queue
 from .webapp import serve as serve_api
@@ -101,7 +102,14 @@ def main() -> int:
         server = serve_api(host=args.host, port=args.port)
         print(f"Serving API on http://{args.host}:{args.port}")
         try:
-            server.serve_forever()
+            with advertise_http_service(
+                role="api",
+                port=args.port,
+                path="/api/status",
+                product="ariaflow",
+                version=__version__,
+            ):
+                server.serve_forever()
         except KeyboardInterrupt:
             server.server_close()
         return 0
