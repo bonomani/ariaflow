@@ -2,6 +2,8 @@ name: release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -12,13 +14,25 @@ on:
         type: string
 
 jobs:
-  build-release:
+  prepare-release:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'Release '))
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Resolve release metadata
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve next release metadata
         id: release_meta
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -30,13 +44,40 @@ jobs:
                 ;;
             esac
             python3 -c 'import re, sys; version = sys.argv[1]; assert re.fullmatch(r"\d+\.\d+\.\d+", version), f"Unsupported version format: {version!r}"' "$version"
-            tag="v${version}"
-            ref="main"
           else
-            tag="${GITHUB_REF_NAME}"
-            version="${tag#v}"
-            ref="$tag"
+            version="$(python3 -c 'from pathlib import Path; import re; text = Path("pyproject.toml").read_text(encoding="utf-8"); match = re.search(r"^version = \"([^\"]+)\"$", text, re.MULTILINE); assert match, "version not found"; major, minor, patch = map(int, match.group(1).split(".")); print(f"{major}.{minor}.{patch + 1}")')"
           fi
+          tag="v${version}"
+          git rev-parse -q --verify "refs/tags/${tag}" >/dev/null && { echo "Tag already exists: ${tag}"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Bump version, commit, and tag
+        env:
+          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
+        run: |
+          python3 -c 'from pathlib import Path; import os, re; root = Path("."); version = os.environ["RELEASE_VERSION"]; pyproject = root / "pyproject.toml"; package_init = root / "src" / "aria_queue" / "__init__.py"; text = pyproject.read_text(encoding="utf-8"); text = re.sub(r"^version = \"[^\"]+\"$", f"version = \"{version}\"", text, flags=re.MULTILINE); pyproject.write_text(text, encoding="utf-8"); text = package_init.read_text(encoding="utf-8"); text = re.sub(r"^__version__ = \"[^\"]+\"$", f"__version__ = \"{version}\"", text, flags=re.MULTILINE); package_init.write_text(text, encoding="utf-8")'
+          git add pyproject.toml src/aria_queue/__init__.py
+          git diff --cached --quiet && { echo "Release version already committed"; exit 1; }
+          git commit -m "Release $RELEASE_VERSION"
+          git tag "$RELEASE_TAG"
+          git push origin HEAD:main
+          git push origin "$RELEASE_TAG"
+
+  build-release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Resolve release metadata
+        id: release_meta
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          ref="$tag"
           case "$tag" in
             *-*)
               echo "Stable tags only: $tag"
@@ -52,26 +93,6 @@ jobs:
         with:
           ref: ${{ steps.release_meta.outputs.ref }}
           fetch-depth: 0
-
-      - name: Set up git identity
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump version, commit, and tag
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
-          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
-        run: |
-          python3 -c 'from pathlib import Path; import os, re; root = Path("."); version = os.environ["RELEASE_VERSION"]; pyproject = root / "pyproject.toml"; package_init = root / "src" / "aria_queue" / "__init__.py"; text = pyproject.read_text(encoding="utf-8"); text = re.sub(r"^version = \"[^\"]+\"$", f"version = \"{version}\"", text, flags=re.MULTILINE); pyproject.write_text(text, encoding="utf-8"); text = package_init.read_text(encoding="utf-8"); text = re.sub(r"^__version__ = \"[^\"]+\"$", f"__version__ = \"{version}\"", text, flags=re.MULTILINE); package_init.write_text(text, encoding="utf-8")'
-          git add pyproject.toml src/aria_queue/__init__.py
-          git diff --cached --quiet && { echo "Release version already committed"; exit 1; }
-          git commit -m "Release $RELEASE_VERSION"
-          git tag "$RELEASE_TAG"
-          git push origin HEAD:main
-          git push origin "$RELEASE_TAG"
 
       - name: Set up Python
         uses: actions/setup-python@v5
