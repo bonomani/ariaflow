@@ -142,7 +142,8 @@ jobs:
             exit 0
           fi
           git commit -m "Update ariaflow formula to ${{ steps.release_meta.outputs.tag }}"
-          git push
+          git pull --rebase origin main
+          git push origin HEAD:main
 
       - name: Verify tap version
         run: |
