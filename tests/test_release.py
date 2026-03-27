@@ -32,8 +32,20 @@ class ReleaseScriptTests(unittest.TestCase):
             run_tests=True,
             allow_dirty=False,
         )
-        self.assertIn("manual fallback release helper", plan[0])
+        self.assertIn("explicit release dispatch helper", plan[0])
         self.assertIn("requested version: 0.1.2", plan)
+
+    def test_build_plan_without_version_is_rebase_safe_push_helper(self) -> None:
+        plan = release_script.build_plan(
+            current="0.1.1",
+            next_version=None,
+            tag=None,
+            push=True,
+            run_tests=False,
+            allow_dirty=False,
+        )
+        self.assertIn("rebase-safe main publish helper", plan[0])
+        self.assertIn("requested version: none", plan)
 
 
 if __name__ == "__main__":

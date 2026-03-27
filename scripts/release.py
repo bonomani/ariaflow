@@ -4,11 +4,13 @@ from __future__ import annotations
 import argparse
 import glob
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO = "bonomani/ariaflow"
 PYPROJECT = ROOT / "pyproject.toml"
 PACKAGE_INIT = ROOT / "src" / "aria_queue" / "__init__.py"
 VERSION_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)(?:a(\d+))?")
@@ -45,16 +47,6 @@ def version_to_tag(version: str) -> str:
     return f"v{major}.{minor}.{patch}"
 
 
-def write_version(version: str) -> None:
-    pyproject = PYPROJECT.read_text(encoding="utf-8")
-    pyproject = re.sub(r'^version = "[^"]+"$', f'version = "{version}"', pyproject, flags=re.MULTILINE)
-    PYPROJECT.write_text(pyproject, encoding="utf-8")
-
-    init_py = PACKAGE_INIT.read_text(encoding="utf-8")
-    init_py = re.sub(r'^__version__ = "[^"]+"$', f'__version__ = "{version}"', init_py, flags=re.MULTILINE)
-    PACKAGE_INIT.write_text(init_py, encoding="utf-8")
-
-
 def run(cmd: list[str]) -> None:
     subprocess.run(cmd, cwd=ROOT, check=True)
 
@@ -80,6 +72,35 @@ def tag_exists(tag: str) -> bool:
     return bool(remote.stdout.strip())
 
 
+def current_branch() -> str:
+    return git_output("rev-parse", "--abbrev-ref", "HEAD")
+
+
+def ensure_main_branch() -> None:
+    branch = current_branch()
+    if branch != "main":
+        raise SystemExit(f"Run this helper from main. Current branch: {branch}")
+
+
+def push_main_with_rebase(max_attempts: int = 3) -> None:
+    ensure_main_branch()
+    ensure_clean_tree(False)
+    for attempt in range(max_attempts):
+        pushed = subprocess.run(["git", "push", "origin", "main"], cwd=ROOT, check=False)
+        if pushed.returncode == 0:
+            return
+        if attempt == max_attempts - 1:
+            raise SystemExit("Unable to push origin/main after rebase retries")
+        run(["git", "pull", "--rebase", "origin", "main"])
+
+
+def dispatch_release(version: str) -> None:
+    gh = shutil.which("gh")
+    if not gh:
+        raise SystemExit("gh CLI is required to trigger an explicit release")
+    run([gh, "workflow", "run", "release.yml", "-R", REPO, "--ref", "main", "-f", f"version={version}"])
+
+
 def run_py_compile() -> None:
     files = (
         sorted(glob.glob(str(ROOT / "src" / "aria_queue" / "*.py")))
@@ -90,32 +111,42 @@ def run_py_compile() -> None:
     run(["python3", "-m", "py_compile", *files])
 
 
-def build_plan(current: str, next_version: str, tag: str, push: bool, run_tests: bool, allow_dirty: bool) -> list[str]:
+def build_plan(current: str, next_version: str | None, tag: str | None, push: bool, run_tests: bool, allow_dirty: bool) -> list[str]:
+    if next_version is None:
+        return [
+            "rebase-safe main publish helper",
+            f"current version: {current}",
+            "requested version: none",
+            f"tests: {'run' if run_tests else 'skip'}",
+            f"dirty tree: {'allowed' if allow_dirty else 'not allowed'}",
+            f"push: {'yes' if push else 'no'}",
+            "no version bump",
+            "no local tag",
+            "if push: git push origin main with pull --rebase retry",
+        ]
     return [
-        "manual fallback release helper",
+        "explicit release dispatch helper",
         f"current version: {current}",
         f"requested version: {next_version}",
         f"tag: {tag}",
         f"tests: {'run' if run_tests else 'skip'}",
         f"dirty tree: {'allowed' if allow_dirty else 'not allowed'}",
         f"push: {'yes' if push else 'no'}",
-        "write pyproject.toml and src/aria_queue/__init__.py",
-        f"commit: Release {next_version}",
-        f"tag: {tag}",
-        "if push: git push origin main --tags",
-        "GitHub Actions will publish the release and update the Homebrew tap formula",
+        "sync current main with rebase-safe push",
+        f"trigger GitHub Actions workflow_dispatch release for {next_version}",
+        "GitHub Actions will create the release commit/tag and update the Homebrew tap formula",
     ]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Manual fallback release helper for ariaflow. Normal releases should come from the CI workflow on main pushes."
+        description="Rebase-safe push and explicit release helper for ariaflow. Normal patch releases come from the CI workflow on main pushes."
     )
-    parser.add_argument("--version", required=True, help="Set an explicit stable package version like 0.1.2.")
+    parser.add_argument("--version", help="Trigger an explicit stable release like 0.1.2 via workflow_dispatch.")
     parser.add_argument("--no-tests", action="store_true", help="Skip local tests before committing.")
-    parser.add_argument("--allow-dirty", action="store_true", help="Allow uncommitted changes before releasing.")
+    parser.add_argument("--allow-dirty", action="store_true", help="Allow dirty trees only for dry-run planning. Real pushes still require a clean tree.")
     parser.add_argument("--dry-run", action="store_true", help="Print the planned release steps and exit.")
-    parser.add_argument("--push", action="store_true", help="Push main and tags after committing.")
+    parser.add_argument("--push", action="store_true", help="Push main with rebase-safe sync. Required for real sync/release actions.")
     args = parser.parse_args()
 
     current = read_version()
@@ -123,15 +154,20 @@ def main() -> int:
     if current != package_version:
         raise SystemExit(f"Version files disagree: pyproject.toml={current!r}, __init__.py={package_version!r}")
 
+    ensure_main_branch()
     next_version = args.version
-    _, _, _, next_alpha = parse_version(next_version)
-    if next_alpha is not None:
-        raise SystemExit(f"Release versions must be stable semver, got: {next_version!r}")
-
-    tag = version_to_tag(next_version)
-    if tag_exists(tag):
-        raise SystemExit(f"Tag already exists: {tag}")
-    ensure_clean_tree(args.allow_dirty)
+    tag: str | None = None
+    if next_version is not None:
+        _, _, _, next_alpha = parse_version(next_version)
+        if next_alpha is not None:
+            raise SystemExit(f"Release versions must be stable semver, got: {next_version!r}")
+        tag = version_to_tag(next_version)
+        if tag_exists(tag):
+            raise SystemExit(f"Tag already exists: {tag}")
+    if args.push:
+        ensure_clean_tree(False)
+    else:
+        ensure_clean_tree(args.allow_dirty)
 
     plan = build_plan(
         current=current,
@@ -146,24 +182,20 @@ def main() -> int:
         print("Dry run only; no files changed.")
         return 0
 
-    print("Using manual fallback release path. Normal releases should come from the CI workflow on main pushes.")
+    if not args.push:
+        raise SystemExit("Pass --push to sync main or trigger an explicit release.")
 
     if not args.no_tests:
         run_py_compile()
         run(["python3", "-m", "unittest", "discover", "-s", "tests", "-v"])
 
-    write_version(next_version)
-    run(["git", "add", "pyproject.toml", "src/aria_queue/__init__.py"])
-    run(["git", "commit", "-m", f"Release {next_version}"])
-    run(["git", "tag", tag])
+    push_main_with_rebase()
+    if next_version is None:
+        print("Synced origin/main with rebase-safe push.")
+        return 0
 
-    if args.push:
-        run(["git", "push", "origin", "main"])
-        run(["git", "push", "origin", tag])
-    else:
-        print(f"Tagged {tag}. Push with: git push origin main && git push origin {tag}")
-
-    print(f"Prepared release tag: {tag}")
+    dispatch_release(next_version)
+    print(f"Triggered workflow-dispatch release for {tag}")
     return 0
 
 
