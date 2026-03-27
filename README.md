@@ -111,24 +111,24 @@ The dedicated release checklist lives in [`RELEASE.md`](./RELEASE.md).
 The repo ships a small publish helper:
 
 ```bash
-python3 scripts/publish.py --push
+python3 scripts/publish.py push
 ```
 
 Preview the steps without changing files:
 
 ```bash
-python3 scripts/publish.py --dry-run
+python3 scripts/publish.py plan
 ```
 
 That script will:
 
 - run the local test suite
 - push `main` with a `pull --rebase` retry if needed
-- optionally trigger an explicit `workflow_dispatch` release with `--version`
-- optionally print the plan first with `--dry-run`
+- optionally trigger an explicit `workflow_dispatch` release with `release --version X.Y.Z`
+- optionally print the plan first with `plan`
 
 Normal patch releases come from the GitHub Actions workflow on `main` pushes.
-Use `--version X.Y.Z --push` only when you need to force an explicit release.
+Use `release --version X.Y.Z` only when you need to force an explicit release.
 
 After the push or explicit dispatch, the GitHub release workflow publishes the release and
 updates `bonomani/homebrew-ariaflow/Formula/ariaflow.rb` directly.

@@ -111,30 +111,41 @@ def run_py_compile() -> None:
     run(["python3", "-m", "py_compile", *files])
 
 
-def build_plan(current: str, next_version: str | None, tag: str | None, push: bool, run_tests: bool, allow_dirty: bool) -> list[str]:
-    if next_version is None:
+def build_plan(action: str, current: str, next_version: str | None, tag: str | None, run_tests: bool, allow_dirty: bool) -> list[str]:
+    if action == "push":
         return [
             "rebase-safe main publish helper",
             f"current version: {current}",
             "requested version: none",
             f"tests: {'run' if run_tests else 'skip'}",
             f"dirty tree: {'allowed' if allow_dirty else 'not allowed'}",
-            f"push: {'yes' if push else 'no'}",
+            "action: push",
             "no version bump",
             "no local tag",
-            "if push: git push origin main with pull --rebase retry",
+            "git push origin main with pull --rebase retry",
+        ]
+    if action == "release":
+        return [
+            "explicit release dispatch helper",
+            f"current version: {current}",
+            f"requested version: {next_version}",
+            f"tag: {tag}",
+            f"tests: {'run' if run_tests else 'skip'}",
+            f"dirty tree: {'allowed' if allow_dirty else 'not allowed'}",
+            "action: release",
+            "sync current main with rebase-safe push",
+            f"trigger GitHub Actions workflow_dispatch release for {next_version}",
+            "GitHub Actions will create the release commit/tag and update the Homebrew tap formula",
         ]
     return [
-        "explicit release dispatch helper",
+        "publish plan preview",
         f"current version: {current}",
-        f"requested version: {next_version}",
-        f"tag: {tag}",
+        f"requested version: {next_version or 'none'}",
+        f"tag: {tag or 'none'}",
         f"tests: {'run' if run_tests else 'skip'}",
         f"dirty tree: {'allowed' if allow_dirty else 'not allowed'}",
-        f"push: {'yes' if push else 'no'}",
-        "sync current main with rebase-safe push",
-        f"trigger GitHub Actions workflow_dispatch release for {next_version}",
-        "GitHub Actions will create the release commit/tag and update the Homebrew tap formula",
+        "action: plan",
+        "preview only; no files changed",
     ]
 
 
@@ -142,11 +153,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Rebase-safe push and explicit publish helper for ariaflow. Normal patch releases come from the CI workflow on main pushes."
     )
-    parser.add_argument("--version", help="Trigger an explicit stable release like 0.1.2 via workflow_dispatch.")
-    parser.add_argument("--no-tests", action="store_true", help="Skip local tests before publishing.")
-    parser.add_argument("--allow-dirty", action="store_true", help="Allow dirty trees only for dry-run planning. Real pushes still require a clean tree.")
-    parser.add_argument("--dry-run", action="store_true", help="Print the planned publish steps and exit.")
-    parser.add_argument("--push", action="store_true", help="Push main with rebase-safe sync. Required for real sync/release actions.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    plan_parser = subparsers.add_parser("plan", help="Preview a push or explicit release without changing anything.")
+    plan_parser.add_argument("--version", help="Preview an explicit stable release like 0.1.2.")
+    plan_parser.add_argument("--no-tests", action="store_true", help="Show a plan that skips local tests.")
+    plan_parser.add_argument("--allow-dirty", action="store_true", help="Allow dirty trees for preview only.")
+
+    push_parser = subparsers.add_parser("push", help="Run tests, then push main with rebase-safe sync.")
+    push_parser.add_argument("--no-tests", action="store_true", help="Skip local tests before pushing.")
+
+    release_parser = subparsers.add_parser("release", help="Run tests, push main with rebase-safe sync, then trigger an explicit GitHub release.")
+    release_parser.add_argument("--version", required=True, help="Trigger an explicit stable release like 0.1.2 via workflow_dispatch.")
+    release_parser.add_argument("--no-tests", action="store_true", help="Skip local tests before publishing.")
+
     args = parser.parse_args()
 
     current = read_version()
@@ -155,7 +175,7 @@ def main() -> int:
         raise SystemExit(f"Version files disagree: pyproject.toml={current!r}, __init__.py={package_version!r}")
 
     ensure_main_branch()
-    next_version = args.version
+    next_version = getattr(args, "version", None)
     tag: str | None = None
     if next_version is not None:
         _, _, _, next_alpha = parse_version(next_version)
@@ -164,33 +184,31 @@ def main() -> int:
         tag = version_to_tag(next_version)
         if tag_exists(tag):
             raise SystemExit(f"Tag already exists: {tag}")
-    if args.push:
-        ensure_clean_tree(False)
+    allow_dirty = bool(getattr(args, "allow_dirty", False))
+    if args.command == "plan":
+        ensure_clean_tree(allow_dirty)
     else:
-        ensure_clean_tree(args.allow_dirty)
+        ensure_clean_tree(False)
 
     plan = build_plan(
+        action=args.command,
         current=current,
         next_version=next_version,
         tag=tag,
-        push=args.push,
         run_tests=not args.no_tests,
-        allow_dirty=args.allow_dirty,
+        allow_dirty=allow_dirty,
     )
-    if args.dry_run:
+    if args.command == "plan":
         print("\n".join(plan))
         print("Dry run only; no files changed.")
         return 0
-
-    if not args.push:
-        raise SystemExit("Pass --push to sync main or trigger an explicit release.")
 
     if not args.no_tests:
         run_py_compile()
         run(["python3", "-m", "unittest", "discover", "-s", "tests", "-v"])
 
     push_main_with_rebase()
-    if next_version is None:
+    if args.command == "push":
         print("Synced origin/main with rebase-safe push.")
         return 0
 

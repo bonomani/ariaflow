@@ -8,8 +8,8 @@ release flow.
 Run the helper from a clean checkout on `main`:
 
 ```bash
-python3 scripts/publish.py --dry-run
-python3 scripts/publish.py --push
+python3 scripts/publish.py plan
+python3 scripts/publish.py push
 ```
 
 The helper will:
@@ -17,15 +17,15 @@ The helper will:
 - validate that `pyproject.toml` and `src/aria_queue/__init__.py` agree
 - refuse to reuse an existing tag
 - run `py_compile` and `python3 -m unittest discover -s tests -v` unless `--no-tests` is used
-- push `main` with a `pull --rebase` retry when `--push` is given
-- optionally trigger `workflow_dispatch` for an explicit stable version with `--version X.Y.Z`
+- `push`: push `main` with a `pull --rebase` retry
+- `release --version X.Y.Z`: trigger `workflow_dispatch` for an explicit stable version after the same rebase-safe sync
 
 Useful flags:
 
-- `--dry-run`: print the release plan without changing files
-- `--version 0.1.2`: dispatch an explicit stable release on GitHub Actions
+- `plan`: print the release plan without changing files
+- `release --version 0.1.2`: dispatch an explicit stable release on GitHub Actions
 - `--no-tests`: skip local tests
-- `--allow-dirty`: bypass the clean-tree check for dry-run planning only
+- `plan --allow-dirty`: bypass the clean-tree check for preview only
 
 ## After Push
 
@@ -48,7 +48,7 @@ If you do not use the helper, keep the sequence the same:
 If you need to force a specific stable version:
 
 ```bash
-python3 scripts/publish.py --version 0.1.2 --push
+python3 scripts/publish.py release --version 0.1.2
 ```
 
 ## Verification

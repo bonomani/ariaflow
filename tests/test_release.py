@@ -25,10 +25,10 @@ class ReleaseScriptTests(unittest.TestCase):
 
     def test_build_plan_marks_manual_fallback_role(self) -> None:
         plan = release_script.build_plan(
+            action="release",
             current="0.1.1",
             next_version="0.1.2",
             tag="v0.1.2",
-            push=True,
             run_tests=True,
             allow_dirty=False,
         )
@@ -37,10 +37,10 @@ class ReleaseScriptTests(unittest.TestCase):
 
     def test_build_plan_without_version_is_rebase_safe_push_helper(self) -> None:
         plan = release_script.build_plan(
+            action="push",
             current="0.1.1",
             next_version=None,
             tag=None,
-            push=True,
             run_tests=False,
             allow_dirty=False,
         )
