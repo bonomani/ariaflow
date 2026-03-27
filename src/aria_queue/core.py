@@ -514,13 +514,12 @@ def _queue_item_preference(item: dict[str, Any]) -> tuple[int, float, int, int]:
 
 def _merge_queue_rows(primary: dict[str, Any], candidate: dict[str, Any]) -> bool:
     changed = False
+    primary_status = str(primary.get("status") or "").lower()
     for key in (
         "url",
         "output",
         "post_action_rule",
         "session_id",
-        "recovery_session_id",
-        "recovered_at",
         "error_code",
         "error_message",
         "live_status",
@@ -529,6 +528,11 @@ def _merge_queue_rows(primary: dict[str, Any], candidate: dict[str, Any]) -> boo
         if not primary.get(key) and candidate.get(key):
             primary[key] = candidate.get(key)
             changed = True
+    if primary_status not in {"done", "error"}:
+        for key in ("recovery_session_id", "recovered_at"):
+            if not primary.get(key) and candidate.get(key):
+                primary[key] = candidate.get(key)
+                changed = True
     for key in ("downloadSpeed", "completedLength", "totalLength", "files"):
         primary_val = _coerce_float(primary.get(key))
         candidate_val = _coerce_float(candidate.get(key))
@@ -560,6 +564,11 @@ def _normalize_queue_row(item: dict[str, Any]) -> bool:
     elif status == "done" and item.get("live_status") is not None:
         item.pop("live_status", None)
         changed = True
+    if status in {"done", "error"}:
+        for key in ("recovered", "recovered_at", "recovery_session_id"):
+            if item.get(key) is not None:
+                item.pop(key, None)
+                changed = True
     return changed
 
 

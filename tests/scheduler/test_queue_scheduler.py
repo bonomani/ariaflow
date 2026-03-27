@@ -150,6 +150,9 @@ class QueueSchedulerTests(unittest.TestCase):
                     "status": "error",
                     "gid": "gid-error",
                     "error_message": "Resource not found",
+                    "recovered": True,
+                    "recovered_at": "2026-03-21T18:46:52+0100",
+                    "recovery_session_id": "batch-old",
                     "created_at": "2026-03-21T18:46:52+0100",
                 },
                 {
@@ -158,6 +161,8 @@ class QueueSchedulerTests(unittest.TestCase):
                     "status": "error",
                     "gid": "gid-error",
                     "error_message": "Resource not found",
+                    "recovered_at": "2026-03-26T21:16:09+0100",
+                    "recovery_session_id": "batch-new",
                     "created_at": "2026-03-26T21:16:09+0100",
                 },
             ]
@@ -170,6 +175,9 @@ class QueueSchedulerTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["gid"], "gid-error")
         self.assertEqual(items[0]["error_message"], "Resource not found")
+        self.assertNotIn("recovered", items[0])
+        self.assertNotIn("recovered_at", items[0])
+        self.assertNotIn("recovery_session_id", items[0])
 
     def test_cleanup_queue_state_normalizes_stale_live_status_for_paused_item(self) -> None:
         save_queue(
