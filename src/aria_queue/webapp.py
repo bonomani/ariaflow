@@ -15,7 +15,6 @@ from .api import (
     auto_preflight_on_run,
     aria_status,
     current_bandwidth,
-    current_global_options,
     homebrew_install_ariaflow,
     homebrew_uninstall_ariaflow,
     install_aria2_launchd,
@@ -702,7 +701,7 @@ INDEX_HTML = """<!doctype html>
             </div>
             <div class="item">
               <div class="item-top"><div class="item-url">Current cap</div><span class="badge" id="bw-cap">-</span></div>
-              <div class="meta"><span id="bw-global">Global option not loaded</span></div>
+              <div class="meta"><span id="bw-global">Configured limit unavailable</span></div>
             </div>
             <div class="item">
               <div class="item-top"><div class="item-url">Live download</div><span class="badge" id="bw-live">idle</span></div>
@@ -827,7 +826,6 @@ INDEX_HTML = """<!doctype html>
     let lastResult = null;
     let refreshTimer = null;
     let refreshInterval = 10000;
-    let backendGlobalOptions = {};
     let lastDeclaration = null;
     const path = window.location.pathname.replace(/[/]+$/, "");
     const page = path === "/bandwidth"
@@ -960,8 +958,7 @@ INDEX_HTML = """<!doctype html>
     function syncRefreshControl() {
       const el = document.getElementById('refresh-interval');
       if (!el) return;
-      const backendValue = backendGlobalOptions["ariaflow-refresh-interval"];
-      const value = String(Number(backendValue || refreshInterval || 10000) || 10000);
+      const value = String(Number(refreshInterval || 10000) || 10000);
       if (el.value !== value) el.value = value;
     }
     function getDeclarationPreference(name) {
@@ -1194,7 +1191,6 @@ INDEX_HTML = """<!doctype html>
           completedLength: matches.completedLength,
           errorMessage: matches.errorMessage,
           recovered: matches.recovered,
-          recovery_session_id: matches.recovery_session_id,
           recovered_at: matches.recovered_at,
           url: matches.url,
           status: matches.status,
@@ -1496,7 +1492,7 @@ INDEX_HTML = """<!doctype html>
           document.getElementById('bw-source').textContent = 'offline';
           document.getElementById('bw-down').textContent = backendUnavailableLabel(data);
           document.getElementById('bw-cap').textContent = '-';
-          document.getElementById('bw-global').textContent = 'Backend unavailable';
+          document.getElementById('bw-global').textContent = 'Configured limit unavailable';
           document.getElementById('bw-live').textContent = 'offline';
           document.getElementById('bw-live-detail').textContent = backendUnavailableLabel(data);
           document.getElementById('bw-probe-mode').textContent = '-';
@@ -1507,18 +1503,17 @@ INDEX_HTML = """<!doctype html>
           syncRefreshControl();
           return;
         }
-        backendGlobalOptions = data.aria2_global_options || {};
         const state = data.state || {};
-        const active = data.active || {status: 'idle'};
+        const active = data.active || null;
         const actives = Array.isArray(data.actives) ? data.actives : (data.active ? [data.active] : []);
         const liveActive = activeTransfer(actives, active, state);
-        const speed = liveActive?.downloadSpeed || active.downloadSpeed || data.state?.download_speed || null;
+        const speed = liveActive?.downloadSpeed || active?.downloadSpeed || data.state?.download_speed || null;
         const items = enrichQueueItems(data.items || [], actives, state);
         document.getElementById('queue').innerHTML = items.length ? items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
         document.getElementById('backend-version').textContent = data.backend?.version || 'unreported';
         document.getElementById('backend-pid').textContent = data.backend?.pid || 'unreported';
         document.getElementById('backend-error').textContent = state.last_error || data.bandwidth?.reason || 'none';
-        document.getElementById('backend-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || data.bandwidth_global?.limit || '-');
+        document.getElementById('backend-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || '-');
         document.getElementById('backend-runner').textContent = runnerStateLabel(state);
         document.getElementById('backend-session').textContent = sessionLabel(state);
         const toggleButton = document.getElementById('toggle-btn');
@@ -1544,7 +1539,7 @@ INDEX_HTML = """<!doctype html>
           ? `Downlink ${formatMbps(data.bandwidth.downlink_mbps)}${data.bandwidth.partial ? ' (partial capture)' : ''}`
           : `No networkquality probe available${data.bandwidth?.reason ? ` · ${data.bandwidth.reason}` : ''}`;
         document.getElementById('bw-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || '-');
-        document.getElementById('bw-global').textContent = data.bandwidth_global?.limit ? `Global limit ${data.bandwidth_global.limit}` : 'Global option unavailable';
+        document.getElementById('bw-global').textContent = `Configured limit ${humanCap(data.bandwidth?.limit || '-')}`;
         document.getElementById('bw-live').textContent = activeStateLabel(liveActive, state);
         document.getElementById('bw-live-detail').textContent = liveActive?.downloadSpeed
           ? `Speed ${formatRate(liveActive.downloadSpeed)}${liveActive.completedLength ? ` · ${formatBytes(liveActive.completedLength)}/${formatBytes(liveActive.totalLength || 0)}` : ''}`
@@ -1803,29 +1798,6 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         STATUS_CACHE["ts"] = 0.0
         STATUS_CACHE["payload"] = None
 
-    @staticmethod
-    def _derive_active_item(items: list[dict]) -> dict | None:
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            status = str(item.get("status") or "").lower()
-            live_status = str(item.get("live_status") or "").lower()
-            if status in {"downloading", "paused", "recovered"} or live_status in {"active", "paused"}:
-                active = {
-                    "gid": item.get("gid"),
-                    "url": item.get("url"),
-                    "status": item.get("status") or item.get("live_status") or "active",
-                    "errorCode": item.get("error_code"),
-                    "errorMessage": item.get("error_message"),
-                    "downloadSpeed": item.get("downloadSpeed") or item.get("download_speed"),
-                    "completedLength": item.get("completedLength") or item.get("completed_length"),
-                    "totalLength": item.get("totalLength") or item.get("total_length"),
-                    "files": item.get("files"),
-                    "percent": item.get("percent"),
-                }
-                return active
-        return None
-
     def _status_payload(self, force: bool = False) -> dict:
         now = time.time()
         cached = STATUS_CACHE.get("payload")
@@ -1841,8 +1813,6 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             "summary": summarize_queue(items),
             "aria2": aria_status(timeout=3),
             "bandwidth": bandwidth,
-            "bandwidth_global": bandwidth,
-            "aria2_global_options": current_global_options(timeout=3),
             "backend": {
                 "reachable": True,
                 "version": __version__,
@@ -1850,13 +1820,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             },
         }
         active = active_status(timeout=3)
-        if not active:
-            active = self._derive_active_item(items)
         if active:
             payload["active"] = active
         actives = active_gids(timeout=3)
-        if not actives and active:
-            actives = [active]
         if actives:
             payload["actives"] = actives
         STATUS_CACHE["ts"] = now
