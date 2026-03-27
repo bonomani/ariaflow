@@ -566,18 +566,12 @@ INDEX_HTML = """<!doctype html>
         <button class="secondary" onclick="useDefaultBackend()">Use default</button>
       </div>
       <div class="chips" style="margin-top:12px;">
-        <div class="chip">Active <strong id="backend-active">http://127.0.0.1:8000</strong></div>
         <div class="chip">PID <strong id="backend-pid">-</strong></div>
         <div class="chip">Runner <strong id="backend-runner">idle</strong></div>
         <div class="chip">Startup <strong id="backend-startup">manual</strong></div>
         <div class="chip">Cap <strong id="backend-cap">-</strong></div>
         <div class="chip">Last issue <strong id="backend-error">none</strong></div>
         <div class="chip">Run <strong id="backend-session">-</strong></div>
-      </div>
-      <div class="topline" style="margin-top:12px;">
-        <span>Mode: <strong id="backend-mode">idle</strong></span>
-        <span>Job: <strong id="backend-job" class="mono">none</strong></span>
-        <span>Speed: <strong id="backend-speed">-</strong></span>
       </div>
       <div id="backend-panel" class="chips" style="margin-top:12px;"></div>
     </div>
@@ -623,6 +617,7 @@ INDEX_HTML = """<!doctype html>
             <div class="system-facts">
               <div class="system-fact"><span>Queue flow</span><strong id="queue-detail">Waiting for state</strong></div>
               <div class="system-fact"><span>Active job</span><strong id="queue-active">none</strong></div>
+              <div class="system-fact"><span>Speed</span><strong id="queue-speed">idle</strong></div>
               <div class="system-fact"><span>Jobs in queue</span><strong id="queue-count">0 queued</strong></div>
             </div>
             <div class="system-actions">
@@ -885,7 +880,6 @@ INDEX_HTML = """<!doctype html>
       const panel = document.getElementById('backend-panel');
       if (!panel) return;
       const { backends, selected } = loadBackendState();
-      document.getElementById('backend-active').textContent = selected || DEFAULT_BACKEND_URL;
       panel.innerHTML = backends.map((backend) => `
         <button class="${backend === selected ? '' : 'secondary'}" onclick="selectBackend('${backend.replace(/'/g, "\\'")}')">${backend}</button>
       `).join('');
@@ -1451,19 +1445,16 @@ INDEX_HTML = """<!doctype html>
         lastStatus = data;
         if (data?.ok === false || data?.backend?.reachable === false) {
           document.getElementById('queue').innerHTML = `<div class='item'>${backendUnavailableLabel(data)}</div>`;
-          document.getElementById('backend-mode').textContent = 'offline';
-          document.getElementById('backend-job').textContent = 'none';
-          document.getElementById('backend-speed').textContent = 'idle';
           document.getElementById('backend-pid').textContent = '-';
           document.getElementById('backend-runner').textContent = 'offline';
           document.getElementById('backend-session').textContent = '-';
           document.getElementById('backend-error').textContent = data?.backend?.error || 'connection refused';
-          document.getElementById('engine-state').textContent = 'offline';
           document.getElementById('backend-startup').textContent = autoPreflight ? 'auto-check' : 'manual';
           document.getElementById('backend-cap').textContent = '-';
           document.getElementById('queue-state').textContent = 'offline';
           document.getElementById('queue-detail').textContent = 'Backend unavailable';
           document.getElementById('queue-active').textContent = 'none';
+          document.getElementById('queue-speed').textContent = 'idle';
           document.getElementById('queue-count').textContent = '0 queued';
           document.getElementById('session-state').textContent = 'offline';
           document.getElementById('session-detail').textContent = '-';
@@ -1492,7 +1483,7 @@ INDEX_HTML = """<!doctype html>
         const speed = liveActive?.downloadSpeed || active.downloadSpeed || data.state?.download_speed || null;
         const items = enrichQueueItems(data.items || [], actives, state);
         document.getElementById('queue').innerHTML = items.length ? items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
-        document.getElementById('backend-pid').textContent = data.backend?.pid || '-';
+        document.getElementById('backend-pid').textContent = data.backend?.pid || 'unreported';
         document.getElementById('backend-error').textContent = state.last_error || data.bandwidth?.reason || 'none';
         document.getElementById('backend-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || data.bandwidth_global?.limit || '-');
         document.getElementById('backend-runner').textContent = runnerStateLabel(state);
@@ -1501,11 +1492,11 @@ INDEX_HTML = """<!doctype html>
         if (toggleButton) toggleButton.textContent = data.state && data.state.paused ? 'Resume queue' : 'Pause queue';
         const runnerButton = document.getElementById('runner-btn');
         if (runnerButton) runnerButton.textContent = data.state && data.state.running ? 'Stop engine' : 'Start engine';
-        document.getElementById('engine-state').textContent = runnerStateLabel(state);
         document.getElementById('backend-startup').textContent = autoPreflight ? 'auto-check' : 'manual';
         document.getElementById('queue-state').textContent = queueStateLabel(state, items, liveActive);
         document.getElementById('queue-detail').textContent = state?.paused ? 'Queue is paused' : (state?.running ? 'Queue can advance' : 'Waiting for engine start');
         document.getElementById('queue-active').textContent = summarizeActiveItem(liveActive, state, items);
+        document.getElementById('queue-speed').textContent = speed ? formatRate(speed) : "idle";
         document.getElementById('queue-count').textContent = `${data.summary?.queued || 0} queued · ${items.length} total`;
         document.getElementById('session-state').textContent = sessionStateLabel(state);
         document.getElementById('session-detail').textContent = sessionLabel(state);
@@ -1514,9 +1505,6 @@ INDEX_HTML = """<!doctype html>
         document.getElementById('session-closed').textContent = state.session_closed_at
           ? `${state.session_closed_at}${state.session_closed_reason ? ` · ${state.session_closed_reason}` : ''}`
           : '-';
-        document.getElementById('backend-mode').textContent = activeStateLabel(liveActive, state);
-        document.getElementById('backend-job').textContent = summarizeActiveItem(liveActive, state, items);
-        document.getElementById('backend-speed').textContent = speed ? formatRate(speed) : "idle";
         renderQueueSummary(data.summary);
         document.getElementById('bw-source').textContent = data.bandwidth?.source || '-';
         document.getElementById('bw-down').textContent = data.bandwidth?.source === 'networkquality'
