@@ -6,8 +6,8 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      tag:
-        description: Stable tag to publish and sync
+      version:
+        description: Stable version to release, for example 0.1.10
         required: true
         type: string
 
@@ -18,13 +18,29 @@ jobs:
       contents: write
 
     steps:
-      - name: Resolve release tag
-        id: release_tag
+      - name: Resolve release metadata
+        id: release_meta
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            tag="${{ inputs.tag }}"
+            version="${{ inputs.version }}"
+            case "$version" in
+              *-*)
+                echo "Stable versions only: $version"
+                exit 1
+                ;;
+            esac
+            python3 - <<'PY' "$version"
+import re, sys
+version = sys.argv[1]
+if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+    raise SystemExit(f"Unsupported version format: {version!r}")
+PY
+            tag="v${version}"
+            ref="main"
           else
             tag="${GITHUB_REF_NAME}"
+            version="${tag#v}"
+            ref="$tag"
           fi
           case "$tag" in
             *-*)
@@ -32,12 +48,51 @@ jobs:
               exit 1
               ;;
           esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.release_tag.outputs.tag }}
+          ref: ${{ steps.release_meta.outputs.ref }}
+          fetch-depth: 0
+
+      - name: Set up git identity
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version, commit, and tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
+        run: |
+          python3 - <<'PY'
+from pathlib import Path
+import os, re
+
+root = Path(".")
+version = os.environ["RELEASE_VERSION"]
+pyproject = root / "pyproject.toml"
+package_init = root / "src" / "aria_queue" / "__init__.py"
+
+text = pyproject.read_text(encoding="utf-8")
+text = re.sub(r'^version = "[^"]+"$', f'version = "{version}"', text, flags=re.MULTILINE)
+pyproject.write_text(text, encoding="utf-8")
+
+text = package_init.read_text(encoding="utf-8")
+text = re.sub(r'^__version__ = "[^"]+"$', f'__version__ = "{version}"', text, flags=re.MULTILINE)
+package_init.write_text(text, encoding="utf-8")
+PY
+          git add pyproject.toml src/aria_queue/__init__.py
+          git diff --cached --quiet && { echo "Release version already committed"; exit 1; }
+          git commit -m "Release $RELEASE_VERSION"
+          git tag "$RELEASE_TAG"
+          git push origin HEAD:main
+          git push origin "$RELEASE_TAG"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -58,7 +113,7 @@ jobs:
         run: |
           mkdir -p release
           artifact=$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)
-          cp "$artifact" "release/ariaflow-${{ steps.release_tag.outputs.tag }}.tar.gz"
+          cp "$artifact" "release/ariaflow-${{ steps.release_meta.outputs.tag }}.tar.gz"
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -66,7 +121,7 @@ jobs:
           files: release/*
           generate_release_notes: true
           prerelease: false
-          tag_name: ${{ steps.release_tag.outputs.tag }}
+          tag_name: ${{ steps.release_meta.outputs.tag }}
 
       - name: Checkout tap
         uses: actions/checkout@v4
@@ -77,7 +132,7 @@ jobs:
 
       - name: Update tap formula
         run: |
-          python3 scripts/homebrew_formula.py --tag "${{ steps.release_tag.outputs.tag }}" --output tap/Formula/ariaflow.rb
+          python3 scripts/homebrew_formula.py --tag "${{ steps.release_meta.outputs.tag }}" --output tap/Formula/ariaflow.rb
 
       - name: Commit tap update
         working-directory: tap
@@ -89,12 +144,12 @@ jobs:
             echo "Formula already up to date"
             exit 0
           fi
-          git commit -m "Update ariaflow formula to ${{ steps.release_tag.outputs.tag }}"
+          git commit -m "Update ariaflow formula to ${{ steps.release_meta.outputs.tag }}"
           git push
 
       - name: Verify tap version
         run: |
-          expected="${{ steps.release_tag.outputs.tag }}"
+          expected="${{ steps.release_meta.outputs.tag }}"
           expected="${expected#v}"
           current=$(python3 -c 'from pathlib import Path; import re; text = Path("tap/Formula/ariaflow.rb").read_text(encoding="utf-8"); match = re.search(r"^  version \"([^\"]+)\"$", text, re.MULTILINE); print(match.group(1) if match else "")')
           test "$current" = "$expected"
