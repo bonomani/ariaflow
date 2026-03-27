@@ -22,6 +22,7 @@ _BITS_PER_MEGABIT = 1_000_000.0
 _BYTES_PER_MEGABIT = 125_000.0
 _NETWORKQUALITY_MAX_RUNTIME = 8
 _NETWORKQUALITY_TIMEOUT = 10
+_NETWORKQUALITY_PROBE_INTERVAL = 180
 _NETWORKQUALITY_CANDIDATES = (
     "/usr/bin/networkQuality",
     "/usr/bin/networkquality",
@@ -554,16 +555,10 @@ def cleanup_queue_state() -> dict[str, Any]:
         changed = False
 
         for item in items:
-            if item.get("status") in {"done", "error"}:
-                survivors.append(item)
-                continue
-
             gid = str(item.get("gid") or "")
             url = str(item.get("url") or "")
             match: dict[str, Any] | None = None
             for existing in survivors:
-                if existing.get("status") in {"done", "error"}:
-                    continue
                 existing_gid = str(existing.get("gid") or "")
                 existing_url = str(existing.get("url") or "")
                 same_gid = bool(gid and existing_gid and gid == existing_gid)
@@ -617,9 +612,6 @@ def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool
         survivors: list[dict[str, Any]] = []
         for candidate in items:
             if candidate is primary:
-                survivors.append(candidate)
-                continue
-            if candidate.get("status") in {"done", "error"}:
                 survivors.append(candidate)
                 continue
             candidate_gid = str(candidate.get("gid") or "")
@@ -957,7 +949,7 @@ def probe_bandwidth(percent: float = 0.8, floor_mbps: int = 2) -> dict[str, Any]
     if not cmd:
         return _default_bandwidth_probe(floor_mbps=floor_mbps, reason="probe_unavailable")
 
-    probe_cmd = [cmd, "-u", "-c", "-M", str(_NETWORKQUALITY_MAX_RUNTIME)]
+    probe_cmd = [cmd, "-u", "-c", "-s", "-M", str(_NETWORKQUALITY_MAX_RUNTIME)]
     command = " ".join(probe_cmd)
     try:
         completed = subprocess.run(
@@ -989,6 +981,60 @@ def probe_bandwidth(percent: float = 0.8, floor_mbps: int = 2) -> dict[str, Any]
         )
     except Exception:
         return _default_bandwidth_probe(floor_mbps=floor_mbps, reason="probe_error", command=command)
+
+
+def _should_probe_bandwidth(state: dict[str, Any], now: float | None = None) -> bool:
+    if now is None:
+        now = time.time()
+    last_probe_at = state.get("last_bandwidth_probe_at")
+    try:
+        last_probe_ts = float(last_probe_at)
+    except (TypeError, ValueError):
+        return True
+    return (now - last_probe_ts) >= _NETWORKQUALITY_PROBE_INTERVAL
+
+
+def _apply_bandwidth_probe(
+    *,
+    port: int = 6800,
+    state: dict[str, Any] | None = None,
+    force: bool = False,
+) -> tuple[dict[str, Any], float, int]:
+    if state is None:
+        state = load_state()
+    now = time.time()
+    probe = state.get("last_bandwidth_probe")
+    needs_probe = force or not isinstance(probe, dict) or _should_probe_bandwidth(state, now=now)
+    if needs_probe:
+        probe = probe_bandwidth()
+        probe["interval_seconds"] = _NETWORKQUALITY_PROBE_INTERVAL
+        state["last_bandwidth_probe"] = probe
+        state["last_bandwidth_probe_at"] = now
+    elif isinstance(probe, dict) and "interval_seconds" not in probe:
+        probe = dict(probe)
+        probe["interval_seconds"] = _NETWORKQUALITY_PROBE_INTERVAL
+        state["last_bandwidth_probe"] = probe
+    cap_mbps = float(probe.get("cap_mbps") or 0) if isinstance(probe, dict) else 0.0
+    cap_bytes_per_sec = int(
+        (probe or {}).get("cap_bytes_per_sec")
+        or _cap_bytes_per_sec_from_mbps(cap_mbps if cap_mbps > 0 else 2.0, 1.0, 2)
+    )
+    if needs_probe:
+        before_bandwidth = current_bandwidth(port=port)
+        try:
+            set_bandwidth(cap_bytes_per_sec, port=port)
+        except Exception:
+            pass
+        record_action(
+            action="probe",
+            target="bandwidth",
+            outcome="changed" if (probe or {}).get("source") == "networkquality" else "unchanged",
+            reason=(probe or {}).get("reason", (probe or {}).get("source", "default")),
+            before={"cap": before_bandwidth},
+            after={"probe": probe, "cap_mbps": cap_mbps, "cap_bytes_per_sec": cap_bytes_per_sec},
+            detail=probe if isinstance(probe, dict) else None,
+        )
+    return (probe if isinstance(probe, dict) else {}), cap_mbps, cap_bytes_per_sec
 
 
 def aria_rpc(method: str, params: list[Any] | None = None, port: int = 6800, timeout: int = 15) -> dict[str, Any]:
@@ -1188,9 +1234,12 @@ def current_bandwidth(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
             "command_mode",
             "responsiveness_rpm",
             "interface_name",
+            "interval_seconds",
         ):
             if key in probe:
                 payload[key] = probe[key]
+    if "last_bandwidth_probe_at" in state:
+        payload["last_probe_at"] = state.get("last_bandwidth_probe_at")
     return payload
 
 
@@ -1337,33 +1386,13 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         reconcile_live_queue(port=port, timeout=5, adopt_missing=True)
     except Exception:
         pass
-    probe = probe_bandwidth()
-    cap_mbps = float(probe.get("cap_mbps") or 0)
-    cap_bytes_per_sec = int(
-        probe.get("cap_bytes_per_sec")
-        or _cap_bytes_per_sec_from_mbps(cap_mbps if cap_mbps > 0 else 2.0, 1.0, 2)
-    )
-    before_bandwidth = current_bandwidth(port=port)
-    try:
-        set_bandwidth(cap_bytes_per_sec, port=port)
-    except Exception:
-        pass
-    record_action(
-        action="probe",
-        target="bandwidth",
-        outcome="changed" if probe.get("source") == "networkquality" else "unchanged",
-        reason=probe.get("reason", probe.get("source", "default")),
-        before={"cap": before_bandwidth},
-        after={"probe": probe, "cap_mbps": cap_mbps, "cap_bytes_per_sec": cap_bytes_per_sec},
-        detail=probe,
-    )
     with storage_locked():
-        items = load_queue()
         state = load_state()
+        probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(port=port, state=state, force=True)
+        items = load_queue()
         state["running"] = True
         state["stop_requested"] = False
         state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-        state["last_bandwidth_probe"] = probe
         save_state(state)
     for item in items:
         gid = str(item.get("gid") or "")
@@ -1521,6 +1550,8 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             running_infos = _poll_tracked_jobs(items)
             _finalize_primary_state(items, running_infos)
 
+            state = load_state()
+            probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(port=port, state=state)
             state = load_state()
             occupied = len(running_infos)
             current_running_infos = list(running_infos)

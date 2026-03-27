@@ -13,6 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from aria_queue.contracts import preflight, run_ucc
 from aria_queue.core import (
+    _apply_bandwidth_probe,
+    _should_probe_bandwidth,
     add_queue_item,
     deduplicate_active_transfers,
     discover_active_transfer,
@@ -121,7 +123,7 @@ class TicAriaFlowTests(unittest.TestCase):
              patch("aria_queue.core.subprocess.run", return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=output)) as run:
             result = probe_bandwidth()
         run.assert_called_once_with(
-            ["/usr/bin/networkQuality", "-u", "-c", "-M", "8"],
+            ["/usr/bin/networkQuality", "-u", "-c", "-s", "-M", "8"],
             check=False,
             text=True,
             stdout=subprocess.PIPE,
@@ -138,7 +140,7 @@ class TicAriaFlowTests(unittest.TestCase):
 
     def test_probe_timeout_without_parse_uses_default_floor(self) -> None:
         timeout = subprocess.TimeoutExpired(
-            cmd=["/usr/bin/networkQuality", "-u", "-c", "-M", "8"],
+            cmd=["/usr/bin/networkQuality", "-u", "-c", "-s", "-M", "8"],
             timeout=10,
             output="",
         )
@@ -149,6 +151,56 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertEqual(result["reason"], "probe_timeout_no_parse")
         self.assertTrue(result["partial"])
         self.assertEqual(result["cap_bytes_per_sec"], 250000)
+
+    def test_should_probe_bandwidth_uses_interval(self) -> None:
+        self.assertTrue(_should_probe_bandwidth({}))
+        self.assertFalse(_should_probe_bandwidth({"last_bandwidth_probe_at": 100.0}, now=200.0))
+        self.assertTrue(_should_probe_bandwidth({"last_bandwidth_probe_at": 100.0}, now=281.0))
+
+    def test_apply_bandwidth_probe_reuses_recent_probe(self) -> None:
+        state = {
+            "last_bandwidth_probe": {
+                "source": "networkquality",
+                "reason": "probe_complete",
+                "cap_mbps": 64.0,
+                "cap_bytes_per_sec": 8_000_000,
+            },
+            "last_bandwidth_probe_at": 100.0,
+        }
+        with patch("aria_queue.core.time.time", return_value=120.0), \
+             patch("aria_queue.core.probe_bandwidth") as probe_bandwidth_mock, \
+             patch("aria_queue.core.current_bandwidth", return_value={}), \
+             patch("aria_queue.core.set_bandwidth") as set_bandwidth_mock, \
+             patch("aria_queue.core.record_action") as record_action_mock:
+            probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(state=state)
+        self.assertFalse(probe_bandwidth_mock.called)
+        self.assertFalse(set_bandwidth_mock.called)
+        self.assertEqual(cap_mbps, 64.0)
+        self.assertEqual(cap_bytes_per_sec, 8_000_000)
+        self.assertEqual(probe["interval_seconds"], 180)
+        self.assertFalse(record_action_mock.called)
+
+    def test_apply_bandwidth_probe_refreshes_stale_probe(self) -> None:
+        state = {"last_bandwidth_probe_at": 100.0}
+        fresh_probe = {
+            "source": "networkquality",
+            "reason": "probe_complete",
+            "cap_mbps": 32.0,
+            "cap_bytes_per_sec": 4_000_000,
+        }
+        with patch("aria_queue.core.time.time", return_value=400.0), \
+             patch("aria_queue.core.probe_bandwidth", return_value=fresh_probe) as probe_bandwidth_mock, \
+             patch("aria_queue.core.current_bandwidth", return_value={}), \
+             patch("aria_queue.core.set_bandwidth") as set_bandwidth_mock, \
+             patch("aria_queue.core.record_action") as record_action_mock:
+            probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(state=state)
+        probe_bandwidth_mock.assert_called_once()
+        set_bandwidth_mock.assert_called_once_with(4_000_000, port=6800)
+        record_action_mock.assert_called_once()
+        self.assertEqual(cap_mbps, 32.0)
+        self.assertEqual(cap_bytes_per_sec, 4_000_000)
+        self.assertEqual(probe["interval_seconds"], 180)
+        self.assertEqual(state["last_bandwidth_probe_at"], 400.0)
 
     def test_discover_active_transfer_prefers_state_gid(self) -> None:
         with patch("aria_queue.core.load_state", return_value={"active_gid": "gid-1", "active_url": "https://example.com/a.gguf"}), \
@@ -396,7 +448,7 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertTrue(status["installed"])
         self.assertTrue(status["usable"])
         self.assertEqual(status["reason"], "ready")
-        self.assertIn("bounded -u -c bootstrap probe", str(status["message"]))
+        self.assertIn("bounded -u -c -s probes at startup and every 180s", str(status["message"]))
 
     def test_uninstall_dry_run_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True)

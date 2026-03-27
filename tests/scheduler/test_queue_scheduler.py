@@ -141,6 +141,36 @@ class QueueSchedulerTests(unittest.TestCase):
         self.assertEqual(items[0]["completedLength"], "20")
         self.assertTrue(items[0].get("recovered"))
 
+    def test_cleanup_queue_state_collapses_duplicate_error_rows(self) -> None:
+        save_queue(
+            [
+                {
+                    "id": "older-error",
+                    "url": "https://releases.ubuntu.com/24.04/ubuntu-24.04.2-live-server-amd64.iso",
+                    "status": "error",
+                    "gid": "gid-error",
+                    "error_message": "Resource not found",
+                    "created_at": "2026-03-21T18:46:52+0100",
+                },
+                {
+                    "id": "newer-error",
+                    "url": "https://releases.ubuntu.com/24.04/ubuntu-24.04.2-live-server-amd64.iso",
+                    "status": "error",
+                    "gid": "gid-error",
+                    "error_message": "Resource not found",
+                    "created_at": "2026-03-26T21:16:09+0100",
+                },
+            ]
+        )
+
+        result = cleanup_queue_state()
+
+        self.assertTrue(result["changed"])
+        items = load_queue()
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["gid"], "gid-error")
+        self.assertEqual(items[0]["error_message"], "Resource not found")
+
     def test_process_queue_runs_startup_cleanup_before_reconcile(self) -> None:
         save_queue(
             [

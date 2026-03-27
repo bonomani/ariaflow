@@ -125,7 +125,7 @@ def networkquality_status() -> dict[str, object]:
         "usable": True,
         "version": None,
         "reason": "ready",
-        "message": f"networkquality available at {cmd}; ariaflow uses a bounded -u -c bootstrap probe during runs",
+        "message": f"networkquality available at {cmd}; ariaflow uses bounded -u -c -s probes at startup and every 180s during runs",
         "command": cmd,
     }
 
