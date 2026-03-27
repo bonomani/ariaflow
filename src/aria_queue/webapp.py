@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -1808,6 +1809,10 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             "bandwidth": bandwidth,
             "bandwidth_global": bandwidth,
             "aria2_global_options": current_global_options(timeout=3),
+            "backend": {
+                "reachable": True,
+                "pid": os.getpid(),
+            },
         }
         active = active_status(timeout=3)
         if not active:
