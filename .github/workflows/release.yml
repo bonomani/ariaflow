@@ -111,6 +111,15 @@ jobs:
           prerelease: false
           tag_name: ${{ steps.release_meta.outputs.tag }}
 
+      - name: Assert tap token is configured
+        env:
+          TAP_TOKEN: ${{ secrets.ARIAFLOW_TAP_TOKEN }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "Missing ARIAFLOW_TAP_TOKEN secret; cannot update bonomani/homebrew-ariaflow"
+            exit 1
+          fi
+
       - name: Checkout tap
         uses: actions/checkout@v4
         with:
@@ -141,3 +150,19 @@ jobs:
           expected="${expected#v}"
           current=$(python3 -c 'from pathlib import Path; import re; text = Path("tap/Formula/ariaflow.rb").read_text(encoding="utf-8"); match = re.search(r"^  version \"([^\"]+)\"$", text, re.MULTILINE); print(match.group(1) if match else "")')
           test "$current" = "$expected"
+
+      - name: Verify published tap formula
+        run: |
+          python3 - <<'PY'
+          from urllib.request import urlopen
+          import re
+
+          expected = "${{ steps.release_meta.outputs.version }}"
+          url = "https://raw.githubusercontent.com/bonomani/homebrew-ariaflow/main/Formula/ariaflow.rb"
+          text = urlopen(url, timeout=20).read().decode("utf-8")
+          match = re.search(r'^  version "([^"]+)"$', text, re.MULTILINE)
+          current = match.group(1) if match else ""
+          if current != expected:
+              raise SystemExit(f"Published tap formula mismatch: expected {expected}, got {current or 'missing'}")
+          print(f"Published tap formula is {current}")
+          PY
