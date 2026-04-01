@@ -527,5 +527,109 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertEqual(plan["aria2-launchd"]["result"]["reason"], "uninstall")
 
 
+class TicPerItemTests(unittest.TestCase):
+    """Per-item action API tests."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        os.environ["ARIA_QUEUE_DIR"] = self.tmp.name
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_pause_queue_item_sets_paused(self) -> None:
+        from aria_queue.core import pause_queue_item
+        item = add_queue_item("https://example.com/file.gguf")
+        result = pause_queue_item(item.id)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["item"]["status"], "paused")
+
+    def test_pause_queue_item_calls_aria2_if_gid(self) -> None:
+        from aria_queue.core import pause_queue_item
+        item = add_queue_item("https://example.com/file.gguf")
+        items = load_queue()
+        items[0]["status"] = "downloading"
+        items[0]["gid"] = "gid-1"
+        save_queue(items)
+        with patch("aria_queue.core.aria_rpc") as rpc:
+            result = pause_queue_item(item.id)
+        rpc.assert_any_call("aria2.pause", ["gid-1"], port=6800, timeout=5)
+        self.assertEqual(result["item"]["status"], "paused")
+
+    def test_resume_queue_item_from_paused(self) -> None:
+        from aria_queue.core import pause_queue_item, resume_queue_item
+        item = add_queue_item("https://example.com/file.gguf")
+        pause_queue_item(item.id)
+        result = resume_queue_item(item.id)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["item"]["status"], "queued")
+
+    def test_resume_queue_item_with_gid_calls_unpause(self) -> None:
+        from aria_queue.core import resume_queue_item
+        item = add_queue_item("https://example.com/file.gguf")
+        items = load_queue()
+        items[0]["status"] = "paused"
+        items[0]["gid"] = "gid-1"
+        save_queue(items)
+        with patch("aria_queue.core.aria_rpc"):
+            result = resume_queue_item(item.id)
+        self.assertEqual(result["item"]["status"], "downloading")
+
+    def test_remove_queue_item_deletes_from_queue(self) -> None:
+        from aria_queue.core import remove_queue_item
+        item = add_queue_item("https://example.com/file.gguf")
+        result = remove_queue_item(item.id)
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["removed"])
+        self.assertEqual(len(load_queue()), 0)
+
+    def test_remove_active_item_calls_aria2_remove(self) -> None:
+        from aria_queue.core import remove_queue_item
+        item = add_queue_item("https://example.com/file.gguf")
+        items = load_queue()
+        items[0]["status"] = "downloading"
+        items[0]["gid"] = "gid-1"
+        save_queue(items)
+        with patch("aria_queue.core.aria_rpc") as rpc:
+            result = remove_queue_item(item.id)
+        rpc.assert_any_call("aria2.remove", ["gid-1"], port=6800, timeout=5)
+        self.assertEqual(len(load_queue()), 0)
+
+    def test_retry_queue_item_requeues_failed(self) -> None:
+        from aria_queue.core import retry_queue_item
+        item = add_queue_item("https://example.com/file.gguf")
+        items = load_queue()
+        items[0]["status"] = "error"
+        items[0]["error_code"] = "1"
+        items[0]["error_message"] = "download failed"
+        save_queue(items)
+        result = retry_queue_item(item.id)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["item"]["status"], "queued")
+        self.assertIsNone(result["item"]["error_code"])
+        self.assertIsNone(result["item"]["gid"])
+
+    def test_retry_rejects_non_error_item(self) -> None:
+        from aria_queue.core import retry_queue_item
+        item = add_queue_item("https://example.com/file.gguf")
+        result = retry_queue_item(item.id)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "invalid_state")
+
+    def test_pause_rejects_already_paused(self) -> None:
+        from aria_queue.core import pause_queue_item
+        item = add_queue_item("https://example.com/file.gguf")
+        pause_queue_item(item.id)
+        result = pause_queue_item(item.id)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "invalid_state")
+
+    def test_not_found_item(self) -> None:
+        from aria_queue.core import pause_queue_item
+        result = pause_queue_item("nonexistent")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "not_found")
+
+
 if __name__ == "__main__":
     unittest.main()

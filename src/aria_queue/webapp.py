@@ -24,9 +24,13 @@ from .api import (
     load_queue,
     load_state,
     pause_active_transfer,
+    pause_queue_item,
     preflight,
     record_action,
+    remove_queue_item,
     resume_active_transfer,
+    resume_queue_item,
+    retry_queue_item,
     run_ucc,
     save_declaration,
     start_background_process,
@@ -2201,6 +2205,29 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
         if path == "/api/resume":
             result = resume_active_transfer()
+            self._invalidate_status_cache()
+            self._send_json(result)
+            return
+
+        if path.startswith("/api/item/") and path.count("/") == 4:
+            parts = path.split("/")
+            item_id = parts[3]
+            action = parts[4]
+            item_actions = {
+                "pause": pause_queue_item,
+                "resume": resume_queue_item,
+                "remove": remove_queue_item,
+                "retry": retry_queue_item,
+            }
+            handler = item_actions.get(action)
+            if handler is None:
+                self._send_json(_error_payload("invalid_action", f"unknown item action: {action}"), status=400)
+                return
+            result = handler(item_id)
+            if not result.get("ok", True):
+                status_code = 404 if result.get("error") == "not_found" else 400
+                self._send_json(result, status=status_code)
+                return
             self._invalidate_status_cache()
             self._send_json(result)
             return

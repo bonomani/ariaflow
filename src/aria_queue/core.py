@@ -1393,6 +1393,136 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
     return payload
 
 
+def _find_queue_item_by_id(item_id: str) -> tuple[list[dict[str, Any]], dict[str, Any] | None, int]:
+    items = load_queue()
+    for idx, item in enumerate(items):
+        if item.get("id") == item_id:
+            return items, item, idx
+    return items, None, -1
+
+
+def pause_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
+    with storage_locked():
+        items, item, idx = _find_queue_item_by_id(item_id)
+        if item is None:
+            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+        if item.get("status") not in {"queued", "downloading"}:
+            return {"ok": False, "error": "invalid_state", "message": f"cannot pause item in status '{item.get('status')}'"}
+        before = dict(item)
+        gid = str(item.get("gid") or "")
+        if gid:
+            try:
+                aria_rpc("aria2.pause", [gid], port=port, timeout=5)
+            except Exception:
+                pass
+        item["status"] = "paused"
+        item["live_status"] = "paused"
+        save_queue(items)
+        record_action(
+            action="pause",
+            target="queue_item",
+            outcome="changed",
+            reason="user_pause_item",
+            before={"item": before},
+            after={"item": dict(item)},
+            detail={"item_id": item_id, "gid": gid},
+        )
+    return {"ok": True, "item": dict(item)}
+
+
+def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
+    with storage_locked():
+        items, item, idx = _find_queue_item_by_id(item_id)
+        if item is None:
+            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+        if item.get("status") != "paused":
+            return {"ok": False, "error": "invalid_state", "message": f"cannot resume item in status '{item.get('status')}'"}
+        before = dict(item)
+        gid = str(item.get("gid") or "")
+        if gid:
+            try:
+                aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
+                item["status"] = "downloading"
+                item.pop("live_status", None)
+            except Exception:
+                item["status"] = "queued"
+                item["gid"] = None
+                item.pop("live_status", None)
+        else:
+            item["status"] = "queued"
+            item.pop("live_status", None)
+        save_queue(items)
+        record_action(
+            action="resume",
+            target="queue_item",
+            outcome="changed",
+            reason="user_resume_item",
+            before={"item": before},
+            after={"item": dict(item)},
+            detail={"item_id": item_id, "gid": gid},
+        )
+    return {"ok": True, "item": dict(item)}
+
+
+def remove_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
+    with storage_locked():
+        items, item, idx = _find_queue_item_by_id(item_id)
+        if item is None:
+            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+        before = dict(item)
+        gid = str(item.get("gid") or "")
+        if gid and item.get("status") in {"downloading", "queued", "paused"}:
+            try:
+                aria_rpc("aria2.remove", [gid], port=port, timeout=5)
+            except Exception:
+                try:
+                    aria_rpc("aria2.removeDownloadResult", [gid], port=port, timeout=5)
+                except Exception:
+                    pass
+        items.pop(idx)
+        save_queue(items)
+        record_action(
+            action="remove",
+            target="queue_item",
+            outcome="changed",
+            reason="user_remove_item",
+            before={"item": before},
+            after={"removed": True},
+            detail={"item_id": item_id, "gid": gid},
+        )
+    return {"ok": True, "removed": True, "item": before}
+
+
+def retry_queue_item(item_id: str) -> dict[str, Any]:
+    with storage_locked():
+        items, item, idx = _find_queue_item_by_id(item_id)
+        if item is None:
+            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+        if item.get("status") not in {"error", "failed", "stopped"}:
+            return {"ok": False, "error": "invalid_state", "message": f"cannot retry item in status '{item.get('status')}'"}
+        before = dict(item)
+        item["status"] = "queued"
+        item["gid"] = None
+        item["error_code"] = None
+        item["error_message"] = None
+        item.pop("live_status", None)
+        item.pop("rpc_failures", None)
+        state = load_state()
+        if state.get("session_id"):
+            item["session_id"] = state["session_id"]
+        save_queue(items)
+        record_action(
+            action="retry",
+            target="queue_item",
+            outcome="changed",
+            reason="user_retry_item",
+            before={"item": before},
+            after={"item": dict(item)},
+            detail={"item_id": item_id},
+        )
+    return {"ok": True, "item": dict(item)}
+
+
 def format_bytes(value: int | float | None) -> str:
     if value is None:
         return "-"
