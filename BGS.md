@@ -1,7 +1,7 @@
 # BGS Entry
 
 project_name: ariaflow
-bgs_slice: BGS-State-Modeled-Governed
+bgs_slice: BGS-State-Modeled-Governed-Verified
 decision_reason: "Stateful download engine with session/run lifecycle, preflight gates, and explicit execution contracts — requires ASM-based state model with preflight governance"
 applies_to_scope: "engine execution path: session → run → queue → job lifecycle"
 decision_record_path: "./docs/governance/bgs-decision.yaml"

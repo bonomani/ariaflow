@@ -1,5 +1,5 @@
 decision_id: ariaflow-engine-001
-bgs_slice: BGS-State-Modeled-Governed
+bgs_slice: BGS-State-Modeled-Governed-Verified
 declared_scope: "engine execution path: session, run, queue, and job lifecycle"
 decision_reason: >
   Ariaflow is a stateful download engine with explicit session/run lifecycle,
