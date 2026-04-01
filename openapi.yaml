@@ -1,0 +1,718 @@
+openapi: 3.0.3
+info:
+  title: Ariaflow API
+  description: |
+    Headless download engine API. Manages queue state, sessions, runs,
+    and policy on top of aria2.
+  version: 0.1.38
+  license:
+    name: MIT
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: Local development
+
+tags:
+  - name: Queue
+    description: Queue and item operations
+  - name: Engine
+    description: Run control, preflight, UCC
+  - name: Config
+    description: Declaration, options, aria2 settings
+  - name: Lifecycle
+    description: Install, uninstall, status
+  - name: Observability
+    description: Logs and session management
+
+paths:
+  /api/status:
+    get:
+      tags: [Queue]
+      summary: Get queue status
+      description: Returns queue items, engine state, summary counts, and aria2 status.
+      responses:
+        "200":
+          description: Current status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/QueueItem"
+                  state:
+                    $ref: "#/components/schemas/EngineState"
+                  summary:
+                    $ref: "#/components/schemas/QueueSummary"
+                  aria2:
+                    type: object
+
+  /api/add:
+    post:
+      tags: [Queue]
+      summary: Add URLs to queue
+      description: Enqueue one or more URLs for download. Duplicate URLs are deduplicated.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [url]
+                    properties:
+                      url:
+                        type: string
+                        example: "https://example.com/file.bin"
+                      output:
+                        type: string
+                        nullable: true
+                        description: Override output filename
+                      post_action_rule:
+                        type: string
+                        nullable: true
+      responses:
+        "200":
+          description: Items added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  count:
+                    type: integer
+                  added:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/QueueItem"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/item/{item_id}/pause:
+    post:
+      tags: [Queue]
+      summary: Pause a queue item
+      description: Pauses a queued or downloading item. Calls aria2.pause if the item has a GID.
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+      responses:
+        "200":
+          $ref: "#/components/responses/ItemResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/item/{item_id}/resume:
+    post:
+      tags: [Queue]
+      summary: Resume a paused item
+      description: Resumes a paused item. Calls aria2.unpause if GID exists, otherwise re-queues.
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+      responses:
+        "200":
+          $ref: "#/components/responses/ItemResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/item/{item_id}/remove:
+    post:
+      tags: [Queue]
+      summary: Remove a queue item
+      description: Removes the item from the queue. If active, calls aria2.remove first.
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+      responses:
+        "200":
+          description: Item removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  removed:
+                    type: boolean
+                  item:
+                    $ref: "#/components/schemas/QueueItem"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/item/{item_id}/retry:
+    post:
+      tags: [Queue]
+      summary: Retry a failed item
+      description: Re-queues an item in error/failed/stopped status. Clears error fields and GID.
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+      responses:
+        "200":
+          $ref: "#/components/responses/ItemResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/item/{item_id}/files:
+    get:
+      tags: [Queue]
+      summary: List files in a torrent/metalink download
+      description: Returns the file list from aria2.getFiles for the item's GID.
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+      responses:
+        "200":
+          description: File list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  item_id:
+                    type: string
+                  gid:
+                    type: string
+                  files:
+                    type: array
+                    items:
+                      type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Queue]
+      summary: Select files in a torrent/metalink download
+      description: |
+        Selects specific files for download via aria2.changeOption and unpauses.
+        Use after adding a .torrent or .metalink URL (which auto-pauses for selection).
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [select]
+              properties:
+                select:
+                  type: array
+                  items:
+                    type: integer
+                  example: [1, 3, 5]
+                  description: 1-based file indices to download
+      responses:
+        "200":
+          description: Files selected and download resumed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  item_id:
+                    type: string
+                  gid:
+                    type: string
+                  selected:
+                    type: array
+                    items:
+                      type: integer
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/run:
+    post:
+      tags: [Engine]
+      summary: Start or stop the queue processor
+      description: |
+        Start begins background queue processing. Stop signals graceful shutdown.
+        When starting, auto-preflight may run first depending on declaration preferences.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [start, stop]
+                auto_preflight_on_run:
+                  type: boolean
+                  nullable: true
+                  description: Override the declaration preference for this run
+      responses:
+        "200":
+          description: Run action result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  action:
+                    type: string
+                  result:
+                    type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Preflight blocked start
+
+  /api/preflight:
+    post:
+      tags: [Engine]
+      summary: Run preflight checks
+      description: |
+        Validates system readiness: aria2 availability, queue directory,
+        UIC gates and preferences. Returns structured gate results.
+      responses:
+        "200":
+          description: Preflight result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  contract:
+                    type: string
+                    example: UCC
+                  version:
+                    type: string
+                    example: "2.0"
+                  gates:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        satisfied:
+                          type: boolean
+                        blocking:
+                          type: string
+                  status:
+                    type: string
+                    enum: [pass, fail]
+                  exit_code:
+                    type: integer
+
+  /api/ucc:
+    post:
+      tags: [Engine]
+      summary: Execute UCC cycle
+      description: Runs preflight + queue processing and returns a UCC 2.0 structured result.
+      responses:
+        "200":
+          description: UCC result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  meta:
+                    type: object
+                    properties:
+                      contract:
+                        type: string
+                      version:
+                        type: string
+                  result:
+                    type: object
+                    properties:
+                      observation:
+                        type: string
+                      outcome:
+                        type: string
+
+  /api/pause:
+    post:
+      tags: [Engine]
+      summary: Pause all active transfers
+      description: Pauses all active aria2 downloads and sets engine paused state.
+      responses:
+        "200":
+          description: Pause result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  paused:
+                    type: boolean
+                  gids:
+                    type: array
+                    items:
+                      type: string
+
+  /api/resume:
+    post:
+      tags: [Engine]
+      summary: Resume all paused transfers
+      description: Resumes all paused aria2 downloads and clears engine paused state.
+      responses:
+        "200":
+          description: Resume result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resumed:
+                    type: boolean
+                  gids:
+                    type: array
+                    items:
+                      type: string
+
+  /api/declaration:
+    get:
+      tags: [Config]
+      summary: Get UIC declaration
+      description: Returns the current UIC declaration (gates, preferences, policies).
+      responses:
+        "200":
+          description: Declaration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Declaration"
+    post:
+      tags: [Config]
+      summary: Save UIC declaration
+      description: Replaces the UIC declaration with the provided object.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Declaration"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  saved:
+                    type: boolean
+                  declaration:
+                    $ref: "#/components/schemas/Declaration"
+
+  /api/options:
+    get:
+      tags: [Config]
+      summary: Get engine options
+      description: Alias for GET /api/declaration.
+      responses:
+        "200":
+          description: Declaration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Declaration"
+
+  /api/aria2/options:
+    post:
+      tags: [Config]
+      summary: Change aria2 global options
+      description: |
+        Modifies aria2 runtime options. Only a safe subset is allowed:
+        max-concurrent-downloads, max-connection-per-server, split,
+        min-split-size, max-overall-download-limit, max-download-limit,
+        timeout, connect-timeout.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+              example:
+                max-concurrent-downloads: "3"
+                max-connection-per-server: "4"
+      responses:
+        "200":
+          description: Options applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  applied:
+                    type: object
+                  options:
+                    type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/session:
+    post:
+      tags: [Observability]
+      summary: Create a new session
+      description: Closes the current session and starts a fresh one.
+      responses:
+        "200":
+          description: New session state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngineState"
+
+  /api/log:
+    get:
+      tags: [Observability]
+      summary: Get action log
+      description: Returns the most recent action log entries.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 120
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: Action log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+
+  /api/lifecycle:
+    get:
+      tags: [Lifecycle]
+      summary: Get lifecycle status
+      description: Returns install/service status for ariaflow, aria2, networkquality, and aria2-launchd.
+      responses:
+        "200":
+          description: Lifecycle status
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/lifecycle/action:
+    post:
+      tags: [Lifecycle]
+      summary: Run lifecycle action
+      description: Install or uninstall components. macOS only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target, action]
+              properties:
+                target:
+                  type: string
+                  enum: [ariaflow, aria2-launchd]
+                action:
+                  type: string
+                  enum: [install, uninstall]
+      responses:
+        "200":
+          description: Action result
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+components:
+  parameters:
+    ItemId:
+      name: item_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Queue item UUID
+
+  schemas:
+    QueueItem:
+      type: object
+      properties:
+        id:
+          type: string
+          description: UUID
+        url:
+          type: string
+        status:
+          type: string
+          enum: [pending, queued, downloading, paused, complete, done, error, failed, removed, stopped, skipped]
+        gid:
+          type: string
+          nullable: true
+          description: aria2 GID
+        session_id:
+          type: string
+          nullable: true
+        error_code:
+          type: string
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        live_status:
+          type: string
+          nullable: true
+          description: aria2 live status (active, waiting, paused, etc.)
+        downloadSpeed:
+          type: string
+          nullable: true
+        completedLength:
+          type: string
+          nullable: true
+        totalLength:
+          type: string
+          nullable: true
+
+    EngineState:
+      type: object
+      properties:
+        running:
+          type: boolean
+        paused:
+          type: boolean
+        stop_requested:
+          type: boolean
+        active_gid:
+          type: string
+          nullable: true
+        active_url:
+          type: string
+          nullable: true
+        session_id:
+          type: string
+          nullable: true
+        session_started_at:
+          type: string
+          nullable: true
+        session_last_seen_at:
+          type: string
+          nullable: true
+        session_closed_at:
+          type: string
+          nullable: true
+        session_closed_reason:
+          type: string
+          nullable: true
+
+    QueueSummary:
+      type: object
+      properties:
+        total:
+          type: integer
+        queued:
+          type: integer
+        downloading:
+          type: integer
+        paused:
+          type: integer
+        done:
+          type: integer
+        error:
+          type: integer
+
+    Declaration:
+      type: object
+      properties:
+        meta:
+          type: object
+          properties:
+            contract:
+              type: string
+              example: UCC
+            version:
+              type: string
+              example: "2.0"
+        uic:
+          type: object
+          properties:
+            gates:
+              type: array
+              items:
+                type: object
+            preferences:
+              type: array
+              items:
+                type: object
+            policies:
+              type: array
+              items:
+                type: object
+        targets:
+          type: array
+          items:
+            type: object
+
+    Error:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: false
+        error:
+          type: string
+        message:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Item not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ItemResult:
+      description: Item action result
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+              item:
+                $ref: "#/components/schemas/QueueItem"

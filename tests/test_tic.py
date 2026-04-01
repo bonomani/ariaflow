@@ -631,5 +631,120 @@ class TicPerItemTests(unittest.TestCase):
         self.assertEqual(result["error"], "not_found")
 
 
+class TicTorrentAndOptionsTests(unittest.TestCase):
+    """Torrent file selection, metadata URL detection, and aria2 options proxy tests."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        os.environ["ARIA_QUEUE_DIR"] = self.tmp.name
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_metadata_url_detection(self) -> None:
+        from aria_queue.core import _is_metadata_url
+        self.assertTrue(_is_metadata_url("https://example.com/file.torrent"))
+        self.assertTrue(_is_metadata_url("https://example.com/file.metalink"))
+        self.assertTrue(_is_metadata_url("https://example.com/file.meta4"))
+        self.assertTrue(_is_metadata_url("magnet:?xt=urn:btih:abc123"))
+        self.assertFalse(_is_metadata_url("https://example.com/file.zip"))
+        self.assertFalse(_is_metadata_url("https://example.com/file.gguf"))
+
+    def test_add_download_sets_pause_metadata_for_torrent(self) -> None:
+        from aria_queue.core import add_download
+        item = {"url": "https://example.com/file.torrent"}
+        with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
+            gid = add_download(item, cap_bytes_per_sec=250000)
+        call_args = rpc.call_args[0]
+        options = call_args[1][1]
+        self.assertEqual(options["pause-metadata"], "true")
+        self.assertEqual(gid, "gid-1")
+
+    def test_add_download_no_pause_metadata_for_http(self) -> None:
+        from aria_queue.core import add_download
+        item = {"url": "https://example.com/file.zip"}
+        with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
+            add_download(item, cap_bytes_per_sec=250000)
+        call_args = rpc.call_args[0]
+        options = call_args[1][1]
+        self.assertNotIn("pause-metadata", options)
+
+    def test_get_item_files_returns_file_list(self) -> None:
+        from aria_queue.core import get_item_files
+        item = add_queue_item("https://example.com/file.torrent")
+        items = load_queue()
+        items[0]["gid"] = "gid-1"
+        save_queue(items)
+        files = [{"index": "1", "path": "/tmp/file1.txt", "length": "100", "selected": "true"}]
+        with patch("aria_queue.core.aria_rpc", return_value={"result": files}):
+            result = get_item_files(item.id)
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(result["files"]), 1)
+        self.assertEqual(result["files"][0]["index"], "1")
+
+    def test_get_item_files_no_gid(self) -> None:
+        from aria_queue.core import get_item_files
+        item = add_queue_item("https://example.com/file.torrent")
+        result = get_item_files(item.id)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "no_gid")
+
+    def test_select_item_files_calls_change_option_and_unpause(self) -> None:
+        from aria_queue.core import select_item_files
+        item = add_queue_item("https://example.com/file.torrent")
+        items = load_queue()
+        items[0]["gid"] = "gid-1"
+        items[0]["status"] = "paused"
+        save_queue(items)
+        with patch("aria_queue.core.aria_rpc") as rpc:
+            result = select_item_files(item.id, [1, 3])
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["selected"], [1, 3])
+        rpc.assert_any_call("aria2.changeOption", ["gid-1", {"select-file": "1,3"}], port=6800, timeout=5)
+        rpc.assert_any_call("aria2.unpause", ["gid-1"], port=6800, timeout=5)
+
+    def test_change_aria2_options_safe_subset(self) -> None:
+        from aria_queue.core import change_aria2_options
+        with patch("aria_queue.core.aria_rpc") as rpc, \
+             patch("aria_queue.core.current_global_options", return_value={}):
+            result = change_aria2_options({"max-concurrent-downloads": "3"})
+        self.assertTrue(result["ok"])
+        rpc.assert_any_call("aria2.changeGlobalOption", [{"max-concurrent-downloads": "3"}], port=6800, timeout=5)
+
+    def test_change_aria2_options_rejects_unsafe(self) -> None:
+        from aria_queue.core import change_aria2_options
+        result = change_aria2_options({"dir": "/tmp/evil", "max-concurrent-downloads": "3"})
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "rejected_options")
+        self.assertIn("dir", result["message"])
+
+    def test_change_aria2_options_rejects_empty(self) -> None:
+        from aria_queue.core import change_aria2_options
+        result = change_aria2_options({})
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "empty_options")
+
+
+class TicOpenAPITests(unittest.TestCase):
+    """Validate OpenAPI spec is well-formed."""
+
+    def test_openapi_spec_is_valid_yaml(self) -> None:
+        spec_path = Path(__file__).resolve().parents[1] / "openapi.yaml"
+        self.assertTrue(spec_path.exists(), "openapi.yaml not found")
+        import json
+        text = spec_path.read_text(encoding="utf-8")
+        try:
+            import yaml
+            data = yaml.safe_load(text)
+        except ImportError:
+            self.skipTest("PyYAML not installed")
+            return
+        self.assertEqual(data["openapi"], "3.0.3")
+        self.assertIn("paths", data)
+        self.assertIn("/api/status", data["paths"])
+        self.assertIn("/api/item/{item_id}/pause", data["paths"])
+        self.assertIn("/api/aria2/options", data["paths"])
+
+
 if __name__ == "__main__":
     unittest.main()
