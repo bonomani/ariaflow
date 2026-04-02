@@ -13,6 +13,7 @@ from pathlib import Path
 from . import __version__
 from .api import (
     add_queue_item,
+    bandwidth_status,
     change_aria2_options,
     active_gids,
     active_status,
@@ -24,6 +25,7 @@ from .api import (
     install_aria2_launchd,
     is_macos,
     get_item_files,
+    manual_probe,
     load_action_log,
     load_declaration,
     load_queue,
@@ -2027,6 +2029,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             result = _run_tests()
             self._send_json(result)
             return
+        if path == "/api/bandwidth":
+            self._send_json(bandwidth_status())
+            return
         if path == "/api/status":
             self._send_json(self._status_payload())
             return
@@ -2067,6 +2072,12 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             payload = json.loads(raw or "{}")
         except json.JSONDecodeError:
             self._send_json(_error_payload("invalid_json", "request body must be valid JSON"), status=400)
+            return
+
+        if path == "/api/bandwidth/probe":
+            result = manual_probe()
+            self._invalidate_status_cache()
+            self._send_json(result)
             return
 
         if path == "/api/add":

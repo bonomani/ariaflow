@@ -455,6 +455,86 @@ def max_simultaneous_downloads() -> int:
     return 0
 
 
+def _pref_value(name: str, default: Any = None) -> Any:
+    from .contracts import load_declaration
+    for pref in load_declaration().get("uic", {}).get("preferences", []):
+        if pref.get("name") == name:
+            return pref.get("value", default)
+    return default
+
+
+def bandwidth_config() -> dict[str, Any]:
+    free_pct = max(0, min(100, int(_pref_value("bandwidth_free_percent", 20) or 20)))
+    free_abs = max(0.0, float(_pref_value("bandwidth_free_absolute_mbps", 0) or 0))
+    floor = max(1, int(_pref_value("bandwidth_floor_mbps", 2) or 2))
+    interval = max(30, int(_pref_value("bandwidth_probe_interval_seconds", 180) or 180))
+    return {
+        "free_percent": free_pct,
+        "free_absolute_mbps": free_abs,
+        "floor_mbps": floor,
+        "probe_interval_seconds": interval,
+        "use_percent": 1.0 - (free_pct / 100.0),
+    }
+
+
+def bandwidth_status(port: int = 6800) -> dict[str, Any]:
+    config = bandwidth_config()
+    state = load_state()
+    last_probe = state.get("last_bandwidth_probe")
+    bw = current_bandwidth(port=port)
+    result: dict[str, Any] = {
+        "config": config,
+        "current_limit": bw,
+        "last_probe": last_probe if isinstance(last_probe, dict) else None,
+        "last_probe_at": state.get("last_bandwidth_probe_at"),
+    }
+    if isinstance(last_probe, dict):
+        result["interface"] = last_probe.get("interface_name")
+        result["downlink_mbps"] = last_probe.get("downlink_mbps")
+        result["uplink_mbps"] = last_probe.get("uplink_mbps")
+        result["cap_mbps"] = last_probe.get("cap_mbps")
+        result["cap_bytes_per_sec"] = last_probe.get("cap_bytes_per_sec")
+        result["responsiveness_rpm"] = last_probe.get("responsiveness_rpm")
+    return result
+
+
+def manual_probe(port: int = 6800) -> dict[str, Any]:
+    config = bandwidth_config()
+    probe = probe_bandwidth(percent=config["use_percent"], floor_mbps=config["floor_mbps"])
+    probe["interval_seconds"] = config["probe_interval_seconds"]
+    state = load_state()
+    state["last_bandwidth_probe"] = probe
+    state["last_bandwidth_probe_at"] = time.time()
+    save_state(state)
+    cap = probe.get("cap_bytes_per_sec", 0)
+    if cap > 0:
+        try:
+            set_bandwidth(cap, port=port)
+        except Exception:
+            pass
+    record_action(
+        action="probe",
+        target="bandwidth",
+        outcome="changed" if probe.get("source") == "networkquality" else "unchanged",
+        reason="manual_probe",
+        before={"config": config},
+        after={"probe": probe},
+        detail=probe,
+    )
+    return {
+        "ok": True,
+        "probe": probe,
+        "config": config,
+        "interface": probe.get("interface_name"),
+        "downlink_mbps": probe.get("downlink_mbps"),
+        "uplink_mbps": probe.get("uplink_mbps"),
+        "cap_mbps": probe.get("cap_mbps"),
+        "cap_bytes_per_sec": probe.get("cap_bytes_per_sec"),
+        "responsiveness_rpm": probe.get("responsiveness_rpm"),
+        "source": probe.get("source"),
+    }
+
+
 def _active_item_url(info: dict[str, Any]) -> str | None:
     files = info.get("files") or []
     if not files:
@@ -972,6 +1052,9 @@ def _parse_networkquality_output(output: str, *, percent: float, floor_mbps: int
                 "cap_mbps": _cap_mbps_from_bytes_per_sec(cap_bytes_per_sec),
                 "cap_bytes_per_sec": cap_bytes_per_sec,
             }
+            ul_throughput_bps = _coerce_float(payload.get("ul_throughput"))
+            if ul_throughput_bps and ul_throughput_bps > 0:
+                probe["uplink_mbps"] = round(ul_throughput_bps / _BITS_PER_MEGABIT, 1)
             responsiveness = _coerce_float(payload.get("dl_responsiveness"))
             if responsiveness is None:
                 responsiveness = _coerce_float(payload.get("responsiveness"))
@@ -1054,23 +1137,32 @@ def _apply_bandwidth_probe(
 ) -> tuple[dict[str, Any], float, int]:
     if state is None:
         state = load_state()
+    config = bandwidth_config()
+    interval = config["probe_interval_seconds"]
+    use_pct = config["use_percent"]
+    floor = config["floor_mbps"]
+    free_abs = config["free_absolute_mbps"]
     now = time.time()
     probe = state.get("last_bandwidth_probe")
     needs_probe = force or not isinstance(probe, dict) or _should_probe_bandwidth(state, now=now)
     if needs_probe:
-        probe = probe_bandwidth()
-        probe["interval_seconds"] = _NETWORKQUALITY_PROBE_INTERVAL
+        probe = probe_bandwidth(percent=use_pct, floor_mbps=floor)
+        probe["interval_seconds"] = interval
         state["last_bandwidth_probe"] = probe
         state["last_bandwidth_probe_at"] = now
     elif isinstance(probe, dict) and "interval_seconds" not in probe:
         probe = dict(probe)
-        probe["interval_seconds"] = _NETWORKQUALITY_PROBE_INTERVAL
+        probe["interval_seconds"] = interval
         state["last_bandwidth_probe"] = probe
     cap_mbps = float(probe.get("cap_mbps") or 0) if isinstance(probe, dict) else 0.0
     cap_bytes_per_sec = int(
         (probe or {}).get("cap_bytes_per_sec")
-        or _cap_bytes_per_sec_from_mbps(cap_mbps if cap_mbps > 0 else 2.0, 1.0, 2)
+        or _cap_bytes_per_sec_from_mbps(cap_mbps if cap_mbps > 0 else float(floor), 1.0, floor)
     )
+    if free_abs > 0 and isinstance(probe, dict) and probe.get("downlink_mbps"):
+        measured = float(probe["downlink_mbps"])
+        abs_cap = max(0, measured - free_abs) * _BYTES_PER_MEGABIT
+        cap_bytes_per_sec = min(cap_bytes_per_sec, max(int(floor * _BYTES_PER_MEGABIT), int(abs_cap)))
     if needs_probe:
         save_state(state)
         before_bandwidth = current_bandwidth(port=port)

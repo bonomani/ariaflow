@@ -19,7 +19,11 @@ DEFAULT_DECLARATION = {
             {"name": "post_action_rule", "value": "pending", "options": ["pending"], "rationale": "default placeholder"},
             {"name": "auto_preflight_on_run", "value": False, "options": [True, False], "rationale": "default off"},
             {"name": "duplicate_active_transfer_action", "value": "remove", "options": ["remove", "pause", "ignore"], "rationale": "remove duplicate live jobs by default"},
-            {"name": "max_simultaneous_downloads", "value": 1, "options": [1], "rationale": "1 preserves the sequential default"}
+            {"name": "max_simultaneous_downloads", "value": 1, "options": [1], "rationale": "1 preserves the sequential default"},
+            {"name": "bandwidth_free_percent", "value": 20, "options": [10, 20, 30, 50], "rationale": "reserve 20% of measured bandwidth for other traffic"},
+            {"name": "bandwidth_free_absolute_mbps", "value": 0, "options": [0, 1, 2, 5, 10], "rationale": "absolute minimum free bandwidth in Mbps (0 = use percent only)"},
+            {"name": "bandwidth_floor_mbps", "value": 2, "options": [1, 2, 5], "rationale": "minimum download cap when probe is unavailable or bandwidth is very low"},
+            {"name": "bandwidth_probe_interval_seconds", "value": 180, "options": [60, 120, 180, 300], "rationale": "seconds between automatic bandwidth probes"}
         ],
         "policies": [],
     },

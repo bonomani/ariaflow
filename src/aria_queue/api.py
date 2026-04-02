@@ -3,6 +3,8 @@ from __future__ import annotations
 from .contracts import load_declaration, preflight, run_ucc, save_declaration
 from .core import (
     add_queue_item,
+    bandwidth_config,
+    bandwidth_status,
     change_aria2_options,
     active_gids,
     active_status,
@@ -12,6 +14,7 @@ from .core import (
     current_global_options,
     get_active_progress,
     get_item_files,
+    manual_probe,
     load_action_log,
     load_queue,
     load_state,
@@ -38,6 +41,8 @@ from .platform.launchd import (
 
 __all__ = [
     "add_queue_item",
+    "bandwidth_config",
+    "bandwidth_status",
     "change_aria2_options",
     "active_gids",
     "active_status",
@@ -51,6 +56,7 @@ __all__ = [
     "load_queue",
     "load_state",
     "get_item_files",
+    "manual_probe",
     "pause_active_transfer",
     "pause_queue_item",
     "preflight",
