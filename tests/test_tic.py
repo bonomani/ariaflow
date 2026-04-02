@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
-import sys
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from conftest import IsolatedTestCase
 
 from aria_queue.contracts import preflight, run_ucc
 from aria_queue.core import (
@@ -36,20 +33,13 @@ from aria_queue.install import (
 )
 
 
-class TicAriaFlowTests(unittest.TestCase):
+class TicAriaFlowTests(IsolatedTestCase):
     """
     Name: test_tic
     Intent: verify queue enqueueing, preflight reporting, and structured UCC output.
     Scope: ariaflow command layer
     Trace targets: UIC pre-flight, UCC execution, TIC reporting
     """
-
-    def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
-        os.environ["ARIA_QUEUE_DIR"] = self.tmp.name
-
-    def tearDown(self) -> None:
-        self.tmp.cleanup()
 
     def test_enqueue_creates_queue_item(self) -> None:
         item = add_queue_item("https://example.com/model.gguf")
@@ -792,15 +782,8 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertEqual(plan["aria2-launchd"]["result"]["reason"], "uninstall")
 
 
-class TicPerItemTests(unittest.TestCase):
+class TicPerItemTests(IsolatedTestCase):
     """Per-item action API tests."""
-
-    def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
-        os.environ["ARIA_QUEUE_DIR"] = self.tmp.name
-
-    def tearDown(self) -> None:
-        self.tmp.cleanup()
 
     def test_pause_queue_item_sets_paused(self) -> None:
         from aria_queue.core import pause_queue_item
@@ -906,15 +889,8 @@ class TicPerItemTests(unittest.TestCase):
         self.assertEqual(result["error"], "not_found")
 
 
-class TicTorrentAndOptionsTests(unittest.TestCase):
+class TicTorrentAndOptionsTests(IsolatedTestCase):
     """Torrent file selection, metadata URL detection, and aria2 options proxy tests."""
-
-    def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
-        os.environ["ARIA_QUEUE_DIR"] = self.tmp.name
-
-    def tearDown(self) -> None:
-        self.tmp.cleanup()
 
     def test_metadata_url_detection(self) -> None:
         from aria_queue.core import _is_metadata_url

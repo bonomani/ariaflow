@@ -8,16 +8,12 @@ bug has been reintroduced.
 from __future__ import annotations
 
 import json
-import os
-import sys
-import tempfile
-from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from conftest import IsolatedTestCase
 
-from aria_queue.core import (  # noqa: E402
+from aria_queue.core import (
     _apply_free_bandwidth_cap,
     _is_metadata_url,
     add_queue_item,
@@ -34,14 +30,7 @@ from aria_queue.core import (  # noqa: E402
 )
 
 
-class TestRegressions(unittest.TestCase):
-    def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
-        os.environ["ARIA_QUEUE_DIR"] = self.tmp.name
-
-    def tearDown(self) -> None:
-        self.tmp.cleanup()
-
+class TestRegressions(IsolatedTestCase):
     # ── Bug #1: Session isolation on recovery ──
     # Fixed: recovered items now get current session_id
     # Before: item kept old session_id, invisible to session queries
@@ -310,15 +299,8 @@ class TestRegressions(unittest.TestCase):
         self.assertGreater(rev2, rev1)
 
 
-class TestSecurityInputValidation(unittest.TestCase):
+class TestSecurityInputValidation(IsolatedTestCase):
     """Security and input validation at API boundaries."""
-
-    def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
-        os.environ["ARIA_QUEUE_DIR"] = self.tmp.name
-
-    def tearDown(self) -> None:
-        self.tmp.cleanup()
 
     def test_add_item_with_very_long_url(self) -> None:
         url = "https://example.com/" + "a" * 10000

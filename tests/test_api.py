@@ -6,40 +6,24 @@ aria2 RPC is mocked where needed to avoid requiring a running daemon.
 
 from __future__ import annotations
 
-import json
-import os
-import sys
-import tempfile
 import threading
 import time
 import urllib.error
 import urllib.request
-from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from conftest import APIServerPerTestCase, raw_request, request_json
 
-from aria_queue.core import load_queue, save_queue  # noqa: E402
-from aria_queue.webapp import serve  # noqa: E402
+from aria_queue.core import load_queue, save_queue
 
 
 def _request(
     url: str, method: str = "GET", payload: dict | None = None, timeout: int = 5
 ) -> tuple[int, dict]:
-    data = None
-    headers = {}
-    if payload is not None:
-        data = json.dumps(payload).encode("utf-8")
-        headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            return resp.status, body
-    except urllib.error.HTTPError as exc:
-        body = json.loads(exc.read().decode("utf-8"))
-        return exc.code, body
+    """Thin 2-tuple wrapper around conftest.request_json."""
+    code, body, _ = request_json(url, method=method, payload=payload, timeout=timeout)
+    return code, body
 
 
 def _raw_request(
@@ -49,34 +33,10 @@ def _raw_request(
     content_type: str | None = None,
     timeout: int = 5,
 ) -> tuple[int, bytes, dict[str, str]]:
-    headers = {}
-    if content_type:
-        headers["Content-Type"] = content_type
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status, resp.read(), dict(resp.headers)
-    except urllib.error.HTTPError as exc:
-        return exc.code, exc.read(), dict(exc.headers)
-
-
-class APIServerMixin:
-    """Mixin that starts/stops a test server."""
-
-    def start_server(self) -> str:
-        self.tmp = tempfile.TemporaryDirectory()
-        os.environ["ARIA_QUEUE_DIR"] = self.tmp.name
-        self.server = serve(host="127.0.0.1", port=0)
-        self.port = self.server.server_address[1]
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-        time.sleep(0.2)
-        return f"http://127.0.0.1:{self.port}"
-
-    def stop_server(self) -> None:
-        self.server.shutdown()
-        self.server.server_close()
-        self.tmp.cleanup()
+    """Delegate to conftest.raw_request."""
+    return raw_request(
+        url, method=method, data=data, content_type=content_type, timeout=timeout
+    )
 
 
 # ──────────────────────────────────────────────────────
@@ -84,13 +44,7 @@ class APIServerMixin:
 # ──────────────────────────────────────────────────────
 
 
-class TestStatusEndpoint(APIServerMixin, unittest.TestCase):
-    def setUp(self) -> None:
-        self.base = self.start_server()
-
-    def tearDown(self) -> None:
-        self.stop_server()
-
+class TestStatusEndpoint(APIServerPerTestCase):
     def test_status_returns_required_fields(self) -> None:
         code, body = _request(f"{self.base}/api/status")
         self.assertEqual(code, 200)
@@ -134,13 +88,7 @@ class TestStatusEndpoint(APIServerMixin, unittest.TestCase):
 # ──────────────────────────────────────────────────────
 
 
-class TestAddEndpoint(APIServerMixin, unittest.TestCase):
-    def setUp(self) -> None:
-        self.base = self.start_server()
-
-    def tearDown(self) -> None:
-        self.stop_server()
-
+class TestAddEndpoint(APIServerPerTestCase):
     def test_add_single_item(self) -> None:
         code, body = _request(
             f"{self.base}/api/add",
@@ -236,9 +184,9 @@ class TestAddEndpoint(APIServerMixin, unittest.TestCase):
 # ──────────────────────────────────────────────────────
 
 
-class TestPerItemActions(APIServerMixin, unittest.TestCase):
+class TestPerItemActions(APIServerPerTestCase):
     def setUp(self) -> None:
-        self.base = self.start_server()
+        super().setUp()
         _, added = _request(
             f"{self.base}/api/add",
             "POST",
@@ -247,9 +195,6 @@ class TestPerItemActions(APIServerMixin, unittest.TestCase):
             },
         )
         self.item_id = added["added"][0]["id"]
-
-    def tearDown(self) -> None:
-        self.stop_server()
 
     # ── Pause ──
 
@@ -385,9 +330,9 @@ class TestPerItemActions(APIServerMixin, unittest.TestCase):
 # ──────────────────────────────────────────────────────
 
 
-class TestFileSelection(APIServerMixin, unittest.TestCase):
+class TestFileSelection(APIServerPerTestCase):
     def setUp(self) -> None:
-        self.base = self.start_server()
+        super().setUp()
         _, added = _request(
             f"{self.base}/api/add",
             "POST",
@@ -396,9 +341,6 @@ class TestFileSelection(APIServerMixin, unittest.TestCase):
             },
         )
         self.item_id = added["added"][0]["id"]
-
-    def tearDown(self) -> None:
-        self.stop_server()
 
     def test_get_files_no_gid_returns_400(self) -> None:
         code, body = _request(f"{self.base}/api/item/{self.item_id}/files")
@@ -486,13 +428,7 @@ class TestFileSelection(APIServerMixin, unittest.TestCase):
 # ──────────────────────────────────────────────────────
 
 
-class TestAria2Options(APIServerMixin, unittest.TestCase):
-    def setUp(self) -> None:
-        self.base = self.start_server()
-
-    def tearDown(self) -> None:
-        self.stop_server()
-
+class TestAria2Options(APIServerPerTestCase):
     def test_safe_option_accepted(self) -> None:
         with (
             patch("aria_queue.core.aria_rpc"),
@@ -583,13 +519,7 @@ class TestAria2Options(APIServerMixin, unittest.TestCase):
 # ──────────────────────────────────────────────────────
 
 
-class TestBandwidth(APIServerMixin, unittest.TestCase):
-    def setUp(self) -> None:
-        self.base = self.start_server()
-
-    def tearDown(self) -> None:
-        self.stop_server()
-
+class TestBandwidth(APIServerPerTestCase):
     def test_bandwidth_status_returns_config(self) -> None:
         code, body = _request(f"{self.base}/api/bandwidth")
         self.assertEqual(code, 200)
@@ -689,13 +619,7 @@ class TestBandwidth(APIServerMixin, unittest.TestCase):
 # ──────────────────────────────────────────────────────
 
 
-class TestEngineControl(APIServerMixin, unittest.TestCase):
-    def setUp(self) -> None:
-        self.base = self.start_server()
-
-    def tearDown(self) -> None:
-        self.stop_server()
-
+class TestEngineControl(APIServerPerTestCase):
     def test_run_start(self) -> None:
         code, body = _request(
             f"{self.base}/api/run",
@@ -789,13 +713,7 @@ class TestEngineControl(APIServerMixin, unittest.TestCase):
 # ──────────────────────────────────────────────────────
 
 
-class TestDeclaration(APIServerMixin, unittest.TestCase):
-    def setUp(self) -> None:
-        self.base = self.start_server()
-
-    def tearDown(self) -> None:
-        self.stop_server()
-
+class TestDeclaration(APIServerPerTestCase):
     def test_get_declaration(self) -> None:
         code, body = _request(f"{self.base}/api/declaration")
         self.assertEqual(code, 200)
@@ -838,13 +756,7 @@ class TestDeclaration(APIServerMixin, unittest.TestCase):
 # ──────────────────────────────────────────────────────
 
 
-class TestSession(APIServerMixin, unittest.TestCase):
-    def setUp(self) -> None:
-        self.base = self.start_server()
-
-    def tearDown(self) -> None:
-        self.stop_server()
-
+class TestSession(APIServerPerTestCase):
     def test_new_session(self) -> None:
         # Create initial session via add
         _request(
@@ -881,13 +793,7 @@ class TestSession(APIServerMixin, unittest.TestCase):
 # ──────────────────────────────────────────────────────
 
 
-class TestActionLog(APIServerMixin, unittest.TestCase):
-    def setUp(self) -> None:
-        self.base = self.start_server()
-
-    def tearDown(self) -> None:
-        self.stop_server()
-
+class TestActionLog(APIServerPerTestCase):
     def test_log_default_limit(self) -> None:
         code, body = _request(f"{self.base}/api/log")
         self.assertEqual(code, 200)
@@ -931,13 +837,7 @@ class TestActionLog(APIServerMixin, unittest.TestCase):
 # ──────────────────────────────────────────────────────
 
 
-class TestLifecycle(APIServerMixin, unittest.TestCase):
-    def setUp(self) -> None:
-        self.base = self.start_server()
-
-    def tearDown(self) -> None:
-        self.stop_server()
-
+class TestLifecycle(APIServerPerTestCase):
     def test_lifecycle_status(self) -> None:
         code, body = _request(f"{self.base}/api/lifecycle")
         self.assertEqual(code, 200)
@@ -964,13 +864,7 @@ class TestLifecycle(APIServerMixin, unittest.TestCase):
 # ──────────────────────────────────────────────────────
 
 
-class TestUCC(APIServerMixin, unittest.TestCase):
-    def setUp(self) -> None:
-        self.base = self.start_server()
-
-    def tearDown(self) -> None:
-        self.stop_server()
-
+class TestUCC(APIServerPerTestCase):
     def test_ucc_returns_structured_result(self) -> None:
         with (
             patch(
@@ -1003,13 +897,7 @@ class TestUCC(APIServerMixin, unittest.TestCase):
 # ──────────────────────────────────────────────────────
 
 
-class TestMetaEndpoints(APIServerMixin, unittest.TestCase):
-    def setUp(self) -> None:
-        self.base = self.start_server()
-
-    def tearDown(self) -> None:
-        self.stop_server()
-
+class TestMetaEndpoints(APIServerPerTestCase):
     def test_openapi_yaml(self) -> None:
         code, body, headers = _raw_request(f"{self.base}/api/openapi.yaml")
         self.assertEqual(code, 200)
@@ -1061,7 +949,7 @@ class TestMetaEndpoints(APIServerMixin, unittest.TestCase):
             headers={"If-None-Match": etag},
         )
         try:
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=5):
                 # 304 should not have body but urllib may still return 200
                 pass
         except urllib.error.HTTPError as exc:
@@ -1113,13 +1001,7 @@ class TestMetaEndpoints(APIServerMixin, unittest.TestCase):
 # ──────────────────────────────────────────────────────
 
 
-class TestErrorHandling(APIServerMixin, unittest.TestCase):
-    def setUp(self) -> None:
-        self.base = self.start_server()
-
-    def tearDown(self) -> None:
-        self.stop_server()
-
+class TestErrorHandling(APIServerPerTestCase):
     def test_404_unknown_endpoint(self) -> None:
         code, body = _request(f"{self.base}/api/nonexistent")
         self.assertEqual(code, 404)

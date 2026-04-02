@@ -2,25 +2,24 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import tempfile
 import threading
 import time
 import urllib.error
 import urllib.request
-from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+import conftest  # noqa: F401 — ensures sys.path is set up
 
-from aria_queue.core import save_queue, save_state  # noqa: E402
-from aria_queue.webapp import serve  # noqa: E402
+from aria_queue.core import save_queue, save_state
+from aria_queue.webapp import serve
 
 
 def request_json(url: str, method: str = "GET", payload: dict | None = None) -> dict:
+    """Make a JSON request and return the parsed body. Raises on HTTP errors."""
     data = None
-    headers = {}
+    headers: dict[str, str] = {}
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"

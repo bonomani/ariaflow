@@ -3,17 +3,13 @@
 from __future__ import annotations
 
 import json
-import os
-import sys
-import tempfile
 from io import StringIO
-from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from conftest import IsolatedTestCase
 
-from aria_queue.cli import build_parser, main  # noqa: E402
+from aria_queue.cli import build_parser, main
 
 
 class TestCliParser(unittest.TestCase):
@@ -117,15 +113,8 @@ class TestCliParser(unittest.TestCase):
             parser.parse_args([])
 
 
-class TestCliExecution(unittest.TestCase):
+class TestCliExecution(IsolatedTestCase):
     """Each subcommand executes and produces expected output."""
-
-    def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
-        os.environ["ARIA_QUEUE_DIR"] = self.tmp.name
-
-    def tearDown(self) -> None:
-        self.tmp.cleanup()
 
     def test_add_prints_queued(self) -> None:
         with patch("sys.argv", ["ariaflow", "add", "https://example.com/test.bin"]):

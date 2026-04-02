@@ -6,77 +6,18 @@ verifying state consistency across multiple operations.
 
 from __future__ import annotations
 
-import json
-import os
 import socket
-import sys
-import tempfile
 import threading
 import time
-import urllib.error
-import urllib.request
-from pathlib import Path
-from typing import Any
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from conftest import APIServerTestCase, request_json as _req
 
-from aria_queue.core import load_queue, save_queue  # noqa: E402
-from aria_queue.webapp import serve  # noqa: E402
-
-
-def _req(
-    url: str,
-    method: str = "GET",
-    payload: dict | None = None,
-    headers: dict[str, str] | None = None,
-    timeout: int = 5,
-) -> tuple[int, Any, dict[str, str]]:
-    data = None
-    hdrs = dict(headers or {})
-    if payload is not None:
-        data = json.dumps(payload).encode("utf-8")
-        hdrs["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = resp.read()
-            ct = resp.headers.get("Content-Type", "")
-            if "json" in ct:
-                return resp.status, json.loads(body), dict(resp.headers)
-            return (
-                resp.status,
-                body.decode("utf-8", errors="replace"),
-                dict(resp.headers),
-            )
-    except urllib.error.HTTPError as exc:
-        body = exc.read()
-        try:
-            return exc.code, json.loads(body), dict(exc.headers)
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            return exc.code, body.decode("utf-8", errors="replace"), dict(exc.headers)
+from aria_queue.core import load_queue, save_queue
 
 
-class ScenarioBase(unittest.TestCase):
-    """Shared server per test class for speed."""
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.tmp = tempfile.TemporaryDirectory()
-        os.environ["ARIA_QUEUE_DIR"] = cls.tmp.name
-        cls.server = serve(host="127.0.0.1", port=0)
-        cls.port = cls.server.server_address[1]
-        cls.base = f"http://127.0.0.1:{cls.port}"
-        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
-        cls.thread.start()
-        time.sleep(0.3)
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        cls.server.shutdown()
-        cls.server.server_close()
-        cls.tmp.cleanup()
+ScenarioBase = APIServerTestCase
 
 
 # ═══════════════════════════════════════════════════════
@@ -626,7 +567,7 @@ class TestScenarioFrontendConsistency(ScenarioBase):
         # First poll → get ETag
         _, body1, hdrs1 = _req(f"{base}/api/status")
         etag1 = hdrs1.get("ETag", "")
-        rev1 = body1["_rev"]
+        body1["_rev"]  # ensure key exists
         self.assertTrue(len(etag1) > 0)
 
         # Same state → 304

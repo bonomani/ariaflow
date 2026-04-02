@@ -6,23 +6,14 @@ corresponding GET endpoint and verifies consistency.
 
 from __future__ import annotations
 
-import json
-import os
-import sys
-import tempfile
-import threading
 import time
-import urllib.error
-import urllib.request
-from pathlib import Path
 from typing import Any
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from conftest import APIServerTestCase, request_json
 
-from aria_queue.core import load_queue, save_queue  # noqa: E402
-from aria_queue.webapp import serve  # noqa: E402
+from aria_queue.core import load_queue, save_queue
 
 
 def _req(
@@ -31,36 +22,12 @@ def _req(
     payload: dict | None = None,
     timeout: int = 5,
 ) -> tuple[int, Any]:
-    data = None
-    headers = {}
-    if payload is not None:
-        data = json.dumps(payload).encode("utf-8")
-        headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status, json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        return exc.code, json.loads(exc.read())
+    """Thin 2-tuple wrapper around conftest.request_json."""
+    code, body, _ = request_json(url, method=method, payload=payload, timeout=timeout)
+    return code, body
 
 
-class CrossCheckBase(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.tmp = tempfile.TemporaryDirectory()
-        os.environ["ARIA_QUEUE_DIR"] = cls.tmp.name
-        cls.server = serve(host="127.0.0.1", port=0)
-        cls.port = cls.server.server_address[1]
-        cls.base = f"http://127.0.0.1:{cls.port}"
-        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
-        cls.thread.start()
-        time.sleep(0.3)
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        cls.server.shutdown()
-        cls.server.server_close()
-        cls.tmp.cleanup()
+CrossCheckBase = APIServerTestCase
 
 
 # ═══════════════════════════════════════════════════════
