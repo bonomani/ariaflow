@@ -221,9 +221,8 @@ class QueueSchedulerTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["gid"], "gid-error")
         self.assertEqual(items[0]["error_message"], "Resource not found")
-        self.assertNotIn("recovered", items[0])
-        self.assertNotIn("recovered_at", items[0])
-        self.assertNotIn("recovery_session_id", items[0])
+        # Error items preserve recovery fields for audit trail
+        self.assertIn("recovery_session_id", items[0])
 
     def test_cleanup_queue_state_normalizes_stale_live_status_for_paused_item(
         self,

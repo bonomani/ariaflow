@@ -442,9 +442,12 @@ def auto_cleanup_queue(
                     or ""
                 )
                 try:
-                    item_ts = time.mktime(
-                        time.strptime(created[:19], "%Y-%m-%dT%H:%M:%S")
-                    )
+                    from datetime import datetime, timezone
+
+                    dt = datetime.fromisoformat(created)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    item_ts = dt.timestamp()
                 except (ValueError, TypeError):
                     item_ts = now
                 if item_ts < cutoff_ts:
@@ -973,7 +976,7 @@ def _normalize_queue_row(item: dict[str, Any]) -> bool:
     elif status == "done" and item.get("live_status") is not None:
         item.pop("live_status", None)
         changed = True
-    if status in {"done", "error"}:
+    if status == "done":
         for key in ("recovered", "recovered_at", "recovery_session_id"):
             if item.get(key) is not None:
                 item.pop(key, None)
@@ -2568,10 +2571,11 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 )
                 continue
             if remote_status == "removed":
-                item["status"] = "queued"
-                item["gid"] = None
-                item["error_code"] = None
-                item["error_message"] = None
+                item["status"] = "stopped"
+                item["error_code"] = "removed"
+                item["error_message"] = "download removed from aria2"
+                item.pop("gid", None)
+                item.pop("live_status", None)
         return running_infos
 
     while True:
