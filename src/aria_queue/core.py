@@ -469,16 +469,27 @@ def _pref_value(name: str, default: Any = None) -> Any:
 
 
 def bandwidth_config() -> dict[str, Any]:
-    free_pct = max(0, min(100, int(_pref_value("bandwidth_free_percent", 20) or 20)))
-    free_abs = max(0.0, float(_pref_value("bandwidth_free_absolute_mbps", 0) or 0))
-    floor = max(1, int(_pref_value("bandwidth_floor_mbps", 2) or 2))
+    down_free_pct = max(
+        0, min(100, int(_pref_value("bandwidth_down_free_percent", 20) or 20))
+    )
+    down_free_abs = max(
+        0.0, float(_pref_value("bandwidth_down_free_absolute_mbps", 0) or 0)
+    )
+    up_free_pct = max(
+        0, min(100, int(_pref_value("bandwidth_up_free_percent", 50) or 50))
+    )
+    up_free_abs = max(
+        0.0, float(_pref_value("bandwidth_up_free_absolute_mbps", 0) or 0)
+    )
     interval = max(30, int(_pref_value("bandwidth_probe_interval_seconds", 180) or 180))
     return {
-        "free_percent": free_pct,
-        "free_absolute_mbps": free_abs,
-        "floor_mbps": floor,
+        "down_free_percent": down_free_pct,
+        "down_free_absolute_mbps": down_free_abs,
+        "down_use_percent": 1.0 - (down_free_pct / 100.0),
+        "up_free_percent": up_free_pct,
+        "up_free_absolute_mbps": up_free_abs,
+        "up_use_percent": 1.0 - (up_free_pct / 100.0),
         "probe_interval_seconds": interval,
-        "use_percent": 1.0 - (free_pct / 100.0),
     }
 
 
@@ -497,18 +508,47 @@ def bandwidth_status(port: int = 6800) -> dict[str, Any]:
         result["interface"] = last_probe.get("interface_name")
         result["downlink_mbps"] = last_probe.get("downlink_mbps")
         result["uplink_mbps"] = last_probe.get("uplink_mbps")
-        result["cap_mbps"] = last_probe.get("cap_mbps")
+        result["down_cap_mbps"] = last_probe.get("down_cap_mbps")
+        result["up_cap_mbps"] = last_probe.get("up_cap_mbps")
         result["cap_bytes_per_sec"] = last_probe.get("cap_bytes_per_sec")
         result["responsiveness_rpm"] = last_probe.get("responsiveness_rpm")
     return result
 
 
+def _apply_free_bandwidth_cap(
+    measured_mbps: float | None,
+    free_pct: int,
+    free_abs: float,
+) -> float | None:
+    if not measured_mbps or measured_mbps <= 0:
+        return None
+    cap_from_pct = measured_mbps * (1.0 - free_pct / 100.0)
+    cap = cap_from_pct
+    if free_abs > 0:
+        cap_from_abs = measured_mbps - free_abs
+        cap = min(cap, cap_from_abs)
+    return max(0.0, round(cap, 1))
+
+
 def manual_probe(port: int = 6800) -> dict[str, Any]:
     config = bandwidth_config()
-    probe = probe_bandwidth(
-        percent=config["use_percent"], floor_mbps=config["floor_mbps"]
-    )
+    probe = probe_bandwidth(percent=config["down_use_percent"], floor_mbps=1)
     probe["interval_seconds"] = config["probe_interval_seconds"]
+
+    down_mbps = probe.get("downlink_mbps")
+    up_mbps = probe.get("uplink_mbps")
+    down_cap = _apply_free_bandwidth_cap(
+        down_mbps, config["down_free_percent"], config["down_free_absolute_mbps"]
+    )
+    up_cap = _apply_free_bandwidth_cap(
+        up_mbps, config["up_free_percent"], config["up_free_absolute_mbps"]
+    )
+    probe["down_cap_mbps"] = down_cap
+    probe["up_cap_mbps"] = up_cap
+    if down_cap is not None:
+        probe["cap_mbps"] = down_cap
+        probe["cap_bytes_per_sec"] = max(1, int(down_cap * _BYTES_PER_MEGABIT))
+
     state = load_state()
     state["last_bandwidth_probe"] = probe
     state["last_bandwidth_probe_at"] = time.time()
@@ -533,9 +573,10 @@ def manual_probe(port: int = 6800) -> dict[str, Any]:
         "probe": probe,
         "config": config,
         "interface": probe.get("interface_name"),
-        "downlink_mbps": probe.get("downlink_mbps"),
-        "uplink_mbps": probe.get("uplink_mbps"),
-        "cap_mbps": probe.get("cap_mbps"),
+        "downlink_mbps": down_mbps,
+        "uplink_mbps": up_mbps,
+        "down_cap_mbps": down_cap,
+        "up_cap_mbps": up_cap,
         "cap_bytes_per_sec": probe.get("cap_bytes_per_sec"),
         "responsiveness_rpm": probe.get("responsiveness_rpm"),
         "source": probe.get("source"),
@@ -1260,17 +1301,30 @@ def _apply_bandwidth_probe(
         state = load_state()
     config = bandwidth_config()
     interval = config["probe_interval_seconds"]
-    use_pct = config["use_percent"]
-    floor = config["floor_mbps"]
-    free_abs = config["free_absolute_mbps"]
+    use_pct = config["down_use_percent"]
     now = time.time()
     probe = state.get("last_bandwidth_probe")
     needs_probe = (
         force or not isinstance(probe, dict) or _should_probe_bandwidth(state, now=now)
     )
     if needs_probe:
-        probe = probe_bandwidth(percent=use_pct, floor_mbps=floor)
+        probe = probe_bandwidth(percent=use_pct, floor_mbps=1)
         probe["interval_seconds"] = interval
+        down_cap = _apply_free_bandwidth_cap(
+            probe.get("downlink_mbps"),
+            config["down_free_percent"],
+            config["down_free_absolute_mbps"],
+        )
+        probe["down_cap_mbps"] = down_cap
+        if down_cap is not None:
+            probe["cap_mbps"] = down_cap
+            probe["cap_bytes_per_sec"] = max(1, int(down_cap * _BYTES_PER_MEGABIT))
+        up_cap = _apply_free_bandwidth_cap(
+            probe.get("uplink_mbps"),
+            config["up_free_percent"],
+            config["up_free_absolute_mbps"],
+        )
+        probe["up_cap_mbps"] = up_cap
         state["last_bandwidth_probe"] = probe
         state["last_bandwidth_probe_at"] = now
     elif isinstance(probe, dict) and "interval_seconds" not in probe:
@@ -1280,16 +1334,8 @@ def _apply_bandwidth_probe(
     cap_mbps = float(probe.get("cap_mbps") or 0) if isinstance(probe, dict) else 0.0
     cap_bytes_per_sec = int(
         (probe or {}).get("cap_bytes_per_sec")
-        or _cap_bytes_per_sec_from_mbps(
-            cap_mbps if cap_mbps > 0 else float(floor), 1.0, floor
-        )
+        or _cap_bytes_per_sec_from_mbps(cap_mbps if cap_mbps > 0 else 2.0, 1.0, 1)
     )
-    if free_abs > 0 and isinstance(probe, dict) and probe.get("downlink_mbps"):
-        measured = float(probe["downlink_mbps"])
-        abs_cap = max(0, measured - free_abs) * _BYTES_PER_MEGABIT
-        cap_bytes_per_sec = min(
-            cap_bytes_per_sec, max(int(floor * _BYTES_PER_MEGABIT), int(abs_cap))
-        )
     if needs_probe:
         save_state(state)
         before_bandwidth = current_bandwidth(port=port)

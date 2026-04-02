@@ -594,22 +594,23 @@ class TestBandwidth(APIServerMixin, unittest.TestCase):
         code, body = _request(f"{self.base}/api/bandwidth")
         self.assertEqual(code, 200)
         self.assertIn("config", body)
-        self.assertIn("free_percent", body["config"])
-        self.assertIn("free_absolute_mbps", body["config"])
-        self.assertIn("floor_mbps", body["config"])
+        self.assertIn("down_free_percent", body["config"])
+        self.assertIn("down_free_absolute_mbps", body["config"])
+        self.assertIn("up_free_percent", body["config"])
+        self.assertIn("up_free_absolute_mbps", body["config"])
         self.assertIn("probe_interval_seconds", body["config"])
-        self.assertIn("use_percent", body["config"])
 
     def test_bandwidth_status_defaults(self) -> None:
         code, body = _request(f"{self.base}/api/bandwidth")
-        self.assertEqual(body["config"]["free_percent"], 20)
-        self.assertEqual(body["config"]["free_absolute_mbps"], 0)
-        self.assertEqual(body["config"]["floor_mbps"], 2)
+        self.assertEqual(body["config"]["down_free_percent"], 20)
+        self.assertEqual(body["config"]["down_free_absolute_mbps"], 0)
+        self.assertEqual(body["config"]["up_free_percent"], 50)
+        self.assertEqual(body["config"]["up_free_absolute_mbps"], 0)
         self.assertEqual(body["config"]["probe_interval_seconds"], 180)
-        self.assertAlmostEqual(body["config"]["use_percent"], 0.8)
+        self.assertAlmostEqual(body["config"]["down_use_percent"], 0.8)
+        self.assertAlmostEqual(body["config"]["up_use_percent"], 0.5)
 
     def test_bandwidth_status_includes_probe_info(self) -> None:
-        # After a manual probe, status should show results
         probe_result = {
             "source": "networkquality",
             "reason": "probe_complete",
@@ -630,6 +631,8 @@ class TestBandwidth(APIServerMixin, unittest.TestCase):
         self.assertEqual(body["uplink_mbps"], 20.0)
         self.assertEqual(body["interface"], "en0")
         self.assertEqual(body["responsiveness_rpm"], 1500.0)
+        self.assertIn("down_cap_mbps", body)
+        self.assertIn("up_cap_mbps", body)
 
     def test_manual_probe(self) -> None:
         probe_result = {
@@ -650,9 +653,10 @@ class TestBandwidth(APIServerMixin, unittest.TestCase):
         self.assertTrue(body["ok"])
         self.assertEqual(body["downlink_mbps"], 50.0)
         self.assertEqual(body["uplink_mbps"], 10.0)
+        self.assertIn("down_cap_mbps", body)
+        self.assertIn("up_cap_mbps", body)
         self.assertEqual(body["interface"], "en1")
         self.assertEqual(body["source"], "networkquality")
-        self.assertIn("config", body)
 
     def test_manual_probe_fallback(self) -> None:
         with patch("aria_queue.core._find_networkquality", return_value=None):
@@ -662,20 +666,22 @@ class TestBandwidth(APIServerMixin, unittest.TestCase):
         self.assertEqual(body["source"], "default")
         self.assertIsNone(body["downlink_mbps"])
         self.assertIsNone(body["uplink_mbps"])
+        self.assertIsNone(body["down_cap_mbps"])
+        self.assertIsNone(body["up_cap_mbps"])
 
     def test_bandwidth_config_from_declaration(self) -> None:
-        # Modify declaration to change bandwidth config
         _, decl = _request(f"{self.base}/api/declaration")
         for pref in decl["uic"]["preferences"]:
-            if pref["name"] == "bandwidth_free_percent":
+            if pref["name"] == "bandwidth_down_free_percent":
                 pref["value"] = 30
-            if pref["name"] == "bandwidth_floor_mbps":
-                pref["value"] = 5
+            if pref["name"] == "bandwidth_up_free_percent":
+                pref["value"] = 80
         _request(f"{self.base}/api/declaration", "POST", decl)
         code, body = _request(f"{self.base}/api/bandwidth")
-        self.assertEqual(body["config"]["free_percent"], 30)
-        self.assertEqual(body["config"]["floor_mbps"], 5)
-        self.assertAlmostEqual(body["config"]["use_percent"], 0.7)
+        self.assertEqual(body["config"]["down_free_percent"], 30)
+        self.assertEqual(body["config"]["up_free_percent"], 80)
+        self.assertAlmostEqual(body["config"]["down_use_percent"], 0.7)
+        self.assertAlmostEqual(body["config"]["up_use_percent"], 0.2)
 
 
 # ──────────────────────────────────────────────────────
