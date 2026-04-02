@@ -30,14 +30,14 @@ Stored fields: `running`, `paused`, `stop_requested`
 
 | Atomic State | Role | Description |
 |---|---|---|
-| `pending` | stable | Newly added, not yet queued |
-| `queued` | stable | Ready for scheduling |
+| `discovering` | transitional | Auto-detecting download mode (instant) |
+| `queued` | stable | Ready for scheduling (priority-ordered) |
 | `downloading` | transitional | Active transfer in progress |
-| `paused` | stable | Transfer suspended |
+| `paused` | stable | Transfer suspended by user |
 | `done` | terminal | Transfer completed successfully |
-| `error` | terminal | Transfer failed (retryable) |
-| `stopped` | terminal | Stopped by af-scheduler shutdown |
-| `cancelled` | terminal | Cancelled by user (archived) |
+| `error` | terminal | Transfer failed (retryable via retry) |
+| `stopped` | terminal | Stopped by af-scheduler shutdown or GID removed |
+| `cancelled` | terminal | Cancelled by user (soft-deleted to archive) |
 
 Download modes: `http`, `magnet`, `torrent`, `metalink`, `mirror`, `torrent_data`, `metalink_data`
 
@@ -115,7 +115,7 @@ error → cancelled       user removes (archived)
 
 ## 5. State Persistence
 
-- **Engine state** (`state.json`): session + run axes — persisted atomically under file lock
+- **Scheduler state** (`state.json`): session + run axes — persisted atomically under file lock
 - **Queue state** (`queue.json`): job axis — persisted atomically under same file lock
 - **Daemon state**: not persisted, probed at runtime via RPC
 

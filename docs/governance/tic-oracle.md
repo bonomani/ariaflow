@@ -70,15 +70,149 @@ Test file: `tests/test_tic.py`
 | `test_uninstall_dry_run_is_describable` | Uninstall dry-run returns UCC-shaped plan | meta.contract == "UCC", reason == "uninstall" | UCC: lifecycle |
 | `test_uninstall_dry_run_with_aria2_is_describable` | Uninstall with aria2 includes launchd component | "aria2-launchd" in plan, reason == "uninstall" | UCC: lifecycle |
 
+## Extended Test Inventory (330 tests total)
+
+### Per-item actions (`tests/test_tic.py` — TicPerItemTests, 10 tests)
+
+| Test Class | Intent | Trace Target |
+|---|---|---|
+| `test_pause_queue_item_*` (3) | Pause queued/downloading items, reject invalid state | ASM: Job queued→paused |
+| `test_resume_queue_item_*` (2) | Resume paused items with/without gid | ASM: Job paused→queued/downloading |
+| `test_remove_queue_item_*` (2) | Remove items, verify aria2 cleanup | ASM: Job →cancelled |
+| `test_retry_queue_item_*` (2) | Retry error items, reject non-error | ASM: Job error→queued |
+| `test_not_found_item` (1) | 404 on missing item | UCC: error semantics |
+
+### Download modes (`tests/test_tic.py` — TicTorrentAndOptionsTests, 9 tests)
+
+| Test Class | Intent | Trace Target |
+|---|---|---|
+| `test_metadata_url_detection` (1) | Detect torrent/metalink/magnet URLs | UCC: mode detection |
+| `test_add_download_*` (2) | Torrent gets pause-metadata, HTTP does not | UCC: aria2 RPC dispatch |
+| `test_get_item_files_*` (2) | List files, handle missing gid | UCC: file selection |
+| `test_select_item_files_*` (1) | Select files calls changeOption + unpause | UCC: execution |
+| `test_change_aria2_options_*` (3) | Safe/unsafe/empty options validation | UIC: policy enforcement |
+
+### API integration (`tests/test_api.py`, 77 tests)
+
+| Test Class | Tests | Trace Target |
+|---|---|---|
+| TestStatusEndpoint | 4 | UCC: observation |
+| TestAddEndpoint | 8 | UCC: execution, UIC: dedup policy |
+| TestPerItemActions | 16 | ASM: all Job transitions |
+| TestFileSelection | 7 | UCC: torrent file selection |
+| TestAria2Options | 7 | UIC: safe option enforcement |
+| TestBandwidth | 6 | UCC: bandwidth observation |
+| TestEngineControl | 7 | ASM: Run axis transitions |
+| TestDeclaration | 4 | UIC: declaration CRUD |
+| TestSession | 2 | ASM: Session axis |
+| TestActionLog | 4 | UCC: audit trail |
+| TestLifecycle | 2 | UCC: lifecycle |
+| TestMetaEndpoints | 9 | UCC: API contract (schema, ETag, SSE) |
+| TestErrorHandling | 5 | UCC: error semantics |
+| TestUCC | 1 | UCC: structured result |
+
+### API coverage (`tests/test_api_coverage.py`, 52 tests)
+
+| Test Class | Tests | Trace Target |
+|---|---|---|
+| TestGetEndpoints | 15 | UCC: every GET endpoint has correct shape |
+| TestPostEndpoints | 22 | UCC: every POST endpoint accepts/rejects correctly |
+| TestCrossCutting | 15 | UCC: schema version, request ID, ETag, CORS, revision |
+
+### Cross-checks (`tests/test_cross_check.py`, 51 tests)
+
+| Test Class | Tests | Trace Target |
+|---|---|---|
+| TestAddReflectedInStatus | 6 | UCC: observation consistency |
+| TestPauseReflectedInStatus | 4 | ASM: Job state → status consistency |
+| TestResumeReflectedInStatus | 3 | ASM: Job state → status consistency |
+| TestRemoveReflectedInStatus | 2 | ASM: Job →cancelled → status consistency |
+| TestRetryReflectedInStatus | 4 | ASM: Job error→queued → status consistency |
+| TestDeclarationRoundtrip | 6 | UIC: declaration persistence |
+| TestProbeReflectedInBandwidth | 1 | UCC: bandwidth observation |
+| TestSessionReflectedInStatus | 1 | ASM: Session axis |
+| TestRunReflectedInStatus | 2 | ASM: Run axis |
+| TestFileSelectReflectedInStatus | 1 | UCC: file select → downloading |
+| TestLogEntryDetails | 4 | UCC: audit trail detail fields |
+| TestMultiStepChains | 4 | ASM: multi-axis transition sequences |
+| TestMutationsLoggedInActionLog | 8 | UCC: all mutations logged |
+| TestMutationsIncrementRevision | 5 | UCC: revision counter |
+
+### End-to-end scenarios (`tests/test_scenarios.py`, 16 tests)
+
+| Scenario | Trace Target |
+|---|---|
+| Normal download lifecycle | ASM: full Session→Run→Job lifecycle |
+| Pause/resume/cancel | ASM: Job axis transitions |
+| Error handling and retry | ASM: Job error→queued recovery |
+| Session management | ASM: Session axis lifecycle |
+| Bandwidth probe and config | UCC: bandwidth observation + UIC config |
+| Torrent file selection | UCC: file selection workflow |
+| aria2 options management | UIC: safe option policy |
+| Preflight blocks start | UIC: gate enforcement (409) |
+| Duplicate URL handling | UIC: dedup policy |
+| Frontend consistency (ETag) | UCC: caching + schema version |
+| SSE real-time events | UCC: event push |
+| Lifecycle install/uninstall | UCC: lifecycle |
+| Declaration roundtrip | UIC: persistence |
+| Concurrent operations | UCC: thread safety |
+
+### Regression tests (`tests/test_regressions.py`, 29 tests)
+
+| Test | Bug prevented | Trace Target |
+|---|---|---|
+| `test_regression_recovered_item_gets_current_session_id` | Session isolation | ASM: recovery |
+| `test_regression_rpc_watchdog_marks_error_after_failures` | Infinite loop | ASM: Coherence CR-4 |
+| `test_regression_dedup_default_is_remove` | Policy mismatch | UIC: preference |
+| `test_regression_cleanup_no_false_positive_change` | Unnecessary writes | UCC: idempotency |
+| `test_regression_aria_rpc_raises_on_error_response` | Silent RPC failure | UCC: error semantics |
+| `test_regression_storage_lock_closes_handle_on_flock_failure` | Resource leak | UCC: safety |
+| `test_regression_probe_state_persisted` | Lost probe timing | UCC: observation |
+| `test_regression_per_item_pause_releases_lock_before_rpc` | Lock contention | UCC: concurrency |
+| `test_regression_state_revision_increments` | Stale frontend | UCC: revision |
+| `test_regression_paused_cleared_on_queue_complete` | Permanent pause | ASM: Run axis |
+| `test_regression_ensure_daemon_raises_on_failed_start` | Silent daemon failure | ASM: Daemon axis |
+| `test_regression_retry_clears_recovery_fields` | Stale recovery metadata | ASM: recovery |
+| `test_regression_mirror_urls_deduplicated` | Duplicate mirrors | UCC: execution |
+| Security input validation (13) | XSS, injection, edge cases | UCC: input boundary |
+
+### CLI tests (`tests/test_cli.py`, 25 tests)
+
+| Test Class | Tests | Trace Target |
+|---|---|---|
+| TestCliParser | 15 | UCC: CLI contract (all subcommands parse correctly) |
+| TestCliExecution | 10 | UCC: CLI execution (add, status, preflight, ucc, install, lifecycle) |
+
+### Queue scheduler (`tests/scheduler/test_queue_scheduler.py`, 7 tests)
+
+| Test | Trace Target |
+|---|---|
+| Cleanup collapses duplicates (2) | UCC: queue integrity |
+| Normalize stale live_status (1) | ASM: Job state normalization |
+| Process queue slot limits (2) | ASM: Coherence CR-6 |
+| Process queue paused state (1) | ASM: Run axis |
+| Startup cleanup before reconcile (1) | UCC: execution order |
+
 ## Coverage Summary
 
 | Trace Target | Tests |
 |---|---|
-| ASM: Session axis | 2 |
-| ASM: Run axis | 2 |
-| ASM: Job axis | 5 |
-| ASM: Daemon axis (recovery) | 2 |
-| ASM: Coherence rules | 2 |
-| UIC: gates / preferences | 5 |
-| UCC: execution results | 10 |
-| UCC: lifecycle | 5 |
+| ASM: Session axis | 12 |
+| ASM: Run axis | 16 |
+| ASM: Job axis (all transitions) | 62 |
+| ASM: Daemon axis (recovery) | 4 |
+| ASM: Coherence rules | 8 |
+| ASM: Multi-axis sequences | 20 |
+| UIC: gates / preferences | 18 |
+| UIC: declaration CRUD | 10 |
+| UIC: policy enforcement | 12 |
+| UCC: execution results | 30 |
+| UCC: observation consistency | 25 |
+| UCC: error semantics | 15 |
+| UCC: API contract shape | 52 |
+| UCC: audit trail | 12 |
+| UCC: lifecycle | 10 |
+| UCC: concurrency / safety | 14 |
+| UCC: input boundary (security) | 13 |
+| UCC: CLI contract | 25 |
+| **Total** | **330** |
