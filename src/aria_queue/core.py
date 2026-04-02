@@ -53,6 +53,14 @@ def action_log_path() -> Path:
     return config_dir() / "actions.jsonl"
 
 
+def archive_path() -> Path:
+    return config_dir() / "archive.json"
+
+
+def sessions_log_path() -> Path:
+    return config_dir() / "sessions.jsonl"
+
+
 def storage_lock_path() -> Path:
     return config_dir() / ".storage.lock"
 
@@ -290,6 +298,7 @@ def close_state_session(reason: str = "closed") -> dict[str, Any]:
             state["session_closed_reason"] = reason
             state["session_last_seen_at"] = now
             save_state(state)
+            _log_session_history(state)
         return state
 
 
@@ -305,6 +314,168 @@ def start_new_state_session(reason: str = "manual_new_session") -> dict[str, Any
         state["session_closed_reason"] = None
         save_state(state)
         return state
+
+
+def _log_session_history(
+    state: dict[str, Any], items: list[dict[str, Any]] | None = None
+) -> None:
+    """Append a session summary to sessions.jsonl."""
+    session_id = state.get("session_id")
+    if not session_id:
+        return
+    if items is None:
+        items = load_queue()
+    session_items = [i for i in items if i.get("session_id") == session_id]
+    entry = {
+        "session_id": session_id,
+        "started_at": state.get("session_started_at"),
+        "closed_at": state.get("session_closed_at"),
+        "closed_reason": state.get("session_closed_reason"),
+        "items_total": len(session_items),
+        "items_done": sum(
+            1 for i in session_items if i.get("status") in ("done", "complete")
+        ),
+        "items_error": sum(
+            1 for i in session_items if i.get("status") in ("error", "failed")
+        ),
+        "items_queued": sum(1 for i in session_items if i.get("status") == "queued"),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+    }
+    with storage_locked():
+        ensure_storage()
+        with sessions_log_path().open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry, sort_keys=True) + "\n")
+
+
+def load_session_history(limit: int = 50) -> list[dict[str, Any]]:
+    with storage_locked():
+        path = sessions_log_path()
+        if not path.exists():
+            return []
+        lines = path.read_text(encoding="utf-8").splitlines()
+        entries: list[dict[str, Any]] = []
+        for line in lines[-limit:]:
+            if not line.strip():
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+        return entries
+
+
+def session_stats(session_id: str | None = None) -> dict[str, Any]:
+    state = load_state()
+    if session_id is None:
+        session_id = state.get("session_id")
+    items = load_queue()
+    session_items = [i for i in items if i.get("session_id") == session_id]
+    archived = load_archive()
+    session_archived = [i for i in archived if i.get("session_id") == session_id]
+    all_items = session_items + session_archived
+    return {
+        "session_id": session_id,
+        "started_at": state.get("session_started_at")
+        if session_id == state.get("session_id")
+        else None,
+        "items_total": len(all_items),
+        "items_active": len(session_items),
+        "items_archived": len(session_archived),
+        "items_done": sum(
+            1 for i in all_items if i.get("status") in ("done", "complete")
+        ),
+        "items_error": sum(
+            1 for i in all_items if i.get("status") in ("error", "failed")
+        ),
+        "items_queued": sum(1 for i in all_items if i.get("status") == "queued"),
+        "items_downloading": sum(
+            1 for i in all_items if i.get("status") == "downloading"
+        ),
+        "items_paused": sum(1 for i in all_items if i.get("status") == "paused"),
+        "bytes_completed": sum(int(i.get("completedLength") or 0) for i in all_items),
+    }
+
+
+def load_archive() -> list[dict[str, Any]]:
+    with storage_locked():
+        data = read_json(archive_path(), {"items": []})
+        return list(data.get("items", []))
+
+
+def save_archive(items: list[dict[str, Any]]) -> None:
+    with storage_locked():
+        write_json(archive_path(), {"items": items})
+
+
+def archive_item(item: dict[str, Any]) -> None:
+    with storage_locked():
+        archived = load_archive()
+        entry = dict(item)
+        entry["archived_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        archived.append(entry)
+        save_archive(archived)
+
+
+def auto_cleanup_queue(
+    max_done_age_days: int = 7,
+    max_done_count: int = 100,
+) -> dict[str, Any]:
+    now = time.time()
+    cutoff_ts = now - (max_done_age_days * 86400)
+    with storage_locked():
+        items = load_queue()
+        keep: list[dict[str, Any]] = []
+        archived_count = 0
+        for item in items:
+            if item.get("status") in (
+                "done",
+                "complete",
+                "error",
+                "failed",
+                "stopped",
+                "removed",
+            ):
+                created = (
+                    item.get("completed_at")
+                    or item.get("error_at")
+                    or item.get("created_at")
+                    or ""
+                )
+                try:
+                    item_ts = time.mktime(
+                        time.strptime(created[:19], "%Y-%m-%dT%H:%M:%S")
+                    )
+                except (ValueError, TypeError):
+                    item_ts = now
+                if item_ts < cutoff_ts:
+                    archive_item(item)
+                    archived_count += 1
+                    continue
+            keep.append(item)
+        # Also enforce max_done_count
+        done_items = [i for i in keep if i.get("status") in ("done", "complete")]
+        if len(done_items) > max_done_count:
+            excess = len(done_items) - max_done_count
+            done_to_archive = done_items[:excess]
+            for item in done_to_archive:
+                archive_item(item)
+                keep.remove(item)
+                archived_count += 1
+        if archived_count > 0:
+            save_queue(keep)
+            record_action(
+                action="auto_cleanup",
+                target="queue",
+                outcome="changed",
+                reason="stale_items_archived",
+                before={"total": len(items)},
+                after={"total": len(keep), "archived": archived_count},
+                detail={
+                    "max_done_age_days": max_done_age_days,
+                    "max_done_count": max_done_count,
+                },
+            )
+    return {"archived": archived_count, "remaining": len(keep)}
 
 
 def start_background_process(port: int = 6800) -> dict[str, Any]:
@@ -388,6 +559,7 @@ class QueueItem:
     output: str | None = None
     post_action_rule: str = "pending"
     status: str = "queued"
+    priority: int = 0
     created_at: str = ""
     gid: str | None = None
     session_id: str | None = None
@@ -396,6 +568,12 @@ class QueueItem:
     live_status: str | None = None
     error_code: str | None = None
     error_message: str | None = None
+    paused_at: str | None = None
+    resumed_at: str | None = None
+    completed_at: str | None = None
+    error_at: str | None = None
+    removed_at: str | None = None
+    session_history: list[dict[str, str]] | None = None
 
 
 def load_queue() -> list[dict[str, Any]]:
@@ -1089,13 +1267,18 @@ def add_queue_item(
         if not resolved_post_action_rule:
             resolved_post_action_rule = default_rule
 
+        now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        sid = state.get("session_id")
         item = QueueItem(
             id=str(uuid4()),
             url=url,
             output=resolved_output,
             post_action_rule=resolved_post_action_rule,
-            created_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-            session_id=state.get("session_id"),
+            created_at=now,
+            session_id=sid,
+            session_history=[{"session_id": sid, "joined_at": now, "reason": "created"}]
+            if sid
+            else None,
         )
         items.append(asdict(item))
         save_queue(items)
@@ -1863,6 +2046,7 @@ def pause_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
             }
         item["status"] = "paused"
         item["live_status"] = "paused"
+        item["paused_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         save_queue(items)
         record_action(
             action="pause",
@@ -1916,6 +2100,7 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
             if not rpc_ok:
                 item["gid"] = None
             item.pop("live_status", None)
+        item["resumed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         save_queue(items)
         record_action(
             action="resume",
@@ -1961,8 +2146,12 @@ def remove_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
                 "error": "not_found",
                 "message": f"item {item_id} not found",
             }
+        removed_item = dict(item)
+        removed_item["removed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        removed_item["status"] = "removed"
         items.pop(idx)
         save_queue(items)
+        archive_item(removed_item)
         record_action(
             action="remove",
             target="queue_item",
@@ -1991,15 +2180,21 @@ def retry_queue_item(item_id: str) -> dict[str, Any]:
                 "message": f"cannot retry item in status '{item.get('status')}'",
             }
         before = dict(item)
+        now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         item["status"] = "queued"
         item["gid"] = None
         item["error_code"] = None
         item["error_message"] = None
+        item["error_at"] = None
         item.pop("live_status", None)
         item.pop("rpc_failures", None)
         state = load_state()
-        if state.get("session_id"):
-            item["session_id"] = state["session_id"]
+        sid = state.get("session_id")
+        if sid:
+            item["session_id"] = sid
+            history = item.get("session_history") or []
+            history.append({"session_id": sid, "joined_at": now, "reason": "retry"})
+            item["session_history"] = history
         save_queue(items)
         record_action(
             action="retry",
@@ -2154,6 +2349,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     item["error_message"] = (
                         f"aria2 RPC unreachable after {rpc_failures} consecutive attempts"
                     )
+                    item["error_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
                     item.pop("live_status", None)
                     record_action(
                         action="error",
@@ -2203,6 +2399,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 item["status"] = "done"
                 item["error_code"] = None
                 item["error_message"] = None
+                item["completed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
                 item["post_action"] = post_action(item)
                 record_action(
                     action="complete",
@@ -2223,6 +2420,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 item["status"] = "error"
                 item["error_code"] = info.get("errorCode")
                 item["error_message"] = info.get("errorMessage")
+                item["error_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
                 record_action(
                     action="error",
                     target="queue_item",

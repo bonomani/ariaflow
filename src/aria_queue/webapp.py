@@ -28,7 +28,10 @@ from .api import (
     homebrew_uninstall_ariaflow,
     install_aria2_launchd,
     is_macos,
+    auto_cleanup_queue,
     get_item_files,
+    load_archive,
+    load_session_history,
     manual_probe,
     load_action_log,
     load_declaration,
@@ -43,6 +46,7 @@ from .api import (
     resume_queue_item,
     retry_queue_item,
     select_item_files,
+    session_stats,
     run_ucc,
     save_declaration,
     start_background_process,
@@ -1925,7 +1929,11 @@ def _api_discovery() -> dict[str, object]:
         "endpoints": {
             "GET": [
                 {"path": "/api", "description": "API discovery (this endpoint)"},
-                {"path": "/api/status", "description": "Queue items, state, summary"},
+                {
+                    "path": "/api/status",
+                    "description": "Queue items, state, summary",
+                    "params": "?status=queued,paused&session=current",
+                },
                 {
                     "path": "/api/bandwidth",
                     "description": "Bandwidth status, config, last probe",
@@ -1952,6 +1960,21 @@ def _api_discovery() -> dict[str, object]:
                     "path": "/api/events",
                     "description": "Server-Sent Events stream (real-time state changes)",
                 },
+                {
+                    "path": "/api/archive",
+                    "description": "Archived (removed/old) items",
+                    "params": "?limit=100",
+                },
+                {
+                    "path": "/api/sessions",
+                    "description": "Session history",
+                    "params": "?limit=50",
+                },
+                {
+                    "path": "/api/session/stats",
+                    "description": "Per-session statistics",
+                    "params": "?session_id=...",
+                },
             ],
             "POST": [
                 {"path": "/api/add", "description": "Enqueue URLs"},
@@ -1965,6 +1988,10 @@ def _api_discovery() -> dict[str, object]:
                 {
                     "path": "/api/bandwidth/probe",
                     "description": "Run bandwidth probe manually",
+                },
+                {
+                    "path": "/api/cleanup",
+                    "description": "Archive stale done/error items",
                 },
                 {
                     "path": "/api/aria2/options",
@@ -2236,7 +2263,29 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self._send_json(bandwidth_status())
             return
         if path == "/api/status":
-            self._send_json(self._status_payload(), etag=True)
+            query = dict(
+                part.split("=", 1) if "=" in part else (part, "")
+                for part in parsed.query.split("&")
+                if part
+            )
+            payload = self._status_payload()
+            filter_status = query.get("status", "").strip()
+            filter_session = query.get("session", "").strip()
+            if filter_status or filter_session:
+                items = payload.get("items", [])
+                if filter_status:
+                    statuses = set(filter_status.split(","))
+                    items = [i for i in items if i.get("status") in statuses]
+                if filter_session == "current":
+                    sid = payload.get("state", {}).get("session_id")
+                    items = [i for i in items if i.get("session_id") == sid]
+                elif filter_session:
+                    items = [i for i in items if i.get("session_id") == filter_session]
+                payload = dict(payload)
+                payload["items"] = items
+                payload["summary"] = summarize_queue(items)
+                payload["filtered"] = True
+            self._send_json(payload, etag=True)
             return
         if path == "/api/log":
             limit = 120
@@ -2273,6 +2322,40 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(result)
             return
+        if path == "/api/archive":
+            query = dict(
+                part.split("=", 1) if "=" in part else (part, "")
+                for part in parsed.query.split("&")
+                if part
+            )
+            try:
+                limit = max(1, min(500, int(query.get("limit", "100"))))
+            except ValueError:
+                limit = 100
+            items = load_archive()
+            self._send_json({"items": items[-limit:]})
+            return
+        if path == "/api/sessions":
+            query = dict(
+                part.split("=", 1) if "=" in part else (part, "")
+                for part in parsed.query.split("&")
+                if part
+            )
+            try:
+                limit = max(1, min(200, int(query.get("limit", "50"))))
+            except ValueError:
+                limit = 50
+            self._send_json({"sessions": load_session_history(limit=limit)})
+            return
+        if path == "/api/session/stats":
+            query = dict(
+                part.split("=", 1) if "=" in part else (part, "")
+                for part in parsed.query.split("&")
+                if part
+            )
+            sid = query.get("session_id") or None
+            self._send_json(session_stats(session_id=sid))
+            return
         self._send_json({"error": "not_found"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802
@@ -2292,6 +2375,18 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             result = manual_probe()
             self._invalidate_status_cache()
             self._send_json(result)
+            return
+
+        if path == "/api/cleanup":
+            params = payload if isinstance(payload, dict) else {}
+            max_age = int(params.get("max_done_age_days", 7))
+            max_count = int(params.get("max_done_count", 100))
+            result = auto_cleanup_queue(
+                max_done_age_days=max_age, max_done_count=max_count
+            )
+            if result["archived"] > 0:
+                self._invalidate_status_cache()
+            self._send_json({"ok": True, **result})
             return
 
         if path == "/api/add":

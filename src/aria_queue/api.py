@@ -3,6 +3,7 @@ from __future__ import annotations
 from .contracts import load_declaration, preflight, run_ucc, save_declaration
 from .core import (
     add_queue_item,
+    auto_cleanup_queue,
     bandwidth_config,
     bandwidth_status,
     change_aria2_options,
@@ -14,6 +15,8 @@ from .core import (
     current_global_options,
     get_active_progress,
     get_item_files,
+    load_archive,
+    load_session_history,
     manual_probe,
     load_action_log,
     load_queue,
@@ -27,6 +30,7 @@ from .core import (
     retry_queue_item,
     select_item_files,
     save_state,
+    session_stats,
     start_background_process,
     start_new_state_session,
     stop_background_process,
@@ -46,6 +50,7 @@ from .platform.launchd import (
 
 __all__ = [
     "add_queue_item",
+    "auto_cleanup_queue",
     "bandwidth_config",
     "bandwidth_status",
     "change_aria2_options",
@@ -61,6 +66,8 @@ __all__ = [
     "load_queue",
     "load_state",
     "get_item_files",
+    "load_archive",
+    "load_session_history",
     "manual_probe",
     "pause_active_transfer",
     "pause_queue_item",
@@ -74,6 +81,7 @@ __all__ = [
     "run_ucc",
     "save_declaration",
     "save_state",
+    "session_stats",
     "start_background_process",
     "start_new_state_session",
     "status_all",
