@@ -2609,53 +2609,14 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 for item in sorted(
                     items, key=lambda i: int(i.get("priority", 0)), reverse=True
                 ):
-                    if item.get("status") not in {"queued", "paused"}:
+                    if item.get("status") != "queued":
                         continue
                     if slots is not None and allocated >= slots:
                         break
                     gid = str(item.get("gid") or "")
                     live_status = str(item.get("live_status") or "")
-                    if gid:
-                        if live_status in {"active", "waiting"}:
-                            continue
-                        if item.get("status") == "paused":
-                            before_item = dict(item)
-                            try:
-                                aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
-                                try:
-                                    set_download_bandwidth(
-                                        gid, cap_bytes_per_sec, port=port, timeout=5
-                                    )
-                                except Exception:
-                                    pass
-                                item["status"] = "queued"
-                                item["live_status"] = "waiting"
-                                record_action(
-                                    action="run",
-                                    target="queue_item",
-                                    outcome="changed",
-                                    reason="download_resumed",
-                                    before={"item": before_item},
-                                    after={
-                                        "item": dict(item),
-                                        "gid": gid,
-                                        "cap_mbps": cap_mbps,
-                                    },
-                                    detail={
-                                        "item_id": item.get("id"),
-                                        "gid": gid,
-                                        "url": item.get("url"),
-                                        "cap_mbps": cap_mbps,
-                                    },
-                                )
-                                current_running_infos.append(
-                                    _queued_info(item, gid, "waiting")
-                                )
-                                allocated += 1
-                                continue
-                            except Exception:
-                                item["gid"] = None
-                                item.pop("live_status", None)
+                    if gid and live_status in {"active", "waiting"}:
+                        continue
                     before_item = dict(item)
                     item["status"] = "downloading"
                     item.pop("live_status", None)

@@ -599,7 +599,8 @@ class TicAriaFlowTests(IsolatedTestCase):
         self.assertEqual(result[0]["gid"], "gid-1")
         self.assertIn("post_action", result[0])
 
-    def test_process_queue_resumes_paused_tracked_download(self) -> None:
+    def test_process_queue_does_not_auto_resume_paused_items(self) -> None:
+        """Paused items stay paused — user must explicitly resume."""
         add_queue_item("https://example.com/model.gguf")
         items = load_queue()
         items[0]["status"] = "paused"
@@ -610,31 +611,10 @@ class TicAriaFlowTests(IsolatedTestCase):
         state["paused"] = False
         save_state(state)
 
-        status_responses = iter(
-            [
-                {
-                    "status": "paused",
-                    "errorCode": "0",
-                    "errorMessage": "",
-                    "downloadSpeed": "0",
-                    "completedLength": "10",
-                    "totalLength": "100",
-                    "files": [{"uris": [{"uri": "https://example.com/model.gguf"}]}],
-                },
-                {
-                    "status": "complete",
-                    "errorCode": "0",
-                    "errorMessage": "",
-                    "downloadSpeed": "0",
-                    "completedLength": "100",
-                    "totalLength": "100",
-                    "files": [{"uris": [{"uri": "https://example.com/model.gguf"}]}],
-                },
-            ]
-        )
-
-        def fake_status(_gid: str, port: int = 6800, timeout: int = 5) -> dict:
-            return next(status_responses)
+        def stop_after_one_loop(_seconds: float) -> None:
+            s = load_state()
+            s["stop_requested"] = True
+            save_state(s)
 
         with (
             patch("aria_queue.core.ensure_aria_daemon"),
@@ -650,22 +630,28 @@ class TicAriaFlowTests(IsolatedTestCase):
                 },
             ),
             patch("aria_queue.core.current_bandwidth", return_value={}),
+            patch("aria_queue.core.set_bandwidth"),
             patch("aria_queue.core.active_gids", return_value=[]),
+            patch(
+                "aria_queue.core.status",
+                return_value={
+                    "status": "paused",
+                    "errorCode": "0",
+                    "errorMessage": "",
+                    "downloadSpeed": "0",
+                    "completedLength": "10",
+                    "totalLength": "100",
+                    "files": [],
+                },
+            ),
             patch("aria_queue.core.add_download") as add_download,
-            patch("aria_queue.core.status", side_effect=fake_status),
-            patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc,
-            patch("aria_queue.core.time.sleep", return_value=None),
+            patch("aria_queue.core.time.sleep", side_effect=stop_after_one_loop),
         ):
             result = process_queue()
+        # Paused item should NOT have been started
         self.assertFalse(add_download.called)
-        rpc.assert_any_call(
-            "aria2.changeOption",
-            ["gid-1", {"max-download-limit": "250000"}],
-            port=6800,
-            timeout=5,
-        )
-        rpc.assert_any_call("aria2.unpause", ["gid-1"], port=6800, timeout=5)
-        self.assertEqual(result[0]["status"], "done")
+        # Item should still be paused
+        self.assertEqual(result[0]["status"], "paused")
 
     def test_ucc_returns_structured_result(self) -> None:
         add_queue_item("https://example.com/model.gguf")
