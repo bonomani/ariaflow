@@ -214,161 +214,78 @@ Terminal states (`complete`, `error`, `removed`) appear in `tellStopped()` and c
 | running → idle | Automatic | All queue items reached terminal status (`queue_complete`) |
 | paused → idle | Automatic | All queue items reached terminal status (`queue_complete`) |
 
-### 2.2 Queue Model
+### 2.2 Queue Model — Hybrid (queue.json + aria2)
 
-#### Current Architecture — Two-Level Queue
-
-ariaflow currently maintains its own queue on top of aria2's queue:
-
-1. **ariaflow queue** (`queue.json`): items in `queued` status waiting to be submitted to aria2. ariaflow gates submission via `max_simultaneous_downloads`.
-2. **aria2 queue**: items submitted to aria2 (`active` or `waiting`). aria2 manages its own concurrency via `--max-concurrent-downloads`.
-
-This creates a "queue of queues" — ariaflow holds items back, then feeds them to aria2 which also queues them. Concurrency is controlled at two levels, priority ordering is duplicated, and state mapping between the two queues adds complexity (e.g. aria2 `waiting` maps back to ariaflow `queued` but still counts as a slot).
+**Design:** `queue.json` is the persistent source of truth. aria2 is the volatile executor. Items are submitted eagerly to aria2 when available, with `queued` as a safety-net fallback when aria2 is unreachable.
 
 ```
-CURRENT:
-    ariaflow queue              aria2 queue                    post-completion
-    (queue.json)                (aria2 RPC)
-    ──────────────────    ────────────────────────────────    ──────────────
+    queue.json (persistent)          aria2 (executor)                ariaflow
+    ───────────────────────    ──────────────────────────────    ──────────────
 
     ┌─────────────┐
-    │ discovering │
+    │ discovering │  mode detection
     └──────┬──────┘
+           │ eager submit
            ▼
-    ┌──────────┐  slot    ┌──────────┐  slot    ┌────────┐    ┌──────┐
-    │  queued  │ ───────► │ waiting  │ ───────► │ active │ ─► │ done │
-    └──────────┘ avail.   └──────────┘ avail.   └────────┘    └──────┘
-    ariaflow              aria2                  aria2         ariaflow
-    controls              controls
+    ┌──────────┐  aria2.addUri   ┌──────────┐    ┌────────┐    ┌──────┐
+    │  queued  │ ──────────────► │ waiting  │──► │download│──► │ done │
+    └──────────┘  (fallback if   └──────────┘    └────────┘    └──────┘
+    safety net    aria2 down)     aria2 owns      aria2 owns   post_action()
 ```
 
-**Problems with current model:**
-- Two concurrency controls: ariaflow `max_simultaneous_downloads` AND aria2 `--max-concurrent-downloads`
-- Priority managed by ariaflow before submission, but aria2 has its own queue order (`aria2_change_position`)
-- aria2 `waiting` status mapped back to ariaflow `queued` is confusing — same name, different meaning
-- Reconciliation needed on restart to match ariaflow's queue.json with aria2's live state
+**Six design principles:**
 
-#### Goal Architecture — Single Queue (aria2 is the queue)
+1. **queue.json is always the source of truth.** Survives aria2 crashes, restarts, power failures.
+2. **Submit eagerly.** Items go to aria2 immediately at add time when scheduler is running. No lazy 2s-loop submission.
+3. **Delegate concurrency to aria2.** `aria2_change_global_option({max-concurrent-downloads: N})` at scheduler start. No ariaflow slot-gating.
+4. **Delegate priority to aria2.** After submission, `aria2_change_position` reorders aria2's queue by ariaflow priority.
+5. **`queued` is a safety net.** Items only stay `queued` when aria2 is unreachable or submission fails.
+6. **Reconcile on startup.** Compare queue.json to aria2 live state. Re-submit `queued` items. Adopt orphaned aria2 downloads.
 
-The target design eliminates the double queue. ariaflow becomes a thin wrapper:
-
-1. **Pre-submission** (ariaflow only): mode detection, validation, bandwidth probing — happens instantly
-2. **Submit immediately to aria2**: all items go to aria2 as soon as pre-submission completes. aria2 owns the queue.
-3. **aria2 is the queue**: concurrency via `--max-concurrent-downloads`, priority via `aria2_change_position`, pause/resume via `aria2_pause`/`aria2_unpause`
-4. **Post-completion** (ariaflow only): post-action execution after aria2 reports `complete`
-
-```
-GOAL:
-    ariaflow                     aria2 IS the queue                 ariaflow
-    pre-submission               (single source of truth)           post-completion
-    ──────────────    ──────────────────────────────────────────    ──────────────
-
-    ┌─────────────┐    ┌──────────┐    ┌────────┐                   ┌──────┐
-    │ discovering │──► │ waiting  │──► │ active │ ────────────────► │ done │
-    └─────────────┘    └──────────┘    └────────┘                   └──────┘
-    instant             aria2 owns     aria2 owns                   post_action()
-    addUri immediately  the queue      the transfer
-```
-
-**Key changes from current to goal:**
-
-| Aspect | Current | Goal |
-|---|---|---|
-| Queue owner | ariaflow (`queue.json`) + aria2 | aria2 only |
-| `queued` status | Item waiting in ariaflow for submission | Eliminated — items go directly to aria2 `waiting` |
-| Concurrency | `max_simultaneous_downloads` (ariaflow) + `--max-concurrent-downloads` (aria2) | `--max-concurrent-downloads` (aria2 only), set via `aria2_change_global_option` |
-| Priority | ariaflow sorts before submission | `aria2_change_position` to reorder aria2's queue |
-| Pause/resume | ariaflow tracks paused state separately | `aria2_pause` / `aria2_unpause` — aria2 is authoritative |
-| State source of truth | `queue.json` (ariaflow mirrors aria2 via polling) | aria2 RPC is authoritative; `queue.json` is metadata overlay (URL, post_action_rule, session_id) |
-| Reconciliation on restart | Complex — match queue.json to aria2 live state | Simple — read aria2 state, enrich with metadata from queue.json |
-
-**What ariaflow still owns in goal architecture:**
+**What ariaflow owns:**
 - Pre-submission: mode detection, validation
-- Metadata: URL origin, post_action_rule, session_id, timestamps, session_history
+- Metadata: URL, post_action_rule, session_id, timestamps, session_history
 - Post-completion: post_action execution
-- Bandwidth probing and `aria2_change_global_option` to apply caps
-- Session lifecycle
-- API surface: REST API, SSE events, audit logging
+- Bandwidth probing and cap application
+- Session lifecycle, API surface, audit logging
 
-**What ariaflow delegates to aria2 in goal architecture:**
+**What ariaflow delegates to aria2:**
 - Queue ordering (`aria2_change_position`)
-- Concurrency (`aria2_change_global_option({max-concurrent-downloads: N})`)
+- Concurrency (`aria2_change_global_option({max-concurrent-downloads})`)
 - Download state (active, waiting, paused, complete, error, removed)
 - Pause/resume (`aria2_pause`, `aria2_unpause`, `aria2_pause_all`, `aria2_unpause_all`)
 
-**aria2 RPC methods that enable single-queue design:**
-- `aria2_add_uri` / `aria2_add_torrent` / `aria2_add_metalink` — submit immediately
-- `aria2_change_position` — reorder queue by priority
-- `aria2_change_global_option` — set `max-concurrent-downloads`
-- `aria2_tell_active` / `aria2_tell_waiting` / `aria2_tell_stopped` — read queue state
-- `aria2_pause` / `aria2_unpause` / `aria2_pause_all` / `aria2_unpause_all` — pause control
-- `aria2_force_pause` / `aria2_force_pause_all` — immediate drain
-
-### 2.3 Item States
-
-#### Current (8 states)
+### 2.3 Item States (9)
 
 | Status | Type | Owner | Description |
 |---|---|---|---|
-| `discovering` | Transitional | ariaflow | Auto-detecting download mode (pre-submission) |
-| `queued` | Stable | ariaflow | Waiting in ariaflow queue for submission to aria2 |
-| `downloading` | Transitional | aria2 | Active transfer (`active` in aria2) |
+| `discovering` | Transitional | ariaflow | Auto-detecting download mode, then eager submission |
+| `queued` | Stable | ariaflow | Safety net — waiting for aria2 (unreachable or submission failed) |
+| `waiting` | Stable | aria2 | In aria2's queue, not yet active |
+| `downloading` | Transitional | aria2 | Active transfer |
 | `paused` | Stable | aria2 | Transfer suspended |
 | `done` | Terminal | ariaflow | Completed — post-action runs |
-| `error` | Terminal | ariaflow | Failed (retryable) |
-| `stopped` | Terminal | ariaflow | Stopped by scheduler shutdown |
+| `error` | Terminal | ariaflow | Failed (retryable via retry) |
+| `stopped` | Terminal | ariaflow | Stopped by scheduler shutdown or aria2 `removed` |
 | `cancelled` | Terminal | ariaflow | Cancelled by user, archived |
-
-#### Goal (7 states — `queued` eliminated)
-
-| Status | Type | Owner | Description |
-|---|---|---|---|
-| `discovering` | Transitional | ariaflow | Mode detection, then immediate submission to aria2 |
-| `waiting` | Stable | aria2 | In aria2's queue, not yet active (maps to aria2 `waiting`) |
-| `active` | Transitional | aria2 | Transferring data (maps to aria2 `active`) |
-| `paused` | Stable | aria2 | Suspended (maps to aria2 `paused`) |
-| `done` | Terminal | ariaflow | Completed — post-action runs |
-| `error` | Terminal | ariaflow | Failed (retryable) |
-| `cancelled` | Terminal | ariaflow | Cancelled by user, archived |
-
-**Changes:**
-- `queued` removed — items go from `discovering` directly into aria2 as `waiting`
-- `downloading` renamed to `active` — matches aria2's vocabulary
-- `stopped` merged into `cancelled` — no separate "scheduler stopped" state needed if aria2 owns the queue
-- `waiting` added — direct mirror of aria2 `waiting` (no confusing remapping)
 
 ### 2.4 State Transitions
 
-#### Current transitions
-
 | From | To | Trigger | aria2 RPC | Phase |
 |---|---|---|---|---|
-| `discovering` → `queued` | Mode resolved | _(none)_ | pre-submission |
-| `queued` → `downloading` | Scheduler submits to aria2 | `aria2.addUri` / `addTorrent` / `addMetalink` | submission |
-| `downloading` → `done` | aria2 reports `complete` | _(poll via `tellStatus`)_ | post-completion |
-| `downloading` → `error` | aria2 reports `error` or 5× RPC failures | _(poll via `tellStatus`)_ | aria2-owned |
-| `downloading` → `paused` | `POST /api/item/{id}/pause` | `aria2.pause(gid)` | aria2-owned |
-| `downloading` → `stopped` | aria2 reports `removed` | _(poll via `tellStatus`)_ | aria2-owned |
-| `paused` → `downloading` | `POST /api/item/{id}/resume` (has GID) | `aria2.unpause(gid)` | aria2-owned |
-| `paused` → `queued` | `POST /api/item/{id}/resume` (no GID) | _(none — re-submitted)_ | back to pre-submission |
-| `queued`/`paused` → `cancelled` | `POST /api/item/{id}/remove` | `aria2.remove(gid)` + `removeDownloadResult(gid)` | removal |
-| `error` → `queued` | `POST /api/item/{id}/retry` | _(clears gid, error fields)_ | back to pre-submission |
-
-#### Goal transitions
-
-| From | To | Trigger | aria2 RPC |
-|---|---|---|---|
-| `discovering` → `waiting` | Mode resolved, submitted immediately | `aria2_add_uri` / `aria2_add_torrent` / `aria2_add_metalink` |
-| `waiting` → `active` | aria2 slot available | Automatic (aria2 internal) |
-| `active` → `done` | aria2 reports `complete` | _(poll via `aria2_tell_status`)_ |
-| `active` → `error` | aria2 reports `error` | _(poll via `aria2_tell_status`)_ |
-| `active` → `paused` | User pauses | `aria2_pause(gid)` |
-| `waiting` → `paused` | User pauses | `aria2_pause(gid)` |
-| `paused` → `waiting` | User resumes | `aria2_unpause(gid)` |
-| any non-terminal → `cancelled` | User removes | `aria2_remove(gid)` + `aria2_remove_download_result(gid)` |
-| `error` → `waiting` | User retries | `aria2_add_uri` (re-submit) |
-
-**Key simplification:** no `queued` holding state, no slot-gating in ariaflow, no `stopped` state. aria2 manages the full download lifecycle.
+| `discovering` → `queued` | Mode resolved, aria2 unreachable | _(none)_ | pre-submission fallback |
+| `discovering` → `downloading` | Mode resolved, eager submission succeeds | `aria2_add_uri` / `aria2_add_torrent` / `aria2_add_metalink` | eager submission |
+| `queued` → `downloading` | Main loop submits to aria2 | `aria2_add_uri` + `aria2_change_position` | deferred submission |
+| `downloading` → `waiting` | aria2 reports `waiting` | _(poll via `aria2_tell_status`)_ | aria2-owned |
+| `waiting` → `downloading` | aria2 slot available | _(poll via `aria2_tell_status`)_ | aria2-owned |
+| `downloading` → `done` | aria2 reports `complete` | _(poll via `aria2_tell_status`)_ | post-completion |
+| `downloading` → `error` | aria2 reports `error` or 5× RPC failures | _(poll via `aria2_tell_status`)_ | aria2-owned |
+| `downloading` → `paused` | `POST /api/item/{id}/pause` | `aria2_pause(gid)` | aria2-owned |
+| `downloading` → `stopped` | aria2 reports `removed` | _(poll via `aria2_tell_status`)_ | aria2-owned |
+| `paused` → `downloading` | `POST /api/item/{id}/resume` (has GID) | `aria2_unpause(gid)` | aria2-owned |
+| `paused` → `queued` | `POST /api/item/{id}/resume` (no GID) | _(eager re-submission attempted)_ | fallback |
+| `queued`/`paused` → `cancelled` | `POST /api/item/{id}/remove` | `aria2_remove(gid)` + `aria2_remove_download_result(gid)` | removal |
+| `error` → `queued` | `POST /api/item/{id}/retry` | _(eager re-submission attempted)_ | fallback |
 
 ### 2.5 Session States (3)
 

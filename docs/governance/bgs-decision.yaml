@@ -40,9 +40,9 @@ evidence_refs:
   - ./tests/
 
 owner: bonomani
-date: 2026-04-02
+date: 2026-04-03
 
 limitations:
   - BISS classification is initial and needs expansion as new boundaries are added
   - ASM state model formalized in docs/governance/asm-state-model.md
-  - TIC oracle mapped from existing tests — 33 test-to-trace-target mappings
+  - TIC oracle covers all 374 tests with trace targets across ASM/UIC/UCC/BISS

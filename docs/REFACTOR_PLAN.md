@@ -1,8 +1,12 @@
-# Refactor Plan: Split core.py into Focused Modules
+# Refactor Plan: Split core.py into Focused Modules — COMPLETED
+
+## Status: Done
+
+core.py split into 7 focused modules + re-export hub. All 374 tests pass. Zero behavior change.
 
 ## Context
 
-`src/aria_queue/core.py` is 3091 lines with 100+ functions doing 6 different jobs. This refactor splits it into focused modules, each answering one question (per ARCHITECTURE.md design rules). No behavior change, no API change.
+`src/aria_queue/core.py` was 3091 lines with 100+ functions doing 6 different jobs. This refactor split it into focused modules, each answering one question (per ARCHITECTURE.md design rules). No behavior change, no API change.
 
 ## Module Map
 
