@@ -1,6 +1,18 @@
 # Plan
 
-No open items.
+### [T1] Remove 1 duplicate test — 2 min
+
+**What:** Remove `test_invalid_json_body` from `test_api_coverage.py` (duplicate of same test in `test_api.py`)
+**Where:** `tests/test_api_coverage.py`
+**Why:** Exact same endpoint, same assertion, same intent. Redundant.
+**Scope:** Delete ~5 lines
+
+### [T2] Add 3 bandwidth function tests — 15 min
+
+**What:** Add unit tests for `bandwidth_config`, `bandwidth_status`, `manual_probe`
+**Where:** `tests/test_unit_coverage.py`
+**Why:** Only 6 public functions remain untested. These 3 are testable (the other 3 are macOS-only path helpers).
+**Scope:** ~30 lines
 
 ---
 
