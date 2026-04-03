@@ -60,6 +60,7 @@ from .api import (
 from .core import cleanup_queue_state
 
 STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
+_STATUS_CACHE_LOCK = threading.Lock()
 STATUS_CACHE_TTL = 2.0
 API_SCHEMA_VERSION = "2"
 
@@ -492,8 +493,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
     }
 
     def _invalidate_status_cache(self, event: str = "state_changed") -> None:
-        STATUS_CACHE["ts"] = 0.0
-        STATUS_CACHE["payload"] = None
+        with _STATUS_CACHE_LOCK:
+            STATUS_CACHE["ts"] = 0.0
+            STATUS_CACHE["payload"] = None
         state = load_state()
         _sse_publish(
             event,
@@ -502,12 +504,10 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
     def _status_payload(self, force: bool = False) -> dict:
         now = time.time()
-        cached = STATUS_CACHE.get("payload")
-        if (
-            not force
-            and cached is not None
-            and now - float(STATUS_CACHE.get("ts", 0.0)) < STATUS_CACHE_TTL
-        ):
+        with _STATUS_CACHE_LOCK:
+            cached = STATUS_CACHE.get("payload")
+            ts = float(STATUS_CACHE.get("ts", 0.0))
+        if not force and cached is not None and now - ts < STATUS_CACHE_TTL:
             return cached  # type: ignore[return-value]
 
         try:
@@ -538,8 +538,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         actives = aria2_tell_active(timeout=3)
         if actives:
             payload["actives"] = actives
-        STATUS_CACHE["ts"] = now
-        STATUS_CACHE["payload"] = payload
+        with _STATUS_CACHE_LOCK:
+            STATUS_CACHE["ts"] = now
+            STATUS_CACHE["payload"] = payload
         return payload
 
     def _send_json(

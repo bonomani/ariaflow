@@ -319,7 +319,7 @@ def get_item_files(item_id: str, port: int = 6800) -> dict[str, Any]:
                 "error": "not_found",
                 "message": f"item {item_id} not found",
             }
-        gid = str(item.get("gid") or "")
+        gid = item.get("gid") or None
     if not gid:
         return {"ok": False, "error": "no_gid", "message": "item has no aria2 GID"}
     try:
@@ -341,7 +341,7 @@ def select_item_files(
                 "error": "not_found",
                 "message": f"item {item_id} not found",
             }
-        gid = str(item.get("gid") or "")
+        gid = item.get("gid") or None
     if not gid:
         return {"ok": False, "error": "no_gid", "message": "item has no aria2 GID"}
     select_str = ",".join(str(i) for i in indices)
@@ -385,7 +385,7 @@ def pause_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
                 "message": f"cannot pause item in status '{item.get('status')}'",
             }
         before = dict(item)
-        gid = str(item.get("gid") or "")
+        gid = item.get("gid") or None
     if gid:
         try:
             core.aria2_pause(gid, port=port, timeout=5)
@@ -432,7 +432,7 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
                 "message": f"cannot resume item in status '{item.get('status')}'",
             }
         before = dict(item)
-        gid = str(item.get("gid") or "")
+        gid = item.get("gid") or None
     rpc_ok = False
     if gid:
         try:
@@ -502,7 +502,7 @@ def remove_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
                 "message": f"item {item_id} not found",
             }
         before = dict(item)
-        gid = str(item.get("gid") or "")
+        gid = item.get("gid") or None
         should_remove_aria2 = gid and item.get("status") in {
             "active",
             "queued",

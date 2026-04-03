@@ -125,7 +125,7 @@ class TestAria2PauseAll(unittest.TestCase):
         result = core.aria2_pause_all()
         self.assertEqual(result, "OK")
         core.aria_rpc.assert_called_once_with(
-            "aria2.pauseAll", port=6800, timeout=5
+            "aria2.pauseAll", [], port=6800, timeout=5
         )
 
 
@@ -135,7 +135,7 @@ class TestAria2ForcePauseAll(unittest.TestCase):
         result = core.aria2_force_pause_all()
         self.assertEqual(result, "OK")
         core.aria_rpc.assert_called_once_with(
-            "aria2.forcePauseAll", port=6800, timeout=5
+            "aria2.forcePauseAll", [], port=6800, timeout=5
         )
 
 
@@ -155,7 +155,7 @@ class TestAria2UnpauseAll(unittest.TestCase):
         result = core.aria2_unpause_all()
         self.assertEqual(result, "OK")
         core.aria_rpc.assert_called_once_with(
-            "aria2.unpauseAll", port=6800, timeout=5
+            "aria2.unpauseAll", [], port=6800, timeout=5
         )
 
 
@@ -205,7 +205,7 @@ class TestAria2TellActive(unittest.TestCase):
         result = core.aria2_tell_active()
         self.assertEqual(len(result), 2)
         core.aria_rpc.assert_called_once_with(
-            "aria2.tellActive", port=6800, timeout=5
+            "aria2.tellActive", [], port=6800, timeout=5
         )
 
     @patch(_MODULE, MagicMock(side_effect=Exception("conn refused")))
@@ -308,7 +308,7 @@ class TestAria2GetGlobalOption(unittest.TestCase):
         opts = core.aria2_get_global_option()
         self.assertEqual(opts["max-concurrent-downloads"], "5")
         core.aria_rpc.assert_called_once_with(
-            "aria2.getGlobalOption", port=6800, timeout=5
+            "aria2.getGlobalOption", [], port=6800, timeout=5
         )
 
 
@@ -333,7 +333,7 @@ class TestAria2GetGlobalStat(unittest.TestCase):
         stat = core.aria2_get_global_stat()
         self.assertEqual(stat["numActive"], "2")
         core.aria_rpc.assert_called_once_with(
-            "aria2.getGlobalStat", port=6800, timeout=5
+            "aria2.getGlobalStat", [], port=6800, timeout=5
         )
 
 
@@ -380,7 +380,7 @@ class TestAria2PurgeDownloadResult(unittest.TestCase):
         result = core.aria2_purge_download_result()
         self.assertEqual(result, "OK")
         core.aria_rpc.assert_called_once_with(
-            "aria2.purgeDownloadResult", port=6800, timeout=5
+            "aria2.purgeDownloadResult", [], port=6800, timeout=5
         )
 
 
@@ -390,7 +390,7 @@ class TestAria2GetVersion(unittest.TestCase):
         info = core.aria2_get_version()
         self.assertEqual(info["version"], "1.37.0")
         core.aria_rpc.assert_called_once_with(
-            "aria2.getVersion", port=6800, timeout=5
+            "aria2.getVersion", [], port=6800, timeout=5
         )
 
 
@@ -400,7 +400,7 @@ class TestAria2GetSessionInfo(unittest.TestCase):
         info = core.aria2_get_session_info()
         self.assertEqual(info["sessionId"], "abc123")
         core.aria_rpc.assert_called_once_with(
-            "aria2.getSessionInfo", port=6800, timeout=5
+            "aria2.getSessionInfo", [], port=6800, timeout=5
         )
 
 
@@ -410,7 +410,7 @@ class TestAria2SaveSession(unittest.TestCase):
         result = core.aria2_save_session()
         self.assertEqual(result, "OK")
         core.aria_rpc.assert_called_once_with(
-            "aria2.saveSession", port=6800, timeout=5
+            "aria2.saveSession", [], port=6800, timeout=5
         )
 
 
@@ -420,7 +420,7 @@ class TestAria2Shutdown(unittest.TestCase):
         result = core.aria2_shutdown()
         self.assertEqual(result, "OK")
         core.aria_rpc.assert_called_once_with(
-            "aria2.shutdown", port=6800, timeout=5
+            "aria2.shutdown", [], port=6800, timeout=5
         )
 
 
@@ -430,7 +430,7 @@ class TestAria2ForceShutdown(unittest.TestCase):
         result = core.aria2_force_shutdown()
         self.assertEqual(result, "OK")
         core.aria_rpc.assert_called_once_with(
-            "aria2.forceShutdown", port=6800, timeout=5
+            "aria2.forceShutdown", [], port=6800, timeout=5
         )
 
 
@@ -454,7 +454,7 @@ class TestAria2ListMethods(unittest.TestCase):
         methods = core.aria2_list_methods()
         self.assertIn("aria2.addUri", methods)
         core.aria_rpc.assert_called_once_with(
-            "system.listMethods", port=6800, timeout=5
+            "system.listMethods", [], port=6800, timeout=5
         )
 
 
@@ -464,7 +464,7 @@ class TestAria2ListNotifications(unittest.TestCase):
         notifs = core.aria2_list_notifications()
         self.assertIn("aria2.onDownloadStart", notifs)
         core.aria_rpc.assert_called_once_with(
-            "system.listNotifications", port=6800, timeout=5
+            "system.listNotifications", [], port=6800, timeout=5
         )
 
 

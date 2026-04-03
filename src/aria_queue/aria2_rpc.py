@@ -70,7 +70,7 @@ def _aria2_rpc(method: str, params: list[Any] | None = None, port: int = 6800, t
     """Call aria_rpc through core module to support patching."""
     if params is not None:
         return _core().aria_rpc(method, params, port=port, timeout=timeout)
-    return _core().aria_rpc(method, port=port, timeout=timeout)
+    return _core().aria_rpc(method, [], port=port, timeout=timeout)
 
 
 # ── aria2 RPC wrappers (1:1 with aria2 JSON-RPC methods) ──────────
