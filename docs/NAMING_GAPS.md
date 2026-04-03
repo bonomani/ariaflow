@@ -1,67 +1,75 @@
-# Naming Gaps — ariaflow vs aria2
+# Naming Conventions — ariaflow vs aria2
 
-Variables and statuses derived from aria2 should keep names consistent with aria2's vocabulary. This document maps the gaps.
+**Rule:** Variables and statuses derived from aria2 should keep names consistent with aria2's vocabulary. ariaflow-only concepts use their own naming.
 
-## Status Name Mapping
+## Status Names
 
-| aria2 status | ariaflow status | Match? | Notes |
-|---|---|---|---|
-| `active` | `downloading` | **Mismatch** | aria2 calls it `active`, ariaflow calls it `downloading` |
-| `waiting` | `waiting` | OK | |
-| `paused` | `paused` | OK | |
-| `complete` | `done` | **Mismatch** | aria2 calls it `complete`, ariaflow calls it `done` |
-| `error` | `error` | OK | |
-| `removed` | `stopped` | **Mismatch** | aria2 calls it `removed`, ariaflow calls it `stopped` |
+| aria2 status | ariaflow status | Match? |
+|---|---|---|
+| `active` | `active` | OK |
+| `waiting` | `waiting` | OK |
+| `paused` | `paused` | OK |
+| `complete` | `complete` | OK |
+| `error` | `error` | OK |
+| `removed` | `stopped` | **Divergence** — justified (see below) |
 
-### ariaflow-only statuses (no aria2 equivalent)
+**ariaflow-only statuses** (no aria2 equivalent):
 
-| ariaflow status | Purpose |
+| Status | Purpose |
 |---|---|
-| `discovering` | Pre-submission mode detection (ariaflow concept) |
-| `queued` | Safety-net fallback when aria2 unreachable (ariaflow concept) |
-| `cancelled` | User-initiated removal with archive (ariaflow concept) |
+| `discovering` | Pre-submission mode detection |
+| `queued` | Safety-net fallback when aria2 unreachable |
+| `cancelled` | User-initiated removal (archived) |
 
-## Field Name Mapping
+**Why `stopped` ≠ `removed`:** ariaflow distinguishes `stopped` (system decided, e.g. scheduler shutdown, aria2 crash) from `cancelled` (user decided). aria2's single `removed` status doesn't carry this distinction.
+
+## Field Names — aria2-Derived
+
+Fields that store values directly from aria2's `tellStatus` response:
 
 | aria2 field | ariaflow field | Match? | Notes |
 |---|---|---|---|
 | `gid` | `gid` | OK | |
-| `status` | `status` / `live_status` | **Split** | ariaflow stores its own `status` (mapped) and `live_status` (raw aria2 value) |
-| `downloadSpeed` | `downloadSpeed` | OK | Stored as-is from aria2 |
-| `completedLength` | `completedLength` | OK | Stored as-is from aria2 |
-| `totalLength` | `totalLength` | OK | Stored as-is from aria2 |
-| `errorCode` | `error_code` | **Mismatch** | aria2 uses camelCase, ariaflow uses snake_case |
-| `errorMessage` | `error_message` | **Mismatch** | aria2 uses camelCase, ariaflow uses snake_case |
-| `files` | `files` | OK | |
+| `downloadSpeed` | `downloadSpeed` | OK | Stored as-is (camelCase) |
+| `completedLength` | `completedLength` | OK | Stored as-is (camelCase) |
+| `totalLength` | `totalLength` | OK | Stored as-is (camelCase) |
+| `files` | `files` | OK | Stored as-is |
+| `errorCode` | `error_code` | **Renamed** | aria2 camelCase → ariaflow snake_case |
+| `errorMessage` | `error_message` | **Renamed** | aria2 camelCase → ariaflow snake_case |
+| `status` | `live_status` | **Renamed** | Raw aria2 status stored separately from mapped ariaflow status |
 
-## Function Name Mapping
+**Inconsistency:** `downloadSpeed`, `completedLength`, `totalLength` keep aria2's camelCase, but `errorCode` and `errorMessage` are converted to snake_case. Both conventions exist in the same item dict.
 
-All 36 `aria2_*` wrapper functions use consistent `aria2_` + snake_case naming. These are 1:1 with aria2 RPC methods. **No gaps.**
+### Options to resolve
 
-## Summary of Mismatches
+| Option | Change | Impact |
+|---|---|---|
+| **A: Keep camelCase for all aria2 fields** | Rename `error_code` → `errorCode`, `error_message` → `errorMessage` | 55 references. Consistent with `downloadSpeed` etc. Breaks Python convention. |
+| **B: Convert all to snake_case** | Rename `downloadSpeed` → `download_speed`, `completedLength` → `completed_length`, `totalLength` → `total_length` | 30+ references. Consistent Python style. Breaks alignment with aria2. |
+| **C: Keep as-is** | No change | Inconsistent but working. Two conventions coexist. |
 
-| Category | aria2 name | ariaflow name | Breaking to fix? | Recommendation |
-|---|---|---|---|---|
-| Status: active | `active` | `downloading` | Yes — API contract | **Align** in next major version |
-| Status: complete | `complete` | `done` | Yes — API contract | **Align** in next major version |
-| Status: removed | `removed` | `stopped` | Yes — API contract | **Keep** — ariaflow adds semantic meaning (`stopped` = system, `cancelled` = user) |
-| Field: errorCode | `errorCode` | `error_code` | Yes — API contract | **Keep** — ariaflow follows Python snake_case convention |
-| Field: errorMessage | `errorMessage` | `error_message` | Yes — API contract | **Keep** — same reason |
-| Field: live_status | _(none)_ | `live_status` | No | **Keep** — stores raw aria2 status alongside mapped ariaflow status |
+**Recommendation:** Option A — keep aria2 field names as-is (camelCase) for all aria2-derived fields. This makes it obvious which fields come from aria2. ariaflow-only fields stay snake_case.
 
-## Recommended Actions
+## Field Names — ariaflow-Only
 
-### Do now (no breaking change)
+These are ariaflow concepts with no aria2 equivalent. All use snake_case (Python convention):
 
-None. All mismatches require API contract changes.
+| Field | Purpose |
+|---|---|
+| `id` | ariaflow item UUID |
+| `url` | Primary download URL |
+| `output` | Custom output filename |
+| `mode` | Download mode (http, magnet, torrent, etc.) |
+| `priority` | Scheduling order |
+| `mirrors` | Additional mirror URLs |
+| `torrent_data` / `metalink_data` | Base64 embedded data |
+| `status` | Mapped ariaflow status (may differ from `live_status`) |
+| `live_status` | Raw aria2 status |
+| `session_id` / `session_history` | Session tracking |
+| `post_action_rule` / `post_action` | Post-completion policy |
+| `created_at` / `paused_at` / `resumed_at` / `completed_at` / `error_at` / `cancelled_at` | Lifecycle timestamps |
+| `rpc_failures` | RPC failure counter |
 
-### Do in next major version
+## Function Names
 
-1. **Rename `downloading` → `active`** — matches aria2 vocabulary, 42 code+test references
-2. **Rename `done` → `complete`** — matches aria2 vocabulary, similar scope
-
-### Keep as-is (justified divergence)
-
-1. **`stopped` vs `removed`** — ariaflow distinguishes `stopped` (system decided) from `cancelled` (user decided). aria2's `removed` doesn't carry this distinction.
-2. **`error_code` vs `errorCode`** — ariaflow follows Python snake_case. The raw aria2 camelCase values are accessible via `live_status` and direct RPC calls.
-3. **`live_status` field** — ariaflow-specific concept. Stores the raw aria2 status for cases where the mapped ariaflow status diverges.
+All 36 `aria2_*` wrapper functions use `aria2_` + snake_case of the RPC method name. **No gaps.** See [ARIA2_RPC_WRAPPERS.md](./ARIA2_RPC_WRAPPERS.md).
