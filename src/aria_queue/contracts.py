@@ -115,7 +115,7 @@ def save_declaration(declaration: dict[str, Any]) -> dict[str, Any]:
         return declaration
 
 
-def _aria_available(port: int = 6800) -> bool:
+def _aria2_available(port: int = 6800) -> bool:
     try:
         aria_rpc("aria2.getVersion", port=port)
         return True
@@ -135,7 +135,7 @@ def preflight() -> dict[str, Any]:
     gates = []
     failures = []
 
-    aria_ok = _aria_available()
+    aria_ok = _aria2_available()
 
     queue_ok = queue_path().parent.exists()
     state = load_state()

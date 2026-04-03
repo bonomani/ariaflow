@@ -22,7 +22,7 @@ _BITS_PER_MEGABIT = 1_000_000.0
 _BYTES_PER_MEGABIT = 125_000.0
 
 
-def _aria_speed_value(cap_bytes_per_sec: int) -> str:
+def _aria2_speed_value(cap_bytes_per_sec: int) -> str:
     return str(max(0, int(cap_bytes_per_sec)))
 
 
@@ -66,7 +66,7 @@ def aria_rpc(
     return data
 
 
-def _rpc(method: str, params: list[Any] | None = None, port: int = 6800, timeout: int = 15) -> dict[str, Any]:
+def _aria2_rpc(method: str, params: list[Any] | None = None, port: int = 6800, timeout: int = 15) -> dict[str, Any]:
     """Call aria_rpc through core module to support patching."""
     if params is not None:
         return _core().aria_rpc(method, params, port=port, timeout=timeout)
@@ -88,7 +88,7 @@ def aria2_add_uri(
         params.append(options or {})
     if position is not None:
         params.append(position)
-    return _rpc("aria2.addUri", params, port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.addUri", params, port=port, timeout=timeout)["result"]
 
 
 def aria2_add_torrent(
@@ -104,7 +104,7 @@ def aria2_add_torrent(
         params.append(options or {})
     if position is not None:
         params.append(position)
-    return _rpc("aria2.addTorrent", params, port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.addTorrent", params, port=port, timeout=timeout)["result"]
 
 
 def aria2_add_metalink(
@@ -119,43 +119,43 @@ def aria2_add_metalink(
         params.append(options or {})
     if position is not None:
         params.append(position)
-    return _rpc("aria2.addMetalink", params, port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.addMetalink", params, port=port, timeout=timeout)["result"]
 
 
 def aria2_pause(gid: str, port: int = 6800, timeout: int = 5) -> str:
-    return _rpc("aria2.pause", [gid], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.pause", [gid], port=port, timeout=timeout)["result"]
 
 
 def aria2_force_pause(gid: str, port: int = 6800, timeout: int = 5) -> str:
-    return _rpc("aria2.forcePause", [gid], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.forcePause", [gid], port=port, timeout=timeout)["result"]
 
 
 def aria2_pause_all(port: int = 6800, timeout: int = 5) -> str:
-    return _rpc("aria2.pauseAll", port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.pauseAll", port=port, timeout=timeout)["result"]
 
 
 def aria2_force_pause_all(port: int = 6800, timeout: int = 5) -> str:
-    return _rpc("aria2.forcePauseAll", port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.forcePauseAll", port=port, timeout=timeout)["result"]
 
 
 def aria2_unpause(gid: str, port: int = 6800, timeout: int = 5) -> str:
-    return _rpc("aria2.unpause", [gid], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.unpause", [gid], port=port, timeout=timeout)["result"]
 
 
 def aria2_unpause_all(port: int = 6800, timeout: int = 5) -> str:
-    return _rpc("aria2.unpauseAll", port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.unpauseAll", port=port, timeout=timeout)["result"]
 
 
 def aria2_remove(gid: str, port: int = 6800, timeout: int = 5) -> str:
-    return _rpc("aria2.remove", [gid], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.remove", [gid], port=port, timeout=timeout)["result"]
 
 
 def aria2_force_remove(gid: str, port: int = 6800, timeout: int = 5) -> str:
-    return _rpc("aria2.forceRemove", [gid], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.forceRemove", [gid], port=port, timeout=timeout)["result"]
 
 
 def aria2_remove_download_result(gid: str, port: int = 6800, timeout: int = 5) -> str:
-    return _rpc("aria2.removeDownloadResult", [gid], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.removeDownloadResult", [gid], port=port, timeout=timeout)["result"]
 
 
 def aria2_tell_status(
@@ -164,12 +164,12 @@ def aria2_tell_status(
     params: list[Any] = [gid]
     if fields is not None:
         params.append(fields)
-    return _rpc("aria2.tellStatus", params, port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.tellStatus", params, port=port, timeout=timeout)["result"]
 
 
 def aria2_tell_active(port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
     try:
-        result = _rpc("aria2.tellActive", port=port, timeout=timeout)
+        result = _aria2_rpc("aria2.tellActive", port=port, timeout=timeout)
         return list(result.get("result", []))
     except Exception:
         return []
@@ -179,7 +179,7 @@ def aria2_tell_waiting(
     port: int = 6800, offset: int = 0, num: int = 100, timeout: int = 5
 ) -> list[dict[str, Any]]:
     try:
-        result = _rpc(
+        result = _aria2_rpc(
             "aria2.tellWaiting", [offset, num], port=port, timeout=timeout
         )
         return list(result.get("result", []))
@@ -191,7 +191,7 @@ def aria2_tell_stopped(
     port: int = 6800, offset: int = 0, num: int = 100, timeout: int = 5
 ) -> list[dict[str, Any]]:
     try:
-        result = _rpc(
+        result = _aria2_rpc(
             "aria2.tellStopped", [offset, num], port=port, timeout=timeout
         )
         return list(result.get("result", []))
@@ -200,49 +200,49 @@ def aria2_tell_stopped(
 
 
 def aria2_get_files(gid: str, port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
-    return _rpc("aria2.getFiles", [gid], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.getFiles", [gid], port=port, timeout=timeout)["result"]
 
 
 def aria2_get_uris(gid: str, port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
-    return _rpc("aria2.getUris", [gid], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.getUris", [gid], port=port, timeout=timeout)["result"]
 
 
 def aria2_get_peers(gid: str, port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
-    return _rpc("aria2.getPeers", [gid], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.getPeers", [gid], port=port, timeout=timeout)["result"]
 
 
 def aria2_get_servers(gid: str, port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
-    return _rpc("aria2.getServers", [gid], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.getServers", [gid], port=port, timeout=timeout)["result"]
 
 
 def aria2_get_option(gid: str, port: int = 6800, timeout: int = 5) -> dict[str, Any]:
-    return _rpc("aria2.getOption", [gid], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.getOption", [gid], port=port, timeout=timeout)["result"]
 
 
 def aria2_change_option(
     gid: str, options: dict[str, str], port: int = 6800, timeout: int = 5
 ) -> str:
-    return _rpc("aria2.changeOption", [gid, options], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.changeOption", [gid, options], port=port, timeout=timeout)["result"]
 
 
 def aria2_get_global_option(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
-    return _rpc("aria2.getGlobalOption", port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.getGlobalOption", port=port, timeout=timeout)["result"]
 
 
 def aria2_change_global_option(
     options: dict[str, str], port: int = 6800, timeout: int = 5
 ) -> str:
-    return _rpc("aria2.changeGlobalOption", [options], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.changeGlobalOption", [options], port=port, timeout=timeout)["result"]
 
 
 def aria2_get_global_stat(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
-    return _rpc("aria2.getGlobalStat", port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.getGlobalStat", port=port, timeout=timeout)["result"]
 
 
 def aria2_change_position(
     gid: str, pos: int, how: str, port: int = 6800, timeout: int = 5
 ) -> int:
-    return _rpc("aria2.changePosition", [gid, pos, how], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.changePosition", [gid, pos, how], port=port, timeout=timeout)["result"]
 
 
 def aria2_change_uri(
@@ -257,43 +257,43 @@ def aria2_change_uri(
     params: list[Any] = [gid, file_index, del_uris, add_uris]
     if position is not None:
         params.append(position)
-    return _rpc("aria2.changeUri", params, port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.changeUri", params, port=port, timeout=timeout)["result"]
 
 
 def aria2_purge_download_result(port: int = 6800, timeout: int = 5) -> str:
-    return _rpc("aria2.purgeDownloadResult", port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.purgeDownloadResult", port=port, timeout=timeout)["result"]
 
 
 def aria2_get_version(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
-    return _rpc("aria2.getVersion", port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.getVersion", port=port, timeout=timeout)["result"]
 
 
 def aria2_get_session_info(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
-    return _rpc("aria2.getSessionInfo", port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.getSessionInfo", port=port, timeout=timeout)["result"]
 
 
 def aria2_save_session(port: int = 6800, timeout: int = 5) -> str:
-    return _rpc("aria2.saveSession", port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.saveSession", port=port, timeout=timeout)["result"]
 
 
 def aria2_shutdown(port: int = 6800, timeout: int = 5) -> str:
-    return _rpc("aria2.shutdown", port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.shutdown", port=port, timeout=timeout)["result"]
 
 
 def aria2_force_shutdown(port: int = 6800, timeout: int = 5) -> str:
-    return _rpc("aria2.forceShutdown", port=port, timeout=timeout)["result"]
+    return _aria2_rpc("aria2.forceShutdown", port=port, timeout=timeout)["result"]
 
 
 def aria2_multicall(calls: list[dict[str, Any]], port: int = 6800, timeout: int = 15) -> list[Any]:
-    return _rpc("system.multicall", [calls], port=port, timeout=timeout)["result"]
+    return _aria2_rpc("system.multicall", [calls], port=port, timeout=timeout)["result"]
 
 
 def aria2_list_methods(port: int = 6800, timeout: int = 5) -> list[str]:
-    return _rpc("system.listMethods", port=port, timeout=timeout)["result"]
+    return _aria2_rpc("system.listMethods", port=port, timeout=timeout)["result"]
 
 
 def aria2_list_notifications(port: int = 6800, timeout: int = 5) -> list[str]:
-    return _rpc("system.listNotifications", port=port, timeout=timeout)["result"]
+    return _aria2_rpc("system.listNotifications", port=port, timeout=timeout)["result"]
 
 
 def aria2_ensure_daemon(port: int = 6800) -> None:
@@ -340,7 +340,7 @@ def _is_metadata_url(url: str) -> bool:
 def aria2_add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800) -> str:
 
     options: dict[str, str] = {
-        "max-download-limit": _aria_speed_value(cap_bytes_per_sec),
+        "max-download-limit": _aria2_speed_value(cap_bytes_per_sec),
         "allow-overwrite": "true",
         "continue": "true",
     }
@@ -385,7 +385,7 @@ def aria2_status(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
 
 def aria2_set_bandwidth(cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5) -> None:
     aria2_change_global_option(
-        {"max-overall-download-limit": _aria_speed_value(cap_bytes_per_sec)},
+        {"max-overall-download-limit": _aria2_speed_value(cap_bytes_per_sec)},
         port=port,
         timeout=timeout,
     )
@@ -396,7 +396,7 @@ def aria2_set_download_bandwidth(
 ) -> None:
     aria2_change_option(
         gid,
-        {"max-download-limit": _aria_speed_value(cap_bytes_per_sec)},
+        {"max-download-limit": _aria2_speed_value(cap_bytes_per_sec)},
         port=port,
         timeout=timeout,
     )

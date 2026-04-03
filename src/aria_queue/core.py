@@ -22,7 +22,7 @@ from .storage import _STORAGE_LOCK_STATE  # noqa: F401
 from .state import _rotate_action_log  # noqa: F401
 from .state import _ACTION_LOG_MAX_LINES  # noqa: F401
 from .state import _ACTION_LOG_KEEP_LINES  # noqa: F401
-from .aria2_rpc import _aria_speed_value  # noqa: F401
+from .aria2_rpc import _aria2_speed_value  # noqa: F401
 from .aria2_rpc import _cap_bytes_per_sec_from_mbps  # noqa: F401
 from .aria2_rpc import _cap_mbps_from_bytes_per_sec  # noqa: F401
 from .aria2_rpc import _is_metadata_url  # noqa: F401
@@ -42,7 +42,7 @@ from .bandwidth import _NETWORKQUALITY_PROBE_INTERVAL  # noqa: F401
 from .bandwidth import _NETWORKQUALITY_CANDIDATES  # noqa: F401
 from .queue_ops import _TERMINAL_STATUSES  # noqa: F401
 from .queue_ops import _find_queue_item_by_id  # noqa: F401
-from .queue_ops import _apply_aria2_priority  # noqa: F401
+from .queue_ops import _aria2_apply_priority  # noqa: F401
 from .queue_ops import _aria2_position_for_priority  # noqa: F401
 from .queue_ops import _pref_value  # noqa: F401
 from .reconcile import _active_item_url  # noqa: F401

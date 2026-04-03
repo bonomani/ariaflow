@@ -154,7 +154,7 @@ def _aria2_position_for_priority(priority: int, port: int = 6800) -> int:
     return len(waiting)
 
 
-def _apply_aria2_priority(gid: str, priority: int, port: int = 6800) -> None:
+def _aria2_apply_priority(gid: str, priority: int, port: int = 6800) -> None:
     if priority <= 0:
         return
     try:
@@ -355,7 +355,7 @@ def add_queue_item(
                         it["status"] = "active"
                         break
                 core.save_queue(live_items)
-            _apply_aria2_priority(gid, priority)
+            _aria2_apply_priority(gid, priority)
             item = QueueItem(**{**asdict(item), "gid": gid, "status": "active"})
     return item
 
@@ -722,7 +722,7 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
                             it["status"] = "active"
                             break
                     core.save_queue(live_items)
-                _apply_aria2_priority(new_gid, int(item.get("priority", 0)))
+                _aria2_apply_priority(new_gid, int(item.get("priority", 0)))
                 item["gid"] = new_gid
                 item["status"] = "active"
     return {"ok": True, "item": dict(item)}
@@ -845,7 +845,7 @@ def retry_queue_item(item_id: str) -> dict[str, Any]:
                         it["status"] = "active"
                         break
                 core.save_queue(live_items)
-            _apply_aria2_priority(gid, int(item.get("priority", 0)))
+            _aria2_apply_priority(gid, int(item.get("priority", 0)))
             item["gid"] = gid
             item["status"] = "active"
     return {"ok": True, "item": dict(item)}

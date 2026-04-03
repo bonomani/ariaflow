@@ -381,7 +381,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     },
                 )
                 current_running_infos.append(_queued_info(item, gid, "waiting"))
-                core._apply_aria2_priority(gid, int(item.get("priority", 0)))
+                core._aria2_apply_priority(gid, int(item.get("priority", 0)))
 
         # Phase 3: save state (locked)
         with core.storage_locked():
