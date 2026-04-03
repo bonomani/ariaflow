@@ -51,6 +51,8 @@ After all items done:
 □ python scripts/gen_all_variables.py --check # naming compliance
 □ verify PLAN.md says "No open items"
 □ git push origin main
+□ rm -rf .claude/worktrees/     # clean temp working folders
+□ git status                    # confirm clean tree
 ```
 
 ### What NOT to do
