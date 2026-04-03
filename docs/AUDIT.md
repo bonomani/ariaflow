@@ -135,3 +135,19 @@ Phase 7: Documentation (P7)               ~5h
 Phase 8: Developer experience (P8)        ~14h
   → CI matrix, CONTRIBUTING.md, Makefile, pre-commit
 ```
+
+## Completed
+
+- **Phase 1 (Security):** URL/path validation, item ID validation, error masking
+- **Phase 2 (Performance):** aria2_multicall batching in _poll_tracked_jobs
+- **Phase 3 (API):** Standardized error format, fixed status codes
+- **Phase 5 (Observability):** /api/health endpoint
+- **Phase 6 (Tests):** Removed dead format_bytes function
+- **Phase 8 (DevEx):** Makefile with test/lint/check/docs/clean
+
+## Remaining
+
+- **Phase 4 (Correctness):** Silent exception handling (low priority, best-effort patterns are intentional)
+- **Phase 6 (Tests):** 17 public functions need direct unit tests
+- **Phase 7 (Documentation):** TIC oracle stale names, OpenAPI version sync
+- **Phase 8 (DevEx):** CI matrix, CONTRIBUTING.md, pre-commit hooks
