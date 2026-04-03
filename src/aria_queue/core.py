@@ -13,6 +13,7 @@ from .state import *  # noqa: F401,F403
 from .aria2_rpc import *  # noqa: F401,F403
 from .bandwidth import *  # noqa: F401,F403
 from .queue_ops import *  # noqa: F401,F403
+from .transfers import *  # noqa: F401,F403
 from .reconcile import *  # noqa: F401,F403
 from .scheduler import *  # noqa: F401,F403
 
@@ -44,7 +45,7 @@ from .queue_ops import _TERMINAL_STATUSES  # noqa: F401
 from .queue_ops import _find_queue_item_by_id  # noqa: F401
 from .queue_ops import _aria2_apply_priority  # noqa: F401
 from .queue_ops import _aria2_position_for_priority  # noqa: F401
-from .queue_ops import _pref_value  # noqa: F401
+from .transfers import _pref_value  # noqa: F401
 from .reconcile import _active_item_url  # noqa: F401
 from .reconcile import _queue_item_for_active_info  # noqa: F401
 from .reconcile import _merge_active_status  # noqa: F401

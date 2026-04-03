@@ -9,10 +9,8 @@ from .storage import (
     ensure_storage,
     storage_locked,
 )
-from .queue_ops import (
-    QueueItem,
-    dedup_active_transfer_action,
-)
+from .queue_ops import QueueItem
+from .transfers import dedup_active_transfer_action
 from .bandwidth import _coerce_float
 
 

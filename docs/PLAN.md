@@ -1,35 +1,6 @@
 # Plan
 
-### [P1] Split queue_ops.py: extract transfer operations to transfers.py
-
-**What:** Move aria2 transfer discovery and global pause/resume from `queue_ops.py` (850 lines) into a new `transfers.py` module.
-**Where:** `src/aria_queue/queue_ops.py` → `src/aria_queue/transfers.py`
-**Why:** `queue_ops.py` mixes two concerns: queue CRUD (add/pause/resume/remove/retry items) and transfer management (discover what's running in aria2, global pause/resume). Splitting makes each module answer one question.
-**Scope:** ~250 lines moved. No behavior change.
-
-Move to `transfers.py`:
-- `discover_active_transfer()` — polls aria2 for active downloads
-- `active_status()` — alias for discover_active_transfer
-- `pause_active_transfer()` — pause all active aria2 downloads
-- `resume_active_transfer()` — resume all paused aria2 downloads
-- `dedup_active_transfer_action()` — reads dedup preference
-- `max_simultaneous_downloads()` — reads concurrency preference
-- `_pref_value()` — reads any preference from declaration
-
-Keep in `queue_ops.py`:
-- `QueueItem`, `ITEM_STATUSES`, `_TERMINAL_STATUSES`
-- `load_queue`, `save_queue`, `summarize_queue`
-- `add_queue_item`, `pause_queue_item`, `resume_queue_item`, `remove_queue_item`, `retry_queue_item`
-- `get_item_files`, `select_item_files`
-- `find_queue_item_by_gid`, `_find_queue_item_by_id`
-- `detect_download_mode`, `format_bytes`, `post_action`
-- `_aria2_position_for_priority`, `_aria2_apply_priority`
-
-Steps:
-1. Create `transfers.py` with moved functions, import from sibling modules via `_core()` pattern
-2. Update `core.py` re-export hub: add `from .transfers import *`
-3. Run tests (385 must pass)
-4. Commit
+No open items.
 
 ---
 
