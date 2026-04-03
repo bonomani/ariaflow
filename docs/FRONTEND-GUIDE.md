@@ -41,30 +41,27 @@ Every download is a **queue item** with these fields:
 
 ```
     ┌─────────────┐
-    │ discovering  │  mode auto-detection (synchronous, instant)
+    │ discovering  │  mode auto-detection (instant)
     └──────┬──────┘
-           │
+           │ eager submit
            ▼
-    ┌─────────────┐   scheduler picks    ┌──────────────┐
-    │   queued     │ ──────────────────► │ downloading   │
-    └──────┬──────┘                      └──┬───┬───┬───┘
-           │                                │   │   │
-     pause │   ┌────────────────────────────┘   │   │
-           │   │ aria2 reports complete         │   │
-           ▼   ▼                                │   │
-    ┌──────────┐   ┌──────┐                     │   │
-    │  paused  │   │ done │                     │   │
-    └──────┬───┘   └──────┘                     │   │
-           │                          error     │   │ engine
-     resume│                     ┌──────────────┘   │ shutdown
-           │                     ▼                  ▼
-           │              ┌──────────┐       ┌──────────┐
-           └─────────────►│  error   │       │ stopped  │
-              (re-queue)  └────┬─────┘       └──────────┘
-                               │
-                          retry │
-                               ▼
-                          (back to queued)
+    ┌──────────┐  submit   ┌──────────┐    ┌────────┐
+    │  queued  │ ────────► │ waiting  │──► │ active │
+    └──────────┘ (fallback └──────────┘    └┬──┬──┬─┘
+     safety net  if aria2               pause│  │  │
+                 down)                       │  │  │error/
+           ┌─────────────────────────────────┘  │  │removed
+           ▼                                    │  │
+    ┌──────────┐   ┌──────────┐                 │  │
+    │  paused  │   │ complete │◄────────────────┘  │
+    └──────┬───┘   └──────────┘  aria2 complete    │
+           │                                       ▼
+     resume│                    ┌──────────┐  ┌─────────┐
+           └───────────────────►│  error   │  │ stopped │
+              (re-queue)        └────┬─────┘  └─────────┘
+                                     │ retry
+                                     ▼
+                                (back to queued)
 
     Any state ──── user removes ────► cancelled (archived)
 ```
@@ -72,20 +69,21 @@ Every download is a **queue item** with these fields:
 | Status | Terminal? | User actions available |
 |---|---|---|
 | `discovering` | No | — (instant, frontend rarely sees this) |
-| `queued` | No | pause, remove, change priority |
-| `downloading` | No | pause, remove |
+| `queued` | No | remove, change priority (safety net — aria2 unreachable) |
+| `waiting` | No | pause, remove |
+| `active` | No | pause, remove |
 | `paused` | No | resume, remove |
-| `done` | Yes | remove (archive) |
+| `complete` | Yes | remove (archive) |
 | `error` | Yes | retry, remove |
 | `stopped` | Yes | retry, remove |
 | `cancelled` | Yes | — (already archived) |
 
 **Frontend tips:**
 - Show retry button only for `error` and `stopped`
-- Show pause button only for `queued` and `downloading`
+- Show pause button only for `waiting` and `active`
 - Show resume button only for `paused`
 - Show remove button for all non-cancelled states
-- Items in `done`/`error`/`stopped` stay in queue until user removes or auto-cleanup runs
+- Items in `complete`/`error`/`stopped` stay in queue until user removes or auto-cleanup runs
 
 ### 1.3 Download Modes
 
@@ -106,7 +104,7 @@ Mode is auto-detected from the URL when adding. The frontend can display an icon
 2. Engine downloads metadata and pauses → item gets a `gid`
 3. Frontend calls `GET /api/item/{id}/files` → shows file picker
 4. User selects files → frontend calls `POST /api/item/{id}/files` with `{select: [1,3,5]}`
-5. Item transitions to `downloading`
+5. Item transitions to `active`
 
 ### 1.4 Queue Operations
 
@@ -167,7 +165,7 @@ The response always includes:
 {
   "items": [...],
   "state": { "running": false, "paused": false, "session_id": "..." },
-  "summary": { "total": 5, "queued": 2, "downloading": 1, "paused": 0, "done": 1, "error": 1, "stopped": 0, "cancelled": 0, "discovering": 0 },
+  "summary": { "total": 5, "queued": 2, "waiting": 0, "active": 1, "paused": 0, "complete": 1, "error": 1, "stopped": 0, "cancelled": 0, "discovering": 0 },
   "ariaflow": { "version": "0.1.58", "schema_version": "1" },
   "_rev": 42,
   "_schema": "1",
@@ -189,7 +187,7 @@ POST /api/cleanup
 → { "ok": true, "archived": 3, "remaining": 12 }
 ```
 
-Moves stale done/error items to archive automatically.
+Moves stale complete/error items to archive automatically.
 
 ### 1.5 Priority Scheduling
 
@@ -210,12 +208,12 @@ The frontend can expose this as:
 
 ### 1.6 Progress Display
 
-For downloading items, use these fields to render progress:
+For active items, use these fields to render progress:
 
 ```javascript
-const item = status.items.find(i => i.status === 'downloading');
-const completed = parseInt(item.completedLength || '0');
-const total = parseInt(item.totalLength || '0');
+const item = status.items.find(i => i.status === 'active');
+const completed = parseInt(item.completed_length || '0');
+const total = parseInt(item.total_length || '0');
 const speed = parseInt(item.downloadSpeed || '0');
 const percent = total > 0 ? (completed / total * 100).toFixed(1) : null;
 const eta = speed > 0 ? Math.round((total - completed) / speed) : null;

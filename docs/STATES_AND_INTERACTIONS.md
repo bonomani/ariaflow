@@ -227,9 +227,9 @@ Terminal states (`complete`, `error`, `removed`) appear in `tellStopped()` and c
     └──────┬──────┘
            │ eager submit
            ▼
-    ┌──────────┐  aria2.addUri   ┌──────────┐    ┌────────┐    ┌──────┐
-    │  queued  │ ──────────────► │ waiting  │──► │download│──► │ done │
-    └──────────┘  (fallback if   └──────────┘    └────────┘    └──────┘
+    ┌──────────┐  aria2.addUri   ┌──────────┐    ┌────────┐    ┌──────────┐
+    │  queued  │ ──────────────► │ waiting  │──► │ active │──► │ complete │
+    └──────────┘  (fallback if   └──────────┘    └────────┘    └──────────┘
     safety net    aria2 down)     aria2 owns      aria2 owns   post_action()
 ```
 
@@ -262,9 +262,9 @@ Terminal states (`complete`, `error`, `removed`) appear in `tellStopped()` and c
 | `discovering` | Transitional | ariaflow | Auto-detecting download mode, then eager submission |
 | `queued` | Stable | ariaflow | Safety net — waiting for aria2 (unreachable or submission failed) |
 | `waiting` | Stable | aria2 | In aria2's queue, not yet active |
-| `downloading` | Transitional | aria2 | Active transfer |
+| `active` | Transitional | aria2 | Active transfer (aria2 `active`) |
 | `paused` | Stable | aria2 | Transfer suspended |
-| `done` | Terminal | ariaflow | Completed — post-action runs |
+| `complete` | Terminal | ariaflow | Completed — post-action runs (aria2 `complete`) |
 | `error` | Terminal | ariaflow | Failed (retryable via retry) |
 | `stopped` | Terminal | ariaflow | Stopped by scheduler shutdown or aria2 `removed` |
 | `cancelled` | Terminal | ariaflow | Cancelled by user, archived |
@@ -274,15 +274,15 @@ Terminal states (`complete`, `error`, `removed`) appear in `tellStopped()` and c
 | From | To | Trigger | aria2 RPC | Phase |
 |---|---|---|---|---|
 | `discovering` → `queued` | Mode resolved, aria2 unreachable | _(none)_ | pre-submission fallback |
-| `discovering` → `downloading` | Mode resolved, eager submission succeeds | `aria2_add_uri` / `aria2_add_torrent` / `aria2_add_metalink` | eager submission |
-| `queued` → `downloading` | Main loop submits to aria2 | `aria2_add_uri` + `aria2_change_position` | deferred submission |
-| `downloading` → `waiting` | aria2 reports `waiting` | _(poll via `aria2_tell_status`)_ | aria2-owned |
-| `waiting` → `downloading` | aria2 slot available | _(poll via `aria2_tell_status`)_ | aria2-owned |
-| `downloading` → `done` | aria2 reports `complete` | _(poll via `aria2_tell_status`)_ | post-completion |
-| `downloading` → `error` | aria2 reports `error` or 5× RPC failures | _(poll via `aria2_tell_status`)_ | aria2-owned |
-| `downloading` → `paused` | `POST /api/item/{id}/pause` | `aria2_pause(gid)` | aria2-owned |
-| `downloading` → `stopped` | aria2 reports `removed` | _(poll via `aria2_tell_status`)_ | aria2-owned |
-| `paused` → `downloading` | `POST /api/item/{id}/resume` (has GID) | `aria2_unpause(gid)` | aria2-owned |
+| `discovering` → `active` | Mode resolved, eager submission succeeds | `aria2_add_uri` / `aria2_add_torrent` / `aria2_add_metalink` | eager submission |
+| `queued` → `active` | Main loop submits to aria2 | `aria2_add_uri` + `aria2_change_position` | deferred submission |
+| `active` → `waiting` | aria2 reports `waiting` | _(poll via `aria2_tell_status`)_ | aria2-owned |
+| `waiting` → `active` | aria2 slot available | _(poll via `aria2_tell_status`)_ | aria2-owned |
+| `active` → `complete` | aria2 reports `complete` | _(poll via `aria2_tell_status`)_ | post-completion |
+| `active` → `error` | aria2 reports `error` or 5× RPC failures | _(poll via `aria2_tell_status`)_ | aria2-owned |
+| `active` → `paused` | `POST /api/item/{id}/pause` | `aria2_pause(gid)` | aria2-owned |
+| `active` → `stopped` | aria2 reports `removed` | _(poll via `aria2_tell_status`)_ | aria2-owned |
+| `paused` → `active` | `POST /api/item/{id}/resume` (has GID) | `aria2_unpause(gid)` | aria2-owned |
 | `paused` → `queued` | `POST /api/item/{id}/resume` (no GID) | _(eager re-submission attempted)_ | fallback |
 | `queued`/`paused` → `cancelled` | `POST /api/item/{id}/remove` | `aria2_remove(gid)` + `aria2_remove_download_result(gid)` | removal |
 | `error` → `queued` | `POST /api/item/{id}/retry` | _(eager re-submission attempted)_ | fallback |
@@ -335,10 +335,10 @@ Close reasons: `stop_requested`, `queue_complete`, `closed`, `manual_new_session
 │  ├── _poll_tracked_jobs()                               │
 │  │   └── for each item with gid:                        │
 │  │       └── aria2.tellStatus(gid)                      │
-│  │           active   → item.status = downloading       │
-│  │           waiting  → item.status = queued            │
+│  │           active   → item.status = active            │
+│  │           waiting  → item.status = waiting           │
 │  │           paused   → item.status = paused            │
-│  │           complete → item.status = done              │
+│  │           complete → item.status = complete          │
 │  │           error    → item.status = error             │
 │  │           removed  → item.status = stopped           │
 │  │           RPC fail ×5 → item.status = error          │
