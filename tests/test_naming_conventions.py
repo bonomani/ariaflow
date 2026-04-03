@@ -13,6 +13,10 @@ Enforces:
 - Status values: lowercase only
 - Module names: snake_case
 - API response keys: snake_case only (no camelCase leaking from aria2)
+- No common abbreviations in public function names
+- aria2_ wrapper count matches aria2 RPC method count (36)
+- Declaration preference names: snake_case
+- Action log entry keys: snake_case
 """
 
 from __future__ import annotations
@@ -174,6 +178,125 @@ class TestTestNaming(unittest.TestCase):
             [],
             f"Test names not snake_case:\n" + "\n".join(violations),
         )
+
+
+class TestNoAbbreviations(unittest.TestCase):
+    """Public function names should not use common abbreviations."""
+
+    _ABBREVIATIONS = re.compile(
+        r"_(?:bw|cfg|cb|fn|val|tmp|buf|idx|cnt|num|len|sz|src|dst|str|fmt|mgr|msg|q|db|tbl|col|req|resp|err|res|pkg|env|ctx|impl|util|misc)_"
+    )
+
+    def test_public_functions_no_abbreviations(self) -> None:
+        import ast
+
+        violations: list[str] = []
+        for root, dirs, files in os.walk(_SRC):
+            dirs[:] = [d for d in dirs if d != "__pycache__"]
+            for f in files:
+                if not f.endswith(".py"):
+                    continue
+                path = os.path.join(root, f)
+                try:
+                    tree = ast.parse(open(path).read())
+                except Exception:
+                    continue
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef) and node.col_offset == 0:
+                        if node.name.startswith("_"):
+                            continue
+                        if self._ABBREVIATIONS.search(f"_{node.name}_"):
+                            violations.append(f"{f}:{node.lineno}: {node.name}")
+        self.assertEqual(violations, [], f"Abbreviations in public names:\n" + "\n".join(violations))
+
+
+class TestAria2WrapperCount(unittest.TestCase):
+    """All 36 aria2 RPC methods must have wrappers."""
+
+    _EXPECTED_RPC_METHODS = 36
+
+    def test_aria2_wrapper_count(self) -> None:
+        import ast
+
+        rpc_path = _SRC / "aria2_rpc.py"
+        tree = ast.parse(rpc_path.read_text())
+        wrappers = [
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name.startswith("aria2_")
+        ]
+        self.assertGreaterEqual(
+            len(wrappers),
+            self._EXPECTED_RPC_METHODS,
+            f"Expected >= {self._EXPECTED_RPC_METHODS} aria2_ wrappers in aria2_rpc.py, "
+            f"found {len(wrappers)}: {sorted(wrappers)}",
+        )
+
+
+class TestDeclarationPreferenceNames(unittest.TestCase):
+    """UIC preference names in DEFAULT_DECLARATION must be snake_case."""
+
+    def test_preference_names_are_snake_case(self) -> None:
+        from aria_queue.contracts import DEFAULT_DECLARATION
+
+        prefs = DEFAULT_DECLARATION.get("uic", {}).get("preferences", [])
+        violations: list[str] = []
+        for pref in prefs:
+            name = pref.get("name", "")
+            if not re.match(r"^[a-z][a-z0-9_]*$", name):
+                violations.append(name)
+        self.assertEqual(violations, [], f"Preference names not snake_case: {violations}")
+
+    def test_gate_names_are_snake_case(self) -> None:
+        from aria_queue.contracts import DEFAULT_DECLARATION
+
+        gates = DEFAULT_DECLARATION.get("uic", {}).get("gates", [])
+        violations: list[str] = []
+        for gate in gates:
+            name = gate.get("name", "")
+            if not re.match(r"^[a-z][a-z0-9_]*$", name):
+                violations.append(name)
+        self.assertEqual(violations, [], f"Gate names not snake_case: {violations}")
+
+
+class TestActionLogKeys(unittest.TestCase):
+    """Action log entries must use snake_case keys."""
+
+    _CAMEL_CASE = re.compile(r"^[a-z]+[A-Z]")
+
+    def test_record_action_keys_are_snake_case(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.environ["ARIA_QUEUE_DIR"] = tmpdir
+            try:
+                from aria_queue.state import record_action, load_action_log
+                from importlib import reload
+                import aria_queue.storage as storage_mod
+                reload(storage_mod)
+
+                record_action(
+                    action="test",
+                    target="naming",
+                    outcome="pass",
+                    reason="convention_check",
+                    before={"test_key": 1},
+                    after={"test_key": 2},
+                    detail={"detail_key": "ok"},
+                )
+                log = load_action_log(limit=1)
+                self.assertTrue(len(log) > 0, "No action log entries")
+                violations: list[str] = []
+                for key in log[0]:
+                    if isinstance(key, str) and self._CAMEL_CASE.match(key):
+                        violations.append(key)
+                self.assertEqual(
+                    violations,
+                    [],
+                    f"camelCase keys in action log: {violations}",
+                )
+            finally:
+                os.environ.pop("ARIA_QUEUE_DIR", None)
 
 
 if __name__ == "__main__":
