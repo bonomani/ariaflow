@@ -9,4 +9,5 @@ build/
 *.log
 .vscode/
 .claude/
+docs/ALL_VARIABLES.md
 .codexrules
