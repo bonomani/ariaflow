@@ -188,16 +188,52 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
     ) -> tuple[list[dict[str, Any]], bool]:
         running_infos: list[dict[str, Any]] = []
         had_rpc_success = False
+
+        # Collect items that need polling
+        pollable: list[tuple[dict[str, Any], str]] = []
         for item in items_snapshot:
             if item.get("status") in {"complete", "error"}:
                 continue
             gid = str(item.get("gid") or "")
             if not gid:
                 continue
+            pollable.append((item, gid))
+
+        if not pollable:
+            return running_infos, True
+
+        # Batch RPC: one multicall instead of N sequential calls
+        results_map: dict[str, dict[str, Any] | Exception] = {}
+        gids = [gid for _, gid in pollable]
+        try:
+            calls = [
+                {"methodName": "aria2.tellStatus", "params": [gid]}
+                for gid in gids
+            ]
+            batch_results = core.aria2_multicall(calls, port=port, timeout=10)
+            for gid, result in zip(gids, batch_results):
+                if isinstance(result, list) and result:
+                    results_map[gid] = result[0]
+                else:
+                    results_map[gid] = RuntimeError(f"unexpected multicall result: {result}")
+        except Exception:
+            # Fallback: sequential calls if multicall fails
+            for _, gid in pollable:
+                try:
+                    results_map[gid] = core.aria2_tell_status(gid, port=port, timeout=5)
+                except Exception as exc:
+                    results_map[gid] = exc
+
+        # Process results
+        for item, gid in pollable:
             before_item = dict(item)
-            try:
-                info = core.aria2_tell_status(gid, port=port, timeout=5)
-            except Exception:
+            result = results_map.get(gid)
+            if isinstance(result, Exception):
+                info = None
+            else:
+                info = result
+
+            if info is None:
                 rpc_failures = item.get("rpc_failures", 0) + 1
                 item["rpc_failures"] = rpc_failures
                 if rpc_failures >= _MAX_RPC_FAILURES:
