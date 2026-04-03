@@ -160,7 +160,7 @@ class TestCliExecution(IsolatedTestCase):
                 "aria_queue.contracts.aria_rpc",
                 return_value={"result": {"version": "1.37.0"}},
             ),
-            patch("aria_queue.contracts.ensure_aria_daemon"),
+            patch("aria_queue.contracts.aria2_ensure_daemon"),
         ):
             stdout = StringIO()
             with patch("sys.stdout", stdout):
@@ -176,7 +176,7 @@ class TestCliExecution(IsolatedTestCase):
                 "aria_queue.contracts.aria_rpc",
                 return_value={"result": {"version": "1.37.0"}},
             ),
-            patch("aria_queue.contracts.ensure_aria_daemon"),
+            patch("aria_queue.contracts.aria2_ensure_daemon"),
         ):
             stdout = StringIO()
             with patch("sys.stdout", stdout):

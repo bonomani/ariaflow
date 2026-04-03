@@ -676,7 +676,7 @@ class TestEngineControl(APIServerPerTestCase):
                     "exit_code": 0,
                 },
             ),
-            patch("aria_queue.webapp.aria_status", return_value={}),
+            patch("aria_queue.webapp.aria2_status", return_value={}),
             patch("aria_queue.webapp.current_bandwidth", return_value={}),
         ):
             code, body = _request(f"{self.base}/api/preflight", "POST")

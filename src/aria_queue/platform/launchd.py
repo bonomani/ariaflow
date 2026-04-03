@@ -52,9 +52,9 @@ def aria2_status() -> dict[str, bool]:
     version = None
     if _launchctl_list(ARIA2_LABEL):
         try:
-            from ..core import aria_rpc
+            from ..core import aria2_get_version
 
-            version = aria_rpc("aria2.getVersion", timeout=5)["result"]["version"]
+            version = aria2_get_version(timeout=5)["version"]
         except Exception:
             version = None
     return {

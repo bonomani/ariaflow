@@ -21,7 +21,7 @@ from aria_queue.core import (
     _apply_free_bandwidth_cap,
     _is_metadata_url,
     add_queue_item,
-    change_aria2_options,
+    aria2_change_options,
     cleanup_queue_state,
     dedup_active_transfer_action,
     load_queue,
@@ -120,7 +120,7 @@ class TestRegressions(IsolatedTestCase):
         save_queue(items)
 
         with (
-            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.aria2_ensure_daemon"),
             patch("aria_queue.core.deduplicate_active_transfers"),
             patch("aria_queue.core.reconcile_live_queue"),
             patch(
@@ -315,7 +315,7 @@ class TestRegressions(IsolatedTestCase):
         save_queue([{"id": "x", "url": "https://x.com/done.bin", "status": "complete"}])
 
         with (
-            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.aria2_ensure_daemon"),
             patch("aria_queue.core.deduplicate_active_transfers"),
             patch("aria_queue.core.reconcile_live_queue"),
             patch(
@@ -339,11 +339,11 @@ class TestRegressions(IsolatedTestCase):
         self.assertFalse(state.get("paused"))
         self.assertFalse(state.get("running"))
 
-    # ── Bug #14: ensure_aria_daemon doesn't verify startup ──
+    # ── Bug #14: aria2_ensure_daemon doesn't verify startup ──
     # Fixed: now retries RPC after spawn, raises on failure
 
     def test_regression_ensure_daemon_raises_on_failed_start(self) -> None:
-        from aria_queue.core import ensure_aria_daemon
+        from aria_queue.core import aria2_ensure_daemon
 
         with (
             patch(
@@ -354,7 +354,7 @@ class TestRegressions(IsolatedTestCase):
             patch("aria_queue.core.time.sleep"),
         ):
             with self.assertRaises(RuntimeError) as ctx:
-                ensure_aria_daemon()
+                aria2_ensure_daemon()
         self.assertIn("aria2c failed to start", str(ctx.exception))
 
     # ── Bug #15: retry doesn't clear recovery fields ──
@@ -419,20 +419,20 @@ class TestSecurityInputValidation(IsolatedTestCase):
         self.assertEqual(item.url, url)
 
     def test_aria2_options_rejects_rpc_options(self) -> None:
-        result = change_aria2_options({"rpc-listen-port": "9999"})
+        result = aria2_change_options({"rpc-listen-port": "9999"})
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"], "rejected_options")
 
     def test_aria2_options_rejects_dir(self) -> None:
-        result = change_aria2_options({"dir": "/etc/passwd"})
+        result = aria2_change_options({"dir": "/etc/passwd"})
         self.assertFalse(result["ok"])
 
     def test_aria2_options_rejects_conf_path(self) -> None:
-        result = change_aria2_options({"conf-path": "/tmp/evil.conf"})
+        result = aria2_change_options({"conf-path": "/tmp/evil.conf"})
         self.assertFalse(result["ok"])
 
     def test_aria2_options_rejects_log(self) -> None:
-        result = change_aria2_options({"log": "/tmp/evil.log"})
+        result = aria2_change_options({"log": "/tmp/evil.log"})
         self.assertFalse(result["ok"])
 
     def test_metadata_url_detection_no_false_positives(self) -> None:

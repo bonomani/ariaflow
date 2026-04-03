@@ -89,7 +89,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 "aria_queue.contracts.aria_rpc",
                 return_value={"result": {"version": "1.37.0"}},
             ),
-            patch("aria_queue.contracts.ensure_aria_daemon") as ensure,
+            patch("aria_queue.contracts.aria2_ensure_daemon") as ensure,
         ):
             result = preflight()
         self.assertIn("gates", result)
@@ -107,7 +107,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                     {"result": {"version": "1.37.0"}},
                 ],
             ),
-            patch("aria_queue.contracts.ensure_aria_daemon") as ensure,
+            patch("aria_queue.contracts.aria2_ensure_daemon") as ensure,
         ):
             result = preflight()
         gate = next(
@@ -537,7 +537,7 @@ class TicAriaFlowTests(IsolatedTestCase):
         save_queue(items)
 
         with (
-            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.aria2_ensure_daemon"),
             patch("aria_queue.core.deduplicate_active_transfers"),
             patch("aria_queue.core.reconcile_live_queue"),
             patch(
@@ -574,7 +574,7 @@ class TicAriaFlowTests(IsolatedTestCase):
             "files": [{"uris": [{"uri": "https://example.com/model.gguf"}]}],
         }
         with (
-            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.aria2_ensure_daemon"),
             patch("aria_queue.core.deduplicate_active_transfers"),
             patch("aria_queue.core.reconcile_live_queue"),
             patch(
@@ -617,7 +617,7 @@ class TicAriaFlowTests(IsolatedTestCase):
             save_state(s)
 
         with (
-            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.aria2_ensure_daemon"),
             patch("aria_queue.core.deduplicate_active_transfers"),
             patch("aria_queue.core.reconcile_live_queue"),
             patch(
@@ -964,13 +964,13 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
         rpc.assert_any_call("aria2.unpause", ["gid-1"], port=6800, timeout=5)
 
     def test_change_aria2_options_safe_subset(self) -> None:
-        from aria_queue.core import change_aria2_options
+        from aria_queue.core import aria2_change_options
 
         with (
             patch("aria_queue.core.aria_rpc") as rpc,
             patch("aria_queue.core.current_global_options", return_value={}),
         ):
-            result = change_aria2_options({"max-concurrent-downloads": "3"})
+            result = aria2_change_options({"max-concurrent-downloads": "3"})
         self.assertTrue(result["ok"])
         rpc.assert_any_call(
             "aria2.changeGlobalOption",
@@ -980,9 +980,9 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
         )
 
     def test_change_aria2_options_rejects_unsafe(self) -> None:
-        from aria_queue.core import change_aria2_options
+        from aria_queue.core import aria2_change_options
 
-        result = change_aria2_options(
+        result = aria2_change_options(
             {"dir": "/tmp/evil", "max-concurrent-downloads": "3"}
         )
         self.assertFalse(result["ok"])
@@ -990,9 +990,9 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
         self.assertIn("dir", result["message"])
 
     def test_change_aria2_options_rejects_empty(self) -> None:
-        from aria_queue.core import change_aria2_options
+        from aria_queue.core import aria2_change_options
 
-        result = change_aria2_options({})
+        result = aria2_change_options({})
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"], "empty_options")
 

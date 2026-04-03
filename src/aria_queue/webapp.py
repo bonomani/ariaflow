@@ -18,11 +18,11 @@ from . import __version__
 from .api import (
     add_queue_item,
     bandwidth_status,
-    change_aria2_options,
+    aria2_change_options,
     aria2_tell_active,
     active_status,
     auto_preflight_on_run,
-    aria_status,
+    aria2_status,
     current_bandwidth,
     homebrew_install_ariaflow,
     homebrew_uninstall_ariaflow,
@@ -2160,7 +2160,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             "items": items,
             "state": state,
             "summary": summarize_queue(items),
-            "aria2": aria_status(timeout=3),
+            "aria2": aria2_status(timeout=3),
             "bandwidth": bandwidth,
             "_rev": state.get("_rev", 0),
             "ariaflow": {
@@ -2486,7 +2486,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if path == "/api/preflight":
             before = {"state": load_state(), "queue": summarize_queue(load_queue())}
             result = preflight()
-            result["aria2"] = aria_status()
+            result["aria2"] = aria2_status()
             result["bandwidth"] = current_bandwidth()
             record_action(
                 action="preflight",
@@ -2802,7 +2802,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 )
                 return
             options = {str(k): str(v) for k, v in payload.items()}
-            result = change_aria2_options(options)
+            result = aria2_change_options(options)
             if not result.get("ok", True):
                 self._send_json(result, status=400)
                 return

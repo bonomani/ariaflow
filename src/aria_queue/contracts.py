@@ -8,7 +8,7 @@ from typing import Any
 from .core import (
     aria_rpc,
     config_dir,
-    ensure_aria_daemon,
+    aria2_ensure_daemon,
     get_active_progress,
     load_state,
     queue_path,
@@ -123,7 +123,7 @@ def _aria_available(port: int = 6800) -> bool:
         pass
 
     try:
-        ensure_aria_daemon(port=port)
+        aria2_ensure_daemon(port=port)
         aria_rpc("aria2.getVersion", port=port)
         return True
     except Exception:

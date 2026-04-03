@@ -201,7 +201,7 @@ class WebSmokeTests(unittest.TestCase):
                     "aria_queue.webapp.current_bandwidth", return_value={"limit": "0"}
                 ),
                 patch(
-                    "aria_queue.webapp.aria_status",
+                    "aria_queue.webapp.aria2_status",
                     return_value={
                         "reachable": True,
                         "version": "1.37.0",

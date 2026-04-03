@@ -7,7 +7,7 @@ import sys
 from . import __version__
 from .bonjour import advertise_http_service
 from .contracts import preflight, run_ucc
-from .core import add_queue_item, ensure_aria_daemon, load_queue
+from .core import add_queue_item, aria2_ensure_daemon, load_queue
 from .webapp import serve as serve_api
 
 
@@ -132,7 +132,7 @@ def main() -> int:
 
     if args.command == "serve":
         try:
-            ensure_aria_daemon()
+            aria2_ensure_daemon()
         except Exception as exc:
             print(f"Unable to start aria2 runtime: {exc}", file=sys.stderr)
             return 1

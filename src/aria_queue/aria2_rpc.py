@@ -296,7 +296,7 @@ def aria2_list_notifications(port: int = 6800, timeout: int = 5) -> list[str]:
     return _rpc("system.listNotifications", port=port, timeout=timeout)["result"]
 
 
-def ensure_aria_daemon(port: int = 6800) -> None:
+def aria2_ensure_daemon(port: int = 6800) -> None:
     try:
         aria2_get_version(port=port)
         return
@@ -375,7 +375,7 @@ def add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800)
     return aria2_add_uri(uris, options=options, port=port)
 
 
-def aria_status(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
+def aria2_status(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     try:
         version = aria2_get_version(port=port, timeout=timeout)["version"]
     except Exception as exc:
@@ -457,7 +457,7 @@ _SAFE_ARIA2_OPTIONS = {
 }
 
 
-def change_aria2_options(options: dict[str, str], port: int = 6800) -> dict[str, Any]:
+def aria2_change_options(options: dict[str, str], port: int = 6800) -> dict[str, Any]:
     core = _core()
     rejected = [k for k in options if k not in _SAFE_ARIA2_OPTIONS]
     if rejected:

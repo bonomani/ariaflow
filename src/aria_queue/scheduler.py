@@ -95,7 +95,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         core.cleanup_queue_state()
     except Exception:
         pass
-    core.ensure_aria_daemon(port=port)
+    core.aria2_ensure_daemon(port=port)
     try:
         core.deduplicate_active_transfers(port=port)
     except Exception:

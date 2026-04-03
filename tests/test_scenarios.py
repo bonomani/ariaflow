@@ -66,7 +66,7 @@ class TestScenarioNormalDownload(ScenarioBase):
                     "exit_code": 0,
                 },
             ),
-            patch("aria_queue.webapp.aria_status", return_value={"reachable": True}),
+            patch("aria_queue.webapp.aria2_status", return_value={"reachable": True}),
             patch("aria_queue.webapp.current_bandwidth", return_value={}),
         ):
             _, preflight, _ = _req(f"{base}/api/preflight", "POST")

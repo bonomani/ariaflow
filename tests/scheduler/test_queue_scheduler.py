@@ -50,7 +50,7 @@ class QueueSchedulerTests(unittest.TestCase):
         add_queue_item("https://example.com/two.gguf")
 
         with (
-            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.aria2_ensure_daemon"),
             patch("aria_queue.core.deduplicate_active_transfers"),
             patch("aria_queue.core.reconcile_live_queue"),
             patch(
@@ -82,7 +82,7 @@ class QueueSchedulerTests(unittest.TestCase):
         save_state(state)
 
         with (
-            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.aria2_ensure_daemon"),
             patch("aria_queue.core.deduplicate_active_transfers"),
             patch("aria_queue.core.reconcile_live_queue"),
             patch(
@@ -130,7 +130,7 @@ class QueueSchedulerTests(unittest.TestCase):
         }
 
         with (
-            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.aria2_ensure_daemon"),
             patch("aria_queue.core.deduplicate_active_transfers"),
             patch("aria_queue.core.reconcile_live_queue"),
             patch(
@@ -274,7 +274,7 @@ class QueueSchedulerTests(unittest.TestCase):
         )
 
         with (
-            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.aria2_ensure_daemon"),
             patch("aria_queue.core.deduplicate_active_transfers"),
             patch("aria_queue.core.reconcile_live_queue"),
             patch(
