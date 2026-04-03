@@ -159,9 +159,15 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         core.save_state(current)
 
     def _apply_transfer_fields(item: dict[str, Any], info: dict[str, Any]) -> None:
-        for key in ("downloadSpeed", "completedLength", "totalLength", "files"):
-            if key in info:
-                item[key] = info.get(key)
+        _ARIA2_TO_ITEM = {
+            "downloadSpeed": "download_speed",
+            "completedLength": "completed_length",
+            "totalLength": "total_length",
+            "files": "files",
+        }
+        for aria2_key, item_key in _ARIA2_TO_ITEM.items():
+            if aria2_key in info:
+                item[item_key] = info.get(aria2_key)
 
     def _queued_info(
         item: dict[str, Any], gid: str, status_name: str
@@ -169,9 +175,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         return {
             "gid": gid,
             "status": status_name,
-            "completedLength": str(item.get("completedLength") or "0"),
-            "totalLength": str(item.get("totalLength") or "0"),
-            "downloadSpeed": str(item.get("downloadSpeed") or "0"),
+            "completedLength": str(item.get("completed_length") or "0"),
+            "totalLength": str(item.get("total_length") or "0"),
+            "downloadSpeed": str(item.get("download_speed") or "0"),
             "files": [{"uris": [{"uri": item.get("url")}]}] if item.get("url") else [],
         }
 

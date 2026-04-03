@@ -110,7 +110,7 @@ def _queue_item_preference(item: dict[str, Any]) -> tuple[int, float, int, int]:
         "complete": 0,
         "error": 0,
     }.get(str(item.get("status") or ""), 0)
-    completed = _coerce_float(item.get("completedLength")) or 0.0
+    completed = _coerce_float(item.get("completed_length")) or 0.0
     has_gid = 1 if item.get("gid") else 0
     recovered = 1 if item.get("recovered") else 0
     return (status_rank, completed, has_gid, recovered)
@@ -137,7 +137,7 @@ def _merge_queue_rows(primary: dict[str, Any], candidate: dict[str, Any]) -> boo
             if not primary.get(key) and candidate.get(key):
                 primary[key] = candidate.get(key)
                 changed = True
-    for key in ("downloadSpeed", "completedLength", "totalLength", "files"):
+    for key in ("download_speed", "completed_length", "total_length", "files"):
         primary_val = _coerce_float(primary.get(key))
         candidate_val = _coerce_float(candidate.get(key))
         if key == "files":
@@ -260,7 +260,7 @@ def reconcile_live_queue(
         nonlocal changed
         duplicate_keys = {
             key
-            for key in ("downloadSpeed", "completedLength", "totalLength", "files")
+            for key in ("download_speed", "completed_length", "total_length", "files")
             if primary.get(key) is not None
         }
         survivors: list[dict[str, Any]] = []
@@ -292,7 +292,7 @@ def reconcile_live_queue(
                     primary[key] = candidate.get(key)
             if candidate.get("recovered"):
                 primary["recovered"] = True
-            for key in ("downloadSpeed", "completedLength", "totalLength", "files"):
+            for key in ("download_speed", "completed_length", "total_length", "files"):
                 if key not in duplicate_keys and candidate.get(key) is not None:
                     primary[key] = candidate.get(key)
             changed = True

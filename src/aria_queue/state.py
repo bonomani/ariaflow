@@ -295,7 +295,7 @@ def session_stats(session_id: str | None = None) -> dict[str, Any]:
             1 for i in all_items if i.get("status") == "active"
         ),
         "items_paused": sum(1 for i in all_items if i.get("status") == "paused"),
-        "bytes_completed": sum(int(i.get("completedLength") or 0) for i in all_items),
+        "bytes_completed": sum(int(i.get("completed_length") or 0) for i in all_items),
     }
 
 

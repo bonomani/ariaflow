@@ -1290,15 +1290,15 @@ INDEX_HTML = """<!doctype html>
       return (items || []).map((item) => {
         const matches = liveItems.find((live) => live && (item.gid === live.gid || (state?.active_gid && item.gid === state.active_gid) || (item.url && live.url && item.url === live.url)));
         if (!matches) return item;
-        const total = Number(matches.totalLength || item.totalLength || 0);
-        const done = Number(matches.completedLength || item.completedLength || 0);
+        const total = Number(matches.total_length || item.total_length || 0);
+        const done = Number(matches.completed_length || item.completed_length || 0);
         const computedPercent = total > 0 ? (done / total) * 100 : null;
         const live = {
           percent: matches.percent != null ? matches.percent : computedPercent,
-          downloadSpeed: matches.downloadSpeed,
-          totalLength: matches.totalLength,
-          completedLength: matches.completedLength,
-          errorMessage: matches.errorMessage,
+          download_speed: matches.download_speed,
+          total_length: matches.total_length,
+          completed_length: matches.completed_length,
+          error_message: matches.error_message,
           recovered: matches.recovered,
           recovered_at: matches.recovered_at,
           url: matches.url,
@@ -1319,9 +1319,9 @@ INDEX_HTML = """<!doctype html>
       const shortUrl = shortName(item.output || item.url || live.url || '(no url)');
       const activeish = ["active", "paused", "recovered"].includes(status) || item.recovered;
       const liveStatus = live.status || null;
-      const speed = live.downloadSpeed || item.downloadSpeed;
-      const totalLength = live.totalLength || item.totalLength;
-      const completedLength = live.completedLength || item.completedLength;
+      const speed = live.download_speed || item.download_speed;
+      const totalLength = live.total_length || item.total_length;
+      const completedLength = live.completed_length || item.completed_length;
       const progress = live.percent != null ? live.percent : item.percent;
       const computedProgress = progress != null
         ? progress
@@ -1568,9 +1568,9 @@ INDEX_HTML = """<!doctype html>
       const detail = entry?.detail || {};
       const status = detail.status || entry?.outcome || 'unknown';
       const gid = detail.gid || '-';
-      const done = detail.completedLength ? formatBytes(detail.completedLength) : null;
-      const total = detail.totalLength ? formatBytes(detail.totalLength) : null;
-      const speed = detail.downloadSpeed ? formatRate(detail.downloadSpeed) : '0 B/s';
+      const done = detail.completed_length ? formatBytes(detail.completed_length) : null;
+      const total = detail.total_length ? formatBytes(detail.total_length) : null;
+      const speed = detail.download_speed ? formatRate(detail.download_speed) : '0 B/s';
       const target = shortName(detail.url || gid);
       const fragments = [
         `Historical poll snapshot`,
@@ -1665,7 +1665,7 @@ INDEX_HTML = """<!doctype html>
         const active = data.active || null;
         const actives = Array.isArray(data.actives) ? data.actives : (data.active ? [data.active] : []);
         const liveActive = activeTransfer(actives, active, state);
-        const speed = liveActive?.downloadSpeed || active?.downloadSpeed || data.state?.download_speed || null;
+        const speed = liveActive?.download_speed || active?.download_speed || data.state?.download_speed || null;
         const items = enrichQueueItems(data.items || [], actives, state);
         document.getElementById('queue').innerHTML = items.length ? items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
         document.getElementById('ariaflow-version').textContent = data.ariaflow?.version || 'unreported';
@@ -1699,8 +1699,8 @@ INDEX_HTML = """<!doctype html>
         document.getElementById('bw-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || '-');
         document.getElementById('bw-global').textContent = `Configured limit ${humanCap(data.bandwidth?.limit || '-')}`;
         document.getElementById('bw-live').textContent = activeStateLabel(liveActive, state);
-        document.getElementById('bw-live-detail').textContent = liveActive?.downloadSpeed
-          ? `Speed ${formatRate(liveActive.downloadSpeed)}${liveActive.completedLength ? ` · ${formatBytes(liveActive.completedLength)}/${formatBytes(liveActive.totalLength || 0)}` : ''}`
+        document.getElementById('bw-live-detail').textContent = liveActive?.download_speed
+          ? `Speed ${formatRate(liveActive.download_speed)}${liveActive.completed_length ? ` · ${formatBytes(liveActive.completed_length)}/${formatBytes(liveActive.total_length || 0)}` : ''}`
           : 'No active transfer';
         document.getElementById('bw-probe-mode').textContent = data.bandwidth?.source || '-';
         document.getElementById('bw-probe-detail').textContent = data.bandwidth?.source === 'networkquality'
