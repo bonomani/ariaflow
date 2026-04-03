@@ -31,9 +31,9 @@ Every download is a **queue item** with these fields:
 | `error_code` | string \| null | aria2 error code or `rpc_unreachable` |
 | `error_message` | string \| null | Human-readable error description |
 | `live_status` | string \| null | Raw aria2 status (`active`, `waiting`, `paused`) |
-| `downloadSpeed` | string \| null | Current speed in bytes/s |
-| `completedLength` | string \| null | Bytes downloaded |
-| `totalLength` | string \| null | Total file size in bytes |
+| `download_speed` | string \| null | Current speed in bytes/s |
+| `completed_length` | string \| null | Bytes downloaded |
+| `total_length` | string \| null | Total file size in bytes |
 | `post_action` | object \| null | Post-download action result (set on completion) |
 | `session_history` | object[] \| null | Session migration log |
 

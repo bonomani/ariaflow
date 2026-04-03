@@ -31,10 +31,11 @@ Stored fields: `running`, `paused`, `stop_requested`
 | Atomic State | Role | Description |
 |---|---|---|
 | `discovering` | transitional | Auto-detecting download mode (instant) |
-| `queued` | stable | Ready for scheduling (priority-ordered) |
-| `downloading` | transitional | Active transfer in progress |
+| `queued` | stable | Safety net — waiting for aria2 (unreachable or submission failed) |
+| `waiting` | stable | Submitted to aria2, waiting for download slot |
+| `active` | transitional | Active transfer in progress (aria2 `active`) |
 | `paused` | stable | Transfer suspended by user |
-| `done` | terminal | Transfer completed successfully |
+| `complete` | terminal | Transfer completed successfully (aria2 `complete`) |
 | `error` | terminal | Transfer failed (retryable via retry) |
 | `stopped` | terminal | Stopped by af-scheduler shutdown or GID removed |
 | `cancelled` | terminal | Cancelled by user (soft-deleted to archive) |
@@ -88,17 +89,20 @@ stop_requested → idle   drain complete
 ### Job transitions
 
 ```
-discovering → queued    mode detected (synchronous)
-queued → downloading    scheduler picks job
-downloading → done      aria2 reports success
-downloading → error     aria2 reports failure
-downloading → stopped   run stops mid-transfer
-downloading → paused    pause command
-paused → queued         resume command (no gid)
-paused → downloading    resume command (with gid)
+discovering → active    eager submission succeeds
+discovering → queued    aria2 unreachable (fallback)
+queued → active         main loop submits to aria2
+active → waiting        aria2 reports waiting (queued in aria2)
+waiting → active        aria2 slot available
+active → complete       aria2 reports success
+active → error          aria2 reports failure
+active → stopped        run stops mid-transfer / aria2 removed
+active → paused         pause command
+paused → queued         resume command (no gid, re-submission)
+paused → active         resume command (with gid)
 queued → cancelled      user removes (archived)
 paused → cancelled      user removes (archived)
-error → queued          retry (re-queue)
+error → queued          retry (re-queue, eager re-submission)
 error → cancelled       user removes (archived)
 ```
 
