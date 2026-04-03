@@ -458,6 +458,7 @@ def _run_tests() -> dict[str, object]:
 
 class AriaFlowHandler(BaseHTTPRequestHandler):
     _GET_ROUTES: dict[str, str] = {
+        "/api/health": "_get_health",
         "/api/openapi.yaml": "_get_openapi_yaml",
         "/api/docs": "_get_docs",
         "/api/tests": "_get_tests",
@@ -608,6 +609,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             getattr(self, method_name)(parsed)
         else:
             self._send_json(_error_payload("not_found", "resource not found"), status=404)
+
+    def _get_health(self, parsed: object) -> None:
+        self._send_json({"status": "ok", "version": __version__})
 
     def _get_openapi_yaml(self, parsed: object) -> None:
         spec_path = _find_openapi_spec()
