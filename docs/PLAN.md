@@ -20,6 +20,50 @@ This is the **single plan file** for the project. Do not create separate plan fi
 7. **Checkpoint after each item.** Run tests, commit, update docs.
 8. **No stale plans.** If a plan item has been open for more than 2 sessions without progress, re-evaluate it — either do it or decline it.
 
+### Execution workflow
+
+Before starting:
+```
+□ git status                    # must be clean
+□ git pull --rebase origin main # start from latest
+□ python -m pytest tests/ -x -q # all tests pass
+```
+
+For each plan item:
+```
+□ read the plan item
+□ read the code to change
+□ implement the change (smallest diff possible)
+□ python -m pytest tests/ -x -q # all tests pass
+□ update docs if affected
+□ git add <specific files>      # no git add -A
+□ git commit                    # descriptive message
+□ remove the item from PLAN.md
+□ git add docs/PLAN.md
+□ git commit "Update plan"
+□ git push origin main          # if rejected: pull --rebase, re-test, push
+```
+
+After all items done:
+```
+□ python -m pytest tests/ -x -q # final pass
+□ python scripts/gen_rpc_docs.py # regenerate if code changed
+□ python scripts/gen_all_variables.py --check # naming compliance
+□ verify PLAN.md says "No open items"
+□ git push origin main
+```
+
+### What NOT to do
+
+- Don't start coding without checking `git status` first
+- Don't batch multiple plan items into one commit
+- Don't use `git add -A` (risk of committing secrets or generated files)
+- Don't skip tests between items
+- Don't leave uncommitted changes when stopping work
+- Don't create plan files other than this one
+- Don't `git checkout` or `git reset --hard` without understanding what will be lost (uncommitted work is gone forever)
+- Don't modify code you haven't read first
+
 ### Item template
 
 ```
