@@ -316,6 +316,8 @@ def aria2_ensure_daemon(port: int = 6800) -> None:
         "--log-level=warn",
         f"--save-session={session_file}",
         "--save-session-interval=30",
+        "--bt-force-encryption=true",
+        "--dht-listen-port=0",
     ]
     if session_file.exists():
         args.append(f"--input-file={session_file}")

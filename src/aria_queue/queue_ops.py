@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, asdict
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -633,9 +634,73 @@ def retry_queue_item(item_id: str) -> dict[str, Any]:
 
 
 def post_action(item: dict[str, Any]) -> dict[str, Any]:
-    return {
+    result: dict[str, Any] = {
         "success": True,
         "reason": item.get("post_action_rule", "pending"),
         "detail": "post action policy not defined yet",
         "item_id": item["id"],
     }
+
+    # Distribution: create private torrent and seed
+    core = _core()
+    should_distribute = item.get("distribute") or bool(
+        core._pref_value("distribute_completed_downloads", False)
+    )
+    tracker_url = str(core._pref_value("internal_tracker_url", "") or "")
+
+    if should_distribute and tracker_url and item.get("mode") in ("http", None, ""):
+        try:
+            from .torrent import create_private_torrent
+
+            # Find the downloaded file path
+            download_dir = None
+            try:
+                opts = core.aria2_get_global_option()
+                download_dir = opts.get("dir")
+            except Exception:
+                pass
+            if not download_dir:
+                download_dir = "."
+
+            file_name = item.get("output") or item.get("url", "").split("/")[-1].split("?")[0]
+            file_path = Path(download_dir) / file_name
+
+            if file_path.is_file():
+                torrent_info = create_private_torrent(
+                    file_path, tracker_url,
+                    comment=f"ariaflow distribute: {item.get('url', '')}",
+                )
+                seed_ratio = str(core._pref_value("distribute_seed_ratio", 0) or 0)
+                seed_gid = core.aria2_add_torrent(
+                    torrent_info["torrent_b64"],
+                    options={
+                        "seed-ratio": seed_ratio,
+                        "dir": download_dir,
+                    },
+                )
+                result["distribute"] = {
+                    "success": True,
+                    "seed_gid": seed_gid,
+                    "infohash": torrent_info["infohash"],
+                    "torrent_path": torrent_info["torrent_path"],
+                    "piece_count": torrent_info["piece_count"],
+                    "tracker": tracker_url,
+                }
+                # Store on item for tracking
+                item["distribute_status"] = "seeding"
+                item["distribute_infohash"] = torrent_info["infohash"]
+                item["distribute_seed_gid"] = seed_gid
+                item["distribute_torrent_path"] = torrent_info["torrent_path"]
+                item["distribute_started_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+            else:
+                result["distribute"] = {
+                    "success": False,
+                    "reason": f"file not found: {file_path}",
+                }
+        except Exception as exc:
+            result["distribute"] = {
+                "success": False,
+                "reason": str(exc),
+            }
+
+    return result

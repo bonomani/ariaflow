@@ -1,6 +1,10 @@
 # Plan
 
-### [D1] Private torrent creation from downloaded file
+No open items.
+
+_D1-D8 (private torrent distribution pipeline) implemented. See git history._
+
+~~### [D1] Private torrent creation from downloaded file~~
 
 **What:** New function `create_private_torrent(file_path, tracker_url)` that generates a `.torrent` with `private=1` flag and internal tracker URL.
 **Where:** New module `src/aria_queue/torrent.py`

@@ -75,6 +75,53 @@ def build_avahi_cmd(
     ]
 
 
+def advertise_torrent(
+    *, name: str, infohash: str, torrent_url: str,
+    tracker: str, size: int, version: str,
+) -> subprocess.Popen | None:
+    """Register a torrent as _ariaflow-torrent._tcp. Returns process or None."""
+    backend = _detect_backend()
+    if backend is None:
+        return None
+    txt_records = [
+        f"name={name}",
+        f"infohash={infohash}",
+        f"torrent_url={torrent_url}",
+        f"tracker={tracker}",
+        f"size={size}",
+        f"version={version}",
+    ]
+    if backend == "avahi":
+        binary = _avahi_publish_path() or "avahi-publish-service"
+        cmd = [binary, f"ariaflow-torrent-{infohash[:8]}", "_ariaflow-torrent._tcp", "0"] + txt_records
+    else:
+        binary = _dns_sd_path() or "dns-sd"
+        cmd = [binary, "-R", f"ariaflow-torrent-{infohash[:8]}", "_ariaflow-torrent._tcp", "local", "0"] + txt_records
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (FileNotFoundError, PermissionError):
+        return None
+    time.sleep(0.2)
+    if proc.poll() is not None:
+        return None
+    return proc
+
+
+def stop_torrent_advertisement(proc: subprocess.Popen | None) -> None:
+    """Stop a torrent Bonjour advertisement."""
+    if proc is None:
+        return
+    try:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=2)
+    except Exception:
+        pass
+
+
 @contextmanager
 def advertise_http_service(
     *, role: str, port: int, path: str, product: str, version: str

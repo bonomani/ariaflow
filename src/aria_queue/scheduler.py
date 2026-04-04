@@ -423,6 +423,58 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     },
                 )
 
+        # Expire old seeds
+        max_seed_hours = int(core._pref_value("distribute_max_seed_hours", 72) or 72)
+        max_active_seeds = int(core._pref_value("distribute_max_active_seeds", 10) or 10)
+        seeding_items = sorted(
+            [i for i in items if i.get("distribute_status") == "seeding"],
+            key=lambda i: i.get("distribute_started_at", ""),
+        )
+        for item in seeding_items:
+            should_expire = False
+            # Time-based expiration
+            if max_seed_hours > 0:
+                started = item.get("distribute_started_at", "")
+                if started:
+                    try:
+                        import datetime
+                        start_dt = datetime.datetime.strptime(started[:19], "%Y-%m-%dT%H:%M:%S")
+                        age_hours = (datetime.datetime.now() - start_dt).total_seconds() / 3600
+                        if age_hours > max_seed_hours:
+                            should_expire = True
+                    except (ValueError, TypeError):
+                        pass
+            # Count-based expiration (oldest first)
+            if max_active_seeds > 0 and not should_expire:
+                idx = seeding_items.index(item)
+                if len(seeding_items) - idx > max_active_seeds:
+                    should_expire = True
+            if should_expire:
+                seed_gid = item.get("distribute_seed_gid")
+                if seed_gid:
+                    try:
+                        core.aria2_remove(seed_gid, port=port)
+                    except Exception:
+                        pass
+                torrent_path = item.get("distribute_torrent_path")
+                if torrent_path:
+                    try:
+                        import os
+                        os.remove(torrent_path)
+                    except Exception:
+                        pass
+                item["distribute_status"] = "expired"
+                item.pop("distribute_seed_gid", None)
+                core.record_action(
+                    action="seed_expired",
+                    target="queue_item",
+                    outcome="changed",
+                    reason="seed_expiration",
+                    before={},
+                    after={"item_id": item.get("id"), "infohash": item.get("distribute_infohash")},
+                    detail={"item_id": item.get("id"), "infohash": item.get("distribute_infohash")},
+                )
+
         current_running_infos = list(running_infos)
         if not is_paused:
             for item in sorted(

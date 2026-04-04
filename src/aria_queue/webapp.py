@@ -477,6 +477,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         "/api/bandwidth": "_get_bandwidth",
         "/api/status": "_get_status",
         "/api/log": "_get_log",
+        "/api/torrents": "_get_torrents",
         "/api/declaration": "_get_declaration",
         "/api/options": "_get_declaration",
         "/api/aria2/get_global_option": "_get_aria2_global_option",
@@ -620,12 +621,50 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/item/") and path.endswith("/files") and path.count("/") == 4:
             self._get_item_files(parsed)
             return
+        # Parameterized route: /api/torrents/{infohash}.torrent
+        if path.startswith("/api/torrents/") and path.endswith(".torrent"):
+            self._get_torrent_file(parsed)
+            return
         # Dispatch table
         method_name = self._GET_ROUTES.get(path)
         if method_name:
             getattr(self, method_name)(parsed)
         else:
             self._send_json(_error_payload("not_found", "resource not found"), status=404)
+
+    def _get_torrents(self, parsed: object) -> None:
+        items = load_queue()
+        seeds = []
+        for item in items:
+            if item.get("distribute_status") == "seeding" and item.get("distribute_infohash"):
+                seeds.append({
+                    "infohash": item["distribute_infohash"],
+                    "name": item.get("output") or item.get("url", "").split("/")[-1].split("?")[0],
+                    "url": item.get("url"),
+                    "seed_gid": item.get("distribute_seed_gid"),
+                    "torrent_url": f"/api/torrents/{item['distribute_infohash']}.torrent",
+                    "started_at": item.get("distribute_started_at"),
+                    "item_id": item.get("id"),
+                })
+        self._send_json({"torrents": seeds, "count": len(seeds)})
+
+    def _get_torrent_file(self, parsed: object) -> None:
+        path = urlparse(self.path).path
+        infohash = path.split("/")[-1].removesuffix(".torrent")
+        items = load_queue()
+        for item in items:
+            if item.get("distribute_infohash") == infohash:
+                torrent_path = item.get("distribute_torrent_path")
+                if torrent_path and Path(torrent_path).is_file():
+                    body = Path(torrent_path).read_bytes()
+                    self.send_response(HTTPStatus.OK)
+                    self.send_header("Content-Type", "application/x-bittorrent")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+        self._send_json(_error_payload("not_found", "torrent not found"), status=404)
 
     def _get_health(self, parsed: object) -> None:
         self._send_json({"status": "ok", "version": __version__})
