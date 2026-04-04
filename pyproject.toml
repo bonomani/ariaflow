@@ -8,6 +8,29 @@ version = "0.1.98"
 description = "Sequential aria2 download scheduler with adaptive bandwidth control"
 requires-python = ">=3.10"
 dependencies = []
+license = {text = "MIT"}
+readme = "README.md"
+authors = [{name = "bonomani"}]
+keywords = ["aria2", "download", "scheduler", "queue", "torrent", "bandwidth"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: System :: Networking",
+]
+
+[project.urls]
+Homepage = "https://github.com/bonomani/ariaflow"
+Repository = "https://github.com/bonomani/ariaflow"
+Issues = "https://github.com/bonomani/ariaflow/issues"
 
 [project.optional-dependencies]
 web = []

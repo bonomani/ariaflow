@@ -42,6 +42,9 @@ After release:
 
 ```bash
 # Check GitHub release is published (not draft)
+# Check PyPI version matches
+pip install ariaflow --upgrade
+ariaflow --version
 # Check Homebrew formula version matches
 brew tap bonomani/ariaflow
 brew upgrade ariaflow
@@ -51,4 +54,5 @@ ariaflow --version
 ## Prerequisites
 
 - `ARIAFLOW_TAP_TOKEN` repo secret with write access to `bonomani/homebrew-ariaflow`
+- `PYPI_TOKEN` repo secret — PyPI API token for the `ariaflow` package
 - Tools: `git`, Python 3.10+, `gh`
