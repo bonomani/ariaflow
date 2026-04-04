@@ -385,6 +385,44 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             port=port, state=state
         )
 
+        # Auto-retry: re-queue error items that haven't exhausted retries
+        max_retries = int(core._pref_value("max_retries", 3) or 3)
+        backoff = int(core._pref_value("retry_backoff_seconds", 30) or 30)
+        now_ts = time.time()
+        if max_retries > 0 and not is_paused:
+            for item in items:
+                if item.get("status") != "error":
+                    continue
+                if item.get("error_code") == "rpc_unreachable":
+                    continue  # don't auto-retry if aria2 is down
+                retry_count = int(item.get("retry_count") or 0)
+                if retry_count >= max_retries:
+                    continue
+                next_retry = float(item.get("next_retry_at") or 0)
+                if next_retry > 0 and now_ts < next_retry:
+                    continue  # backoff not elapsed
+                # Auto-retry this item
+                before_item = dict(item)
+                item["retry_count"] = retry_count + 1
+                item["status"] = "queued"
+                for key in ("gid", "error_code", "error_message", "error_at", "live_status", "rpc_failures"):
+                    item.pop(key, None)
+                item["next_retry_at"] = now_ts + backoff * (retry_count + 1)
+                core.record_action(
+                    action="auto_retry",
+                    target="queue_item",
+                    outcome="changed",
+                    reason="auto_retry",
+                    before={"item": before_item},
+                    after={"item": dict(item)},
+                    detail={
+                        "item_id": item.get("id"),
+                        "retry_count": item["retry_count"],
+                        "max_retries": max_retries,
+                        "next_retry_at": item["next_retry_at"],
+                    },
+                )
+
         current_running_infos = list(running_infos)
         if not is_paused:
             for item in sorted(

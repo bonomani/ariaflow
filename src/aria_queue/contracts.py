@@ -85,6 +85,18 @@ DEFAULT_DECLARATION = {
                 "options": [False, True],
                 "rationale": "allow setting any aria2 option via API (bypasses safe subset)",
             },
+            {
+                "name": "max_retries",
+                "value": 3,
+                "options": [0, 1, 3, 5, 10],
+                "rationale": "auto-retry failed downloads up to N times (0 = manual retry only)",
+            },
+            {
+                "name": "retry_backoff_seconds",
+                "value": 30,
+                "options": [10, 30, 60, 120, 300],
+                "rationale": "seconds between auto-retries, multiplied by retry count",
+            },
         ],
         "policies": [],
     },
