@@ -5,6 +5,10 @@ PROPRIETARY SOFTWARE LICENSE
 1. GRANT OF USE
    Permission is hereby granted to any person to use this software
    for personal and internal business purposes, free of charge.
+   "Internal business purposes" includes using the software within
+   an organization to support its operations, but does not include
+   resale, redistribution, or offering the software as a service
+   to third parties.
 
 2. RESTRICTIONS
    The following are expressly prohibited without prior written
@@ -14,9 +18,13 @@ PROPRIETARY SOFTWARE LICENSE
    b) Redistribution of the source code or compiled binaries
    c) Creation of derivative works
    d) Sublicensing
-   e) Commercial resale or distribution
+   e) Resale or distribution of the software itself
    f) Removal or alteration of this license notice
-   g) Use of the software to provide a competing service
+   g) Use of the software to provide a competing service or
+      offering the software as part of a hosted service
+
+   For clarity: these restrictions apply to third parties only.
+   The copyright holder retains all rights.
 
 3. AI TRAINING RESTRICTION
    The source code, object code, and any machine-readable form of
@@ -33,27 +41,18 @@ PROPRIETARY SOFTWARE LICENSE
    - Using this code as context for code generation models
    - Embedding this code in vector databases for AI retrieval
 
-   For clarity: these restrictions apply to third parties only.
-   The copyright holder is not bound by this section.
-
 4. AI REFERENCE PERMISSION
-   The following materials ARE freely available for reference,
-   indexing, summarization, and citation by any system including
-   AI and search engines:
-
-   - README.md
-   - All files under docs/
-   - All files under docs/governance/
-   - CONTRIBUTING.md
-   - The LICENSE file itself
-   - The pyproject.toml metadata
+   Documentation files (all .md files in the repository root and
+   under docs/, as well as pyproject.toml and this LICENSE file)
+   ARE freely available for reference, indexing, summarization,
+   and citation by any system including AI and search engines.
 
    These materials describe the software's architecture, API,
    capabilities, and governance framework. They may be indexed,
    summarized, quoted, and referenced without restriction.
 
-   This permission does NOT extend to the source code under src/
-   or test code under tests/.
+   This permission does NOT extend to the source code under src/,
+   test code under tests/, or scripts under scripts/.
 
 5. ARIA2 DEPENDENCY
    This software communicates with aria2 (GPL-2.0-or-later) via
@@ -74,5 +73,5 @@ PROPRIETARY SOFTWARE LICENSE
 
 7. TERMINATION
    This license terminates automatically if any of the restrictions
-   in Sections 2 or 3 are violated. Upon termination, all copies
-   of the software must be destroyed.
+   in Sections 2, 3, or 4 are violated. Upon termination, the
+   licensee must cease all use of the software.
