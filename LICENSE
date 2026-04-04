@@ -1,21 +1,41 @@
-MIT License
+Copyright (c) 2026 bonomani. All rights reserved.
 
-Copyright (c) 2026 bonomani
+PROPRIETARY SOFTWARE LICENSE
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. GRANT OF USE
+   Permission is hereby granted to any person to use this software
+   for personal and internal business purposes, free of charge.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. RESTRICTIONS
+   The following are expressly prohibited without prior written
+   consent from the copyright holder:
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+   a) Modification of the source code
+   b) Redistribution of the source code or compiled binaries
+   c) Creation of derivative works
+   d) Sublicensing
+   e) Commercial resale or distribution
+   f) Removal or alteration of this license notice
+   g) Use of the software to provide a competing service
+
+3. ARIA2 DEPENDENCY
+   This software communicates with aria2 (GPL-2.0-or-later) via
+   JSON-RPC as a separate process. aria2 is NOT distributed with
+   this software. Users must install aria2 independently. This
+   software contains no aria2 source code and is not a derivative
+   work of aria2.
+
+4. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+   OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE
+   LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+   ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+   IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+   THE SOFTWARE.
+
+5. TERMINATION
+   This license terminates automatically if any of the restrictions
+   in Section 2 are violated. Upon termination, all copies of the
+   software must be destroyed.

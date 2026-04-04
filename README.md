@@ -150,3 +150,11 @@ See [`docs/RELEASE.md`](./docs/RELEASE.md).
 python3 scripts/publish.py plan   # preview
 python3 scripts/publish.py push   # push + auto-release
 ```
+
+## License
+
+**Proprietary.** Copyright (c) 2026 bonomani. All rights reserved.
+
+Free to **use** for personal and internal business purposes. Modification, redistribution, and commercial resale are prohibited. See [LICENSE](./LICENSE).
+
+This software communicates with [aria2](https://aria2.github.io/) (GPL-2.0) via JSON-RPC as a separate process. aria2 is not distributed with ariaflow — install it independently.
