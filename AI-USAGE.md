@@ -6,25 +6,11 @@
 
 This source code is proprietary. See Section 3 of [LICENSE](./LICENSE).
 
-## Documentation (docs/, README.md, CONTRIBUTING.md)
+## Documentation (docs/, *.md, pyproject.toml)
 
 **FREE TO REFERENCE** by any system including AI, search engines, and knowledge bases.
 
-The following materials may be indexed, summarized, quoted, and cited without restriction:
-
-- `README.md` — project overview, API reference, installation
-- `CONTRIBUTING.md` — development guide
-- `docs/ARCHITECTURE.md` — engine design principles
-- `docs/STATES_AND_INTERACTIONS.md` — state machines, aria2 interaction model
-- `docs/ARIA2_RPC_WRAPPERS.md` — aria2 RPC wrapper reference (auto-generated)
-- `docs/FRONTEND-GUIDE.md` — frontend integration guide
-- `docs/RELEASE.md` — release process
-- `docs/GAPS.md` — feature gap analysis
-- `docs/AUDIT.md` — codebase audit
-- `docs/PLAN.md` — current plan
-- `docs/governance/` — BGS, ASM, BISS, TIC governance framework
-- `pyproject.toml` — project metadata
-- `LICENSE` — license terms
+All `.md` files in the repository root and under `docs/`, as well as `pyproject.toml` and `LICENSE`, may be indexed, summarized, quoted, and cited without restriction. See Section 4 of [LICENSE](./LICENSE).
 
 ## Summary
 
@@ -33,3 +19,13 @@ The following materials may be indexed, summarized, quoted, and cited without re
 | Source code (`src/`, `tests/`, `scripts/`) | Prohibited | Prohibited |
 | Documentation (`docs/`, `*.md`) | Prohibited | Permitted |
 | License and metadata | Prohibited | Permitted |
+
+## Enforcement
+
+Violations of the AI training restriction (Section 3) are subject to:
+
+1. **DMCA takedown** on hosting platforms (GitHub, PyPI, Docker Hub)
+2. **Legal action** under Swiss law (LDA) and the Berne Convention (181 countries)
+3. **License termination** — violator must cease all use
+
+Report violations: [GitHub Issues](https://github.com/bonomani/ariaflow/issues) or see [SECURITY.md](./SECURITY.md).

@@ -160,3 +160,5 @@ Free to **use** for personal and internal business purposes. Modification, redis
 This software communicates with [aria2](https://aria2.github.io/) (GPL-2.0) via JSON-RPC as a separate process. aria2 is not distributed with ariaflow — install it independently.
 
 **AI policy:** Source code may NOT be used for AI training. Documentation IS freely referenceable. See [AI-USAGE.md](./AI-USAGE.md).
+
+**Report a violation:** If you believe this license has been violated, contact the copyright holder via [GitHub Issues](https://github.com/bonomani/ariaflow/issues) or file a [DMCA takedown](https://docs.github.com/en/site-policy/content-removal-policies/dmca-takedown-policy) if the code has been redistributed.
