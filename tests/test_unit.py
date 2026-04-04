@@ -1,40 +1,51 @@
-"""Unit tests for 35 previously-untested public functions."""
+"""Unit tests covering core functionality.
+
+Covers:
+- Storage paths (config_dir, queue_path, state_path, log_path, etc.)
+- JSON read/write with corruption recovery
+- State session lifecycle (ensure, touch, close, history, stats)
+- Action log and archive operations
+- Queue auto-cleanup and transfer polling
+- Download mode detection and queue item lookup
+- Queue summarization
+- Contracts (declaration path, ensure_declaration)
+- Install helpers (version, ucc_envelope, ucc_record)
+- Bonjour service advertisement
+- aria2 RPC wrappers (bandwidth limit, managed set functions)
+- Transfer pause and background process stop
+- Bandwidth config, status, and manual probe
+- allowed_actions per item status
+- Scheduler auto-retry with policy
+- aria2 max-tries passthrough
+- Option tiers discovery
+- 3-tier option safety
+"""
 from __future__ import annotations
 
 import json
 import os
-import tempfile
 import time
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import sys
 
-class _TempDirMixin:
-    """setUp/tearDown that points ARIA_QUEUE_DIR at a temp directory."""
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from conftest import IsolatedTestCase
 
-    def setUp(self) -> None:
-        self._tmpdir = tempfile.TemporaryDirectory()
-        self._orig_env = os.environ.get("ARIA_QUEUE_DIR")
-        os.environ["ARIA_QUEUE_DIR"] = self._tmpdir.name
-
-    def tearDown(self) -> None:
-        if self._orig_env is None:
-            os.environ.pop("ARIA_QUEUE_DIR", None)
-        else:
-            os.environ["ARIA_QUEUE_DIR"] = self._orig_env
-        self._tmpdir.cleanup()
+_MODULE = "aria_queue.core"
 
 
 # ── storage.py ──────────────────────────────────────────────────────
 
 
-class TestStoragePaths(_TempDirMixin, unittest.TestCase):
+class TestStoragePaths(IsolatedTestCase):
     def test_config_dir_returns_path(self) -> None:
         from aria_queue.core import config_dir
         result = config_dir()
         self.assertIsInstance(result, Path)
-        self.assertEqual(str(result), self._tmpdir.name)
+        self.assertEqual(str(result), self._tmp.name)
 
     def test_queue_path(self) -> None:
         from aria_queue.core import config_dir, queue_path
@@ -65,30 +76,30 @@ class TestStoragePaths(_TempDirMixin, unittest.TestCase):
         self.assertEqual(storage_lock_path(), config_dir() / ".storage.lock")
 
 
-class TestEnsureStorage(_TempDirMixin, unittest.TestCase):
+class TestEnsureStorage(IsolatedTestCase):
     def test_creates_directory(self) -> None:
         from aria_queue.core import ensure_storage, config_dir
-        subdir = Path(self._tmpdir.name) / "sub" / "dir"
+        subdir = Path(self._tmp.name) / "sub" / "dir"
         os.environ["ARIA_QUEUE_DIR"] = str(subdir)
         ensure_storage()
         self.assertTrue(subdir.is_dir())
 
 
-class TestReadJson(_TempDirMixin, unittest.TestCase):
+class TestReadJson(IsolatedTestCase):
     def test_normal_read(self) -> None:
         from aria_queue.core import read_json
-        p = Path(self._tmpdir.name) / "data.json"
+        p = Path(self._tmp.name) / "data.json"
         p.write_text(json.dumps({"a": 1}), encoding="utf-8")
         self.assertEqual(read_json(p, {}), {"a": 1})
 
     def test_missing_file_returns_default(self) -> None:
         from aria_queue.core import read_json
-        p = Path(self._tmpdir.name) / "nope.json"
+        p = Path(self._tmp.name) / "nope.json"
         self.assertEqual(read_json(p, []), [])
 
     def test_corrupted_file_creates_backup(self) -> None:
         from aria_queue.core import read_json
-        p = Path(self._tmpdir.name) / "bad.json"
+        p = Path(self._tmp.name) / "bad.json"
         p.write_text("{{{not json", encoding="utf-8")
         result = read_json(p, "default")
         self.assertEqual(result, "default")
@@ -96,10 +107,10 @@ class TestReadJson(_TempDirMixin, unittest.TestCase):
         self.assertTrue(bak.exists())
 
 
-class TestWriteJson(_TempDirMixin, unittest.TestCase):
+class TestWriteJson(IsolatedTestCase):
     def test_write_then_read(self) -> None:
         from aria_queue.core import read_json, write_json
-        p = Path(self._tmpdir.name) / "rw.json"
+        p = Path(self._tmp.name) / "rw.json"
         write_json(p, {"x": 42})
         self.assertEqual(read_json(p, None), {"x": 42})
 
@@ -107,7 +118,7 @@ class TestWriteJson(_TempDirMixin, unittest.TestCase):
 # ── state.py ────────────────────────────────────────────────────────
 
 
-class TestEnsureStateSession(_TempDirMixin, unittest.TestCase):
+class TestEnsureStateSession(IsolatedTestCase):
     def test_creates_session_id(self) -> None:
         from aria_queue.core import ensure_state_session
         state = ensure_state_session()
@@ -115,7 +126,7 @@ class TestEnsureStateSession(_TempDirMixin, unittest.TestCase):
         self.assertIsNotNone(state.get("session_started_at"))
 
 
-class TestTouchStateSession(_TempDirMixin, unittest.TestCase):
+class TestTouchStateSession(IsolatedTestCase):
     def test_updates_last_seen(self) -> None:
         from aria_queue.core import ensure_state_session, touch_state_session
         ensure_state_session()
@@ -123,7 +134,7 @@ class TestTouchStateSession(_TempDirMixin, unittest.TestCase):
         self.assertIsNotNone(state.get("session_last_seen_at"))
 
 
-class TestCloseStateSession(_TempDirMixin, unittest.TestCase):
+class TestCloseStateSession(IsolatedTestCase):
     def test_sets_closed_fields(self) -> None:
         from aria_queue.core import ensure_state_session, close_state_session
         ensure_state_session()
@@ -132,14 +143,14 @@ class TestCloseStateSession(_TempDirMixin, unittest.TestCase):
         self.assertEqual(state.get("session_closed_reason"), "test_reason")
 
 
-class TestLoadSessionHistory(_TempDirMixin, unittest.TestCase):
+class TestLoadSessionHistory(IsolatedTestCase):
     def test_returns_list(self) -> None:
         from aria_queue.core import load_session_history
         result = load_session_history()
         self.assertIsInstance(result, list)
 
 
-class TestSessionStats(_TempDirMixin, unittest.TestCase):
+class TestSessionStats(IsolatedTestCase):
     def test_returns_dict_with_keys(self) -> None:
         from aria_queue.core import ensure_state_session, session_stats
         ensure_state_session()
@@ -151,7 +162,7 @@ class TestSessionStats(_TempDirMixin, unittest.TestCase):
             self.assertIn(key, result)
 
 
-class TestAppendActionLog(_TempDirMixin, unittest.TestCase):
+class TestAppendActionLog(IsolatedTestCase):
     def test_appends_entry(self) -> None:
         from aria_queue.core import append_action_log, action_log_path
         append_action_log({"action": "test", "target": "unit"})
@@ -161,13 +172,13 @@ class TestAppendActionLog(_TempDirMixin, unittest.TestCase):
         self.assertEqual(entry["action"], "test")
 
 
-class TestLoadArchive(_TempDirMixin, unittest.TestCase):
+class TestLoadArchive(IsolatedTestCase):
     def test_returns_list(self) -> None:
         from aria_queue.core import load_archive
         self.assertIsInstance(load_archive(), list)
 
 
-class TestSaveArchive(_TempDirMixin, unittest.TestCase):
+class TestSaveArchive(IsolatedTestCase):
     def test_roundtrip(self) -> None:
         from aria_queue.core import save_archive, load_archive
         items = [{"id": "a", "status": "complete"}]
@@ -175,7 +186,7 @@ class TestSaveArchive(_TempDirMixin, unittest.TestCase):
         self.assertEqual(load_archive(), items)
 
 
-class TestArchiveItem(_TempDirMixin, unittest.TestCase):
+class TestArchiveItem(IsolatedTestCase):
     def test_adds_to_archive(self) -> None:
         from aria_queue.core import archive_item, load_archive
         archive_item({"id": "x", "status": "complete"})
@@ -185,7 +196,7 @@ class TestArchiveItem(_TempDirMixin, unittest.TestCase):
         self.assertIn("archived_at", archived[0])
 
 
-class TestAutoCleanupQueue(_TempDirMixin, unittest.TestCase):
+class TestAutoCleanupQueue(IsolatedTestCase):
     def test_removes_old_done(self) -> None:
         from aria_queue.core import (
             auto_cleanup_queue, save_queue, load_queue, load_archive,
@@ -205,7 +216,7 @@ class TestAutoCleanupQueue(_TempDirMixin, unittest.TestCase):
         self.assertEqual(remaining[0]["id"], "2")
 
 
-class TestLogTransferPoll(_TempDirMixin, unittest.TestCase):
+class TestLogTransferPoll(IsolatedTestCase):
     def test_appends_to_action_log(self) -> None:
         from aria_queue.core import log_transfer_poll, action_log_path
         log_transfer_poll(
@@ -247,7 +258,7 @@ class TestDetectDownloadMode(unittest.TestCase):
         )
 
 
-class TestFindQueueItemByGid(_TempDirMixin, unittest.TestCase):
+class TestFindQueueItemByGid(IsolatedTestCase):
     def test_finds_item(self) -> None:
         from aria_queue.core import find_queue_item_by_gid, save_queue
         save_queue([{"id": "1", "gid": "g1", "status": "active"}])
@@ -280,7 +291,7 @@ class TestSummarizeQueue(unittest.TestCase):
 # ── contracts.py ────────────────────────────────────────────────────
 
 
-class TestDeclarationPath(_TempDirMixin, unittest.TestCase):
+class TestDeclarationPath(IsolatedTestCase):
     def test_returns_path(self) -> None:
         from aria_queue.contracts import declaration_path
         result = declaration_path()
@@ -288,7 +299,7 @@ class TestDeclarationPath(_TempDirMixin, unittest.TestCase):
         self.assertTrue(str(result).endswith("declaration.json"))
 
 
-class TestEnsureDeclaration(_TempDirMixin, unittest.TestCase):
+class TestEnsureDeclaration(IsolatedTestCase):
     def test_creates_default(self) -> None:
         from aria_queue.contracts import ensure_declaration, declaration_path
         result = ensure_declaration()
@@ -363,7 +374,7 @@ class TestAria2SetDownloadBandwidth(unittest.TestCase):
 # ── transfers.py ────────────────────────────────────────────────────
 
 
-class TestPauseActiveTransfer(_TempDirMixin, unittest.TestCase):
+class TestPauseActiveTransfer(IsolatedTestCase):
     @patch("aria_queue.core.aria2_tell_active", return_value=[])
     def test_no_active_returns_not_paused(self, _mock: MagicMock) -> None:
         from aria_queue.core import pause_active_transfer, ensure_storage
@@ -376,7 +387,7 @@ class TestPauseActiveTransfer(_TempDirMixin, unittest.TestCase):
 # ── scheduler.py ────────────────────────────────────────────────────
 
 
-class TestStopBackgroundProcess(_TempDirMixin, unittest.TestCase):
+class TestStopBackgroundProcess(IsolatedTestCase):
     def test_not_running_returns_stopped_false(self) -> None:
         from aria_queue.core import stop_background_process, ensure_storage
         ensure_storage()
@@ -388,7 +399,7 @@ class TestStopBackgroundProcess(_TempDirMixin, unittest.TestCase):
 # ── bandwidth.py ────────────────────────────────────────────────────
 
 
-class TestBandwidthConfig(_TempDirMixin, unittest.TestCase):
+class TestBandwidthConfig(IsolatedTestCase):
     def test_returns_dict_with_free_percent(self) -> None:
         from aria_queue.core import bandwidth_config, ensure_storage
 
@@ -399,7 +410,7 @@ class TestBandwidthConfig(_TempDirMixin, unittest.TestCase):
         self.assertIn("probe_interval_seconds", result)
 
 
-class TestBandwidthStatus(_TempDirMixin, unittest.TestCase):
+class TestBandwidthStatus(IsolatedTestCase):
     @patch("aria_queue.core.aria2_current_bandwidth", return_value={"limit": "0"})
     def test_returns_dict_with_config_and_bandwidth(self, _mock: MagicMock) -> None:
         from aria_queue.core import bandwidth_status, ensure_storage
@@ -411,7 +422,7 @@ class TestBandwidthStatus(_TempDirMixin, unittest.TestCase):
         self.assertIn("current_limit", result)
 
 
-class TestManualProbe(_TempDirMixin, unittest.TestCase):
+class TestManualProbe(IsolatedTestCase):
     @patch("aria_queue.core.probe_bandwidth", return_value={
         "source": "default",
         "reason": "probe_unavailable",
@@ -426,6 +437,284 @@ class TestManualProbe(_TempDirMixin, unittest.TestCase):
         result = manual_probe()
         self.assertIsInstance(result, dict)
         self.assertIn("probe", result)
+
+
+# ── allowed_actions ─────────────────────────────────────────────────
+
+
+class TestAllowedActions(unittest.TestCase):
+    def test_queued_allows_pause_remove(self) -> None:
+        from aria_queue.queue_ops import allowed_actions
+
+        self.assertEqual(allowed_actions("queued"), ["pause", "remove"])
+
+    def test_active_allows_pause_remove(self) -> None:
+        from aria_queue.queue_ops import allowed_actions
+
+        self.assertEqual(allowed_actions("active"), ["pause", "remove"])
+
+    def test_waiting_allows_pause_remove(self) -> None:
+        from aria_queue.queue_ops import allowed_actions
+
+        self.assertEqual(allowed_actions("waiting"), ["pause", "remove"])
+
+    def test_paused_allows_resume_remove(self) -> None:
+        from aria_queue.queue_ops import allowed_actions
+
+        self.assertEqual(allowed_actions("paused"), ["resume", "remove"])
+
+    def test_complete_allows_remove(self) -> None:
+        from aria_queue.queue_ops import allowed_actions
+
+        self.assertEqual(allowed_actions("complete"), ["remove"])
+
+    def test_error_allows_retry_remove(self) -> None:
+        from aria_queue.queue_ops import allowed_actions
+
+        self.assertEqual(allowed_actions("error"), ["retry", "remove"])
+
+    def test_stopped_allows_retry_remove(self) -> None:
+        from aria_queue.queue_ops import allowed_actions
+
+        self.assertEqual(allowed_actions("stopped"), ["retry", "remove"])
+
+    def test_cancelled_allows_nothing(self) -> None:
+        from aria_queue.queue_ops import allowed_actions
+
+        self.assertEqual(allowed_actions("cancelled"), [])
+
+    def test_unknown_status_allows_nothing(self) -> None:
+        from aria_queue.queue_ops import allowed_actions
+
+        self.assertEqual(allowed_actions("nonexistent"), [])
+
+
+# ── auto-retry ──────────────────────────────────────────────────────
+
+
+class TestAutoRetry(IsolatedTestCase):
+    def _setup_error_item(self) -> None:
+        from aria_queue.core import add_queue_item, save_queue, load_queue, ensure_storage
+
+        ensure_storage()
+        add_queue_item("https://example.com/retry-test.bin")
+        items = load_queue()
+        items[0]["status"] = "error"
+        items[0]["error_code"] = "5"
+        items[0]["error_message"] = "download failed"
+        items[0]["error_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        items[0]["gid"] = "gid-err"
+        save_queue(items)
+
+    def test_auto_retry_requeues_error_item(self) -> None:
+        self._setup_error_item()
+        from aria_queue.core import load_queue, save_queue, load_state, save_state, ensure_storage
+
+        ensure_storage()
+        state = load_state()
+        state["running"] = True
+        save_state(state)
+
+        with (
+            patch(f"{_MODULE}.aria2_ensure_daemon"),
+            patch(f"{_MODULE}.deduplicate_active_transfers"),
+            patch(f"{_MODULE}.reconcile_live_queue"),
+            patch(f"{_MODULE}.probe_bandwidth", return_value={
+                "source": "default", "reason": "probe_unavailable",
+                "cap_mbps": 2, "cap_bytes_per_sec": 250000,
+            }),
+            patch(f"{_MODULE}.aria2_current_bandwidth", return_value={}),
+            patch(f"{_MODULE}.aria2_set_max_overall_download_limit"),
+            patch(f"{_MODULE}.aria2_tell_active", return_value=[]),
+            patch(f"{_MODULE}.aria2_multicall", return_value=[]),
+            patch(f"{_MODULE}.aria2_add_download", return_value="gid-new"),
+            patch(f"{_MODULE}.time.sleep", side_effect=RuntimeError("stop")),
+        ):
+            from aria_queue.core import process_queue
+
+            with self.assertRaisesRegex(RuntimeError, "stop"):
+                process_queue()
+
+        items = load_queue()
+        self.assertEqual(items[0]["status"], "active")
+        self.assertEqual(items[0]["retry_count"], 1)
+
+    def test_auto_retry_skips_rpc_unreachable(self) -> None:
+        self._setup_error_item()
+        from aria_queue.core import load_queue, save_queue, load_state, save_state, ensure_storage, add_queue_item
+
+        ensure_storage()
+        add_queue_item("https://example.com/keep-alive.bin")  # keep loop alive
+        items = load_queue()
+        for item in items:
+            if item.get("error_code"):
+                item["error_code"] = "rpc_unreachable"
+        save_queue(items)
+        state = load_state()
+        state["running"] = True
+        save_state(state)
+
+        with (
+            patch(f"{_MODULE}.aria2_ensure_daemon"),
+            patch(f"{_MODULE}.deduplicate_active_transfers"),
+            patch(f"{_MODULE}.reconcile_live_queue"),
+            patch(f"{_MODULE}.probe_bandwidth", return_value={
+                "source": "default", "reason": "probe_unavailable",
+                "cap_mbps": 2, "cap_bytes_per_sec": 250000,
+            }),
+            patch(f"{_MODULE}.aria2_current_bandwidth", return_value={}),
+            patch(f"{_MODULE}.aria2_set_max_overall_download_limit"),
+            patch(f"{_MODULE}.aria2_tell_active", return_value=[]),
+            patch(f"{_MODULE}.aria2_multicall", return_value=[]),
+            patch(f"{_MODULE}.time.sleep", side_effect=RuntimeError("stop")),
+        ):
+            from aria_queue.core import process_queue
+
+            with self.assertRaisesRegex(RuntimeError, "stop"):
+                process_queue()
+
+        items = load_queue()
+        self.assertEqual(items[0]["status"], "error")  # NOT retried
+
+    def test_auto_retry_respects_max_retries(self) -> None:
+        self._setup_error_item()
+        from aria_queue.core import load_queue, save_queue, ensure_storage, add_queue_item
+
+        ensure_storage()
+        add_queue_item("https://example.com/keep-alive.bin")  # keep loop alive
+        items = load_queue()
+        for item in items:
+            if item.get("error_code"):
+                item["retry_count"] = 3  # already at max
+        save_queue(items)
+
+        from aria_queue.core import load_state, save_state
+
+        state = load_state()
+        state["running"] = True
+        save_state(state)
+
+        with (
+            patch(f"{_MODULE}.aria2_ensure_daemon"),
+            patch(f"{_MODULE}.deduplicate_active_transfers"),
+            patch(f"{_MODULE}.reconcile_live_queue"),
+            patch(f"{_MODULE}.probe_bandwidth", return_value={
+                "source": "default", "reason": "probe_unavailable",
+                "cap_mbps": 2, "cap_bytes_per_sec": 250000,
+            }),
+            patch(f"{_MODULE}.aria2_current_bandwidth", return_value={}),
+            patch(f"{_MODULE}.aria2_set_max_overall_download_limit"),
+            patch(f"{_MODULE}.aria2_tell_active", return_value=[]),
+            patch(f"{_MODULE}.aria2_multicall", return_value=[]),
+            patch(f"{_MODULE}.time.sleep", side_effect=RuntimeError("stop")),
+        ):
+            from aria_queue.core import process_queue
+
+            with self.assertRaisesRegex(RuntimeError, "stop"):
+                process_queue()
+
+        items = load_queue()
+        self.assertEqual(items[0]["status"], "error")  # NOT retried
+
+
+# ── aria2 max-tries passthrough ─────────────────────────────────────
+
+
+class TestAria2MaxTriesPassthrough(IsolatedTestCase):
+    def test_add_download_includes_max_tries(self) -> None:
+        from aria_queue.core import ensure_storage
+
+        ensure_storage()
+        mock_rpc = MagicMock(return_value={"result": "gid-1"})
+        with patch(f"{_MODULE}.aria_rpc", mock_rpc):
+            from aria_queue.aria2_rpc import aria2_add_download
+
+            aria2_add_download(
+                {"url": "http://example.com/f", "mode": "http"},
+                cap_bytes_per_sec=0,
+            )
+        call_args = mock_rpc.call_args
+        options = call_args[0][1][1]  # params[1] = options dict
+        self.assertIn("max-tries", options)
+        self.assertIn("retry-wait", options)
+        self.assertEqual(options["max-tries"], "5")
+        self.assertEqual(options["retry-wait"], "10")
+
+
+# ── option_tiers endpoint ───────────────────────────────────────────
+
+
+class TestOptionTiers(IsolatedTestCase):
+    def test_returns_three_tiers(self) -> None:
+        from aria_queue.aria2_rpc import _MANAGED_ARIA2_OPTIONS, _SAFE_ARIA2_OPTIONS
+        from aria_queue.queue_ops import allowed_actions  # just to verify import works
+
+        self.assertIn("max-overall-download-limit", _MANAGED_ARIA2_OPTIONS)
+        self.assertIn("max-overall-upload-limit", _MANAGED_ARIA2_OPTIONS)
+        self.assertIn("seed-ratio", _MANAGED_ARIA2_OPTIONS)
+        self.assertIn("max-concurrent-downloads", _SAFE_ARIA2_OPTIONS)
+        self.assertNotIn("max-overall-download-limit", _SAFE_ARIA2_OPTIONS)
+
+
+# ── managed aria2_set_* functions ───────────────────────────────────
+
+
+class TestManagedSetFunctions(unittest.TestCase):
+    @patch(f"{_MODULE}.aria_rpc", MagicMock(return_value={"result": "OK"}))
+    def test_set_max_overall_upload_limit(self) -> None:
+        from aria_queue.core import aria2_set_max_overall_upload_limit
+
+        aria2_set_max_overall_upload_limit(500000)
+
+    @patch(f"{_MODULE}.aria_rpc", MagicMock(return_value={"result": "OK"}))
+    def test_set_max_upload_limit(self) -> None:
+        from aria_queue.core import aria2_set_max_upload_limit
+
+        aria2_set_max_upload_limit("gid-1", 100000)
+
+    @patch(f"{_MODULE}.aria_rpc", MagicMock(return_value={"result": "OK"}))
+    def test_set_seed_ratio(self) -> None:
+        from aria_queue.core import aria2_set_seed_ratio
+
+        aria2_set_seed_ratio(2.0)
+
+    @patch(f"{_MODULE}.aria_rpc", MagicMock(return_value={"result": "OK"}))
+    def test_set_seed_time(self) -> None:
+        from aria_queue.core import aria2_set_seed_time
+
+        aria2_set_seed_time(60)
+
+
+# ── 3-tier safety ───────────────────────────────────────────────────
+
+
+class TestThreeTierSafety(IsolatedTestCase):
+    def test_managed_option_rejected(self) -> None:
+        from aria_queue.core import aria2_change_options, ensure_storage
+
+        ensure_storage()
+        result = aria2_change_options({"max-overall-download-limit": "100K"})
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "managed_options")
+
+    def test_safe_option_accepted(self) -> None:
+        from aria_queue.core import aria2_change_options, ensure_storage
+
+        ensure_storage()
+        with (
+            patch(f"{_MODULE}.aria_rpc"),
+            patch(f"{_MODULE}.aria2_current_global_options", return_value={}),
+        ):
+            result = aria2_change_options({"max-concurrent-downloads": "5"})
+        self.assertTrue(result["ok"])
+
+    def test_unsafe_option_rejected_by_default(self) -> None:
+        from aria_queue.core import aria2_change_options, ensure_storage
+
+        ensure_storage()
+        result = aria2_change_options({"dir": "/tmp"})
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "rejected_options")
 
 
 if __name__ == "__main__":
