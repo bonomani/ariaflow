@@ -7,11 +7,11 @@
 **Why:** Upload limit probed but never applied. Naming inconsistent with aria2 option keys.
 **Scope:** ~30 lines added. Rename 2 existing, add 4 new.
 
-Functions:
-- `aria2_set_bandwidth` → `aria2_set_global_download_limit` (rename)
-- `aria2_set_download_bandwidth` → `aria2_set_download_limit` (rename)
-- `aria2_set_global_upload_limit` (new)
-- `aria2_set_upload_limit` (new)
+Functions (aria2_set_ + exact aria2 option key, hyphens → underscores):
+- `aria2_set_bandwidth` → `aria2_set_max_overall_download_limit` (rename)
+- `aria2_set_download_bandwidth` → `aria2_set_max_download_limit` (rename)
+- `aria2_set_max_overall_upload_limit` (new)
+- `aria2_set_max_upload_limit` (new)
 - `aria2_set_seed_ratio` (new)
 - `aria2_set_seed_time` (new)
 
