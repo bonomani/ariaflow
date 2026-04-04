@@ -1,6 +1,50 @@
 # Plan
 
-No open items.
+### [B1] Add 6 managed option functions — no API change
+
+**What:** Add dedicated aria2_set_* functions for upload limits, seed ratio/time. Rename existing ones for consistency. All delegate to aria2_change_global_option / aria2_change_option.
+**Where:** `src/aria_queue/aria2_rpc.py`
+**Why:** Upload limit probed but never applied. Naming inconsistent with aria2 option keys.
+**Scope:** ~30 lines added. Rename 2 existing, add 4 new.
+
+Functions:
+- `aria2_set_bandwidth` → `aria2_set_global_download_limit` (rename)
+- `aria2_set_download_bandwidth` → `aria2_set_download_limit` (rename)
+- `aria2_set_global_upload_limit` (new)
+- `aria2_set_upload_limit` (new)
+- `aria2_set_seed_ratio` (new)
+- `aria2_set_seed_time` (new)
+
+### [B2] Apply upload cap after bandwidth probe — no API change
+
+**What:** After probe, send `max-overall-upload-limit` to aria2 alongside download limit.
+**Where:** `src/aria_queue/bandwidth.py` — `_apply_bandwidth_probe()`
+**Why:** Upload cap is probed and calculated (`up_cap_mbps`) but never sent to aria2.
+**Scope:** ~5 lines
+
+### [B3] Three-tier option safety — no API change
+
+**What:** Split `_SAFE_ARIA2_OPTIONS` into managed + safe + unsafe tiers. `POST /api/aria2/options` blocks managed options (must use dedicated function) and blocks unsafe options unless declaration preference allows.
+**Where:** `src/aria_queue/aria2_rpc.py` (option sets), `src/aria_queue/webapp.py` (endpoint handler)
+**Why:** Managed options have dedicated safe functions. Generic endpoint shouldn't bypass them.
+**Scope:** ~20 lines. No new endpoints, same `POST /api/aria2/options` behavior.
+
+Tiers:
+- **Managed** (blocked from generic API): max-overall-download-limit, max-overall-upload-limit, max-download-limit, max-upload-limit, seed-ratio, seed-time
+- **Safe** (allowed via generic API): max-concurrent-downloads, max-connection-per-server, split, min-split-size, timeout, connect-timeout
+- **Unsafe** (allowed only with `aria2_unsafe_options: true` preference): everything else
+
+### [B4] Add declaration preference for unsafe mode — no API change
+
+**What:** Add `aria2_unsafe_options` preference (default false) to DEFAULT_DECLARATION.
+**Where:** `src/aria_queue/contracts.py`
+**Scope:** 5 lines
+
+### [B5] Update callers — no API change
+
+**What:** Replace `aria2_set_bandwidth` → `aria2_set_global_download_limit` in bandwidth.py, scheduler.py. Add `aria2_set_global_upload_limit` call alongside.
+**Where:** `src/aria_queue/bandwidth.py`, `src/aria_queue/scheduler.py`
+**Depends on:** B1, B2
 
 ---
 
