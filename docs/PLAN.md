@@ -1,6 +1,20 @@
 # Plan
 
-No open items.
+### [E1] Restructure API endpoints for consistency
+
+**What:** Rename endpoints to follow consistent pattern. Breaking change.
+**Where:** `src/aria_queue/webapp.py`, `src/aria_queue/openapi.yaml`, `openapi.yaml`, tests
+**Why:** Current API mixes verb-only (`/api/pause`), noun-only (`/api/status`), and slash-action (`/api/torrents/stop`) styles.
+
+Renames:
+- `POST /api/pause` → `POST /api/scheduler/pause`
+- `POST /api/resume` → `POST /api/scheduler/resume`
+- `POST /api/run` → `POST /api/scheduler/start` + `POST /api/scheduler/stop` (split, no body `{action}`)
+- `POST /api/aria2/set_limits` → remove, use `change_global_option` with managed options unblocked for this endpoint
+- `POST /api/torrents/stop` → `POST /api/torrents/{infohash}/stop` (parameterized, like `/api/item/{id}/pause`)
+- `GET /api/scheduler` → keep (already correct)
+
+**Scope:** ~50 lines changed in webapp.py, ~30 in openapi.yaml, ~40 in tests
 
 _D1-D8 (private torrent distribution pipeline) implemented. See git history._
 

@@ -380,8 +380,8 @@ def _api_discovery() -> dict[str, object]:
                     "description": "Archive stale done/error items",
                 },
                 {
-                    "path": "/api/aria2/options",
-                    "description": "Change aria2 global options (safe subset)",
+                    "path": "/api/aria2/change_global_option",
+                    "description": "Change aria2 global options (3-tier safety)",
                 },
                 {"path": "/api/item/{id}/pause", "description": "Pause a queue item"},
                 {
@@ -481,7 +481,6 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         "/api/log": "_get_log",
         "/api/torrents": "_get_torrents",
         "/api/declaration": "_get_declaration",
-        "/api/options": "_get_declaration",
         "/api/aria2/get_global_option": "_get_aria2_global_option",
         "/api/aria2/get_option": "_get_aria2_option",
         "/api/aria2/option_tiers": "_get_aria2_option_tiers",
@@ -507,7 +506,6 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         "/api/aria2/change_option": "_post_aria2_change_option",
         "/api/aria2/set_limits": "_post_aria2_set_limits",
         "/api/torrents/stop": "_post_torrent_stop",
-        "/api/aria2/options": "_post_aria2_change_global_option",
     }
 
     def _invalidate_status_cache(self, event: str = "state_changed") -> None:

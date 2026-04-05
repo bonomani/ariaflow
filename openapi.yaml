@@ -2,9 +2,9 @@ openapi: 3.0.3
 info:
   title: Ariaflow API
   description: |
-    Headless download scheduler API. Manages queue state, sessions, runs,
+    Headless download engine API. Manages queue state, sessions, runs,
     and policy on top of aria2.
-  version: 0.1.38
+  version: 0.1.98
   license:
     name: MIT
 
@@ -31,7 +31,7 @@ paths:
     get:
       tags: [Queue]
       summary: Get queue status
-      description: Returns queue items, scheduler state, summary counts, and aria2 status.
+      description: Returns queue items, engine state, summary counts, and aria2 status.
       responses:
         "200":
           description: Current status
@@ -353,7 +353,7 @@ paths:
     post:
       tags: [Engine]
       summary: Pause all active transfers
-      description: Pauses all active aria2 downloads and sets scheduler paused state.
+      description: Pauses all active aria2 downloads and sets engine paused state.
       responses:
         "200":
           description: Pause result
@@ -373,7 +373,7 @@ paths:
     post:
       tags: [Engine]
       summary: Resume all paused transfers
-      description: Resumes all paused aria2 downloads and clears scheduler paused state.
+      description: Resumes all paused aria2 downloads and clears engine paused state.
       responses:
         "200":
           description: Resume result
@@ -424,18 +424,6 @@ paths:
                   declaration:
                     $ref: "#/components/schemas/Declaration"
 
-  /api/options:
-    get:
-      tags: [Config]
-      summary: Get scheduler options
-      description: Alias for GET /api/declaration.
-      responses:
-        "200":
-          description: Declaration
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Declaration"
 
   /api/docs:
     get:
@@ -501,7 +489,7 @@ paths:
                   exit_code:
                     type: integer
 
-  /api/aria2/options:
+  /api/aria2/change_global_option:
     post:
       tags: [Config]
       summary: Change aria2 global options

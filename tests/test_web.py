@@ -58,7 +58,7 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertIn("items", log_data)
                 declaration = request_json(f"{base}/api/declaration")
                 self.assertIn("uic", declaration)
-                options = request_json(f"{base}/api/options")
+                options = request_json(f"{base}/api/declaration")
                 self.assertIn("uic", options)
                 lifecycle = request_json(f"{base}/api/lifecycle")
                 self.assertIn("ariaflow", lifecycle)
@@ -337,7 +337,7 @@ class WebSmokeTests(unittest.TestCase):
                 base = f"http://127.0.0.1:{port}"
                 try:
                     request_json(
-                        f"{base}/api/aria2/options",
+                        f"{base}/api/aria2/change_global_option",
                         method="POST",
                         payload={"dir": "/tmp/evil"},
                     )

@@ -1015,7 +1015,7 @@ class TicOpenAPITests(unittest.TestCase):
         self.assertIn("paths", data)
         self.assertIn("/api/status", data["paths"])
         self.assertIn("/api/item/{item_id}/pause", data["paths"])
-        self.assertIn("/api/aria2/options", data["paths"])
+        self.assertIn("/api/aria2/change_global_option", data["paths"])
 
 
 if __name__ == "__main__":

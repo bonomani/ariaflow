@@ -463,7 +463,7 @@ class TestAria2Options(APIServerPerTestCase):
             patch("aria_queue.core.aria2_current_global_options", return_value={}),
         ):
             code, body = _request(
-                f"{self.base}/api/aria2/options",
+                f"{self.base}/api/aria2/change_global_option",
                 "POST",
                 {
                     "max-concurrent-downloads": "5",
@@ -479,7 +479,7 @@ class TestAria2Options(APIServerPerTestCase):
             patch("aria_queue.core.aria2_current_global_options", return_value={}),
         ):
             code, body = _request(
-                f"{self.base}/api/aria2/options",
+                f"{self.base}/api/aria2/change_global_option",
                 "POST",
                 {
                     "max-concurrent-downloads": "3",
@@ -492,7 +492,7 @@ class TestAria2Options(APIServerPerTestCase):
 
     def test_unsafe_option_rejected(self) -> None:
         code, body = _request(
-            f"{self.base}/api/aria2/options",
+            f"{self.base}/api/aria2/change_global_option",
             "POST",
             {
                 "dir": "/tmp/evil",
@@ -503,7 +503,7 @@ class TestAria2Options(APIServerPerTestCase):
 
     def test_mixed_safe_unsafe_rejected(self) -> None:
         code, body = _request(
-            f"{self.base}/api/aria2/options",
+            f"{self.base}/api/aria2/change_global_option",
             "POST",
             {
                 "max-concurrent-downloads": "3",
@@ -514,12 +514,12 @@ class TestAria2Options(APIServerPerTestCase):
         self.assertEqual(body["error"], "rejected_options")
 
     def test_empty_options_rejected(self) -> None:
-        code, body = _request(f"{self.base}/api/aria2/options", "POST", {})
+        code, body = _request(f"{self.base}/api/aria2/change_global_option", "POST", {})
         self.assertEqual(code, 400)
         self.assertIn(body["error"], ("empty_options", "invalid_payload"))
 
     def test_non_object_payload_rejected(self) -> None:
-        code, body = _request(f"{self.base}/api/aria2/options", "POST", None)
+        code, body = _request(f"{self.base}/api/aria2/change_global_option", "POST", None)
         self.assertEqual(code, 400)
 
     def test_all_six_safe_options(self) -> None:
@@ -535,13 +535,13 @@ class TestAria2Options(APIServerPerTestCase):
             patch("aria_queue.core.aria_rpc"),
             patch("aria_queue.core.aria2_current_global_options", return_value={}),
         ):
-            code, body = _request(f"{self.base}/api/aria2/options", "POST", all_safe)
+            code, body = _request(f"{self.base}/api/aria2/change_global_option", "POST", all_safe)
         self.assertEqual(code, 200)
         self.assertEqual(len(body["applied"]), 6)
 
     def test_managed_options_rejected(self) -> None:
         managed = {"max-overall-download-limit": "0"}
-        code, body = _request(f"{self.base}/api/aria2/options", "POST", managed)
+        code, body = _request(f"{self.base}/api/aria2/change_global_option", "POST", managed)
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "managed_options")
 
@@ -755,7 +755,7 @@ class TestDeclaration(APIServerPerTestCase):
 
     def test_get_options_is_alias(self) -> None:
         _, decl = _request(f"{self.base}/api/declaration")
-        _, opts = _request(f"{self.base}/api/options")
+        _, opts = _request(f"{self.base}/api/declaration")
         decl.pop("_request_id", None)
         opts.pop("_request_id", None)
         self.assertEqual(decl, opts)
@@ -1176,9 +1176,9 @@ class TestGetEndpoints(APIServerTestCase):
         self.assertIn("gates", body["uic"])
         self.assertIn("preferences", body["uic"])
 
-    # 6. GET /api/options (alias)
+    # 6. GET /api/declaration (alias)
     def test_get_api_options(self) -> None:
-        code, body, _ = _req(f"{self.base}/api/options")
+        code, body, _ = _req(f"{self.base}/api/declaration")
         self.assertEqual(code, 200)
         self.assertIn("uic", body)
 
@@ -1430,14 +1430,14 @@ class TestPostEndpoints(APIServerTestCase):
         self.assertIn("down_cap_mbps", body)
         self.assertIn("up_cap_mbps", body)
 
-    # 11. POST /api/aria2/options
+    # 11. POST /api/aria2/change_global_option
     def test_post_api_aria2_options_safe(self) -> None:
         with (
             patch("aria_queue.core.aria_rpc"),
             patch("aria_queue.core.aria2_current_global_options", return_value={}),
         ):
             code, body, _ = _req(
-                f"{self.base}/api/aria2/options",
+                f"{self.base}/api/aria2/change_global_option",
                 "POST",
                 {
                     "max-concurrent-downloads": "3",
@@ -1447,7 +1447,7 @@ class TestPostEndpoints(APIServerTestCase):
         self.assertTrue(body["ok"])
 
     def test_post_api_aria2_options_unsafe(self) -> None:
-        code, body, _ = _req(f"{self.base}/api/aria2/options", "POST", {"dir": "/evil"})
+        code, body, _ = _req(f"{self.base}/api/aria2/change_global_option", "POST", {"dir": "/evil"})
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "rejected_options")
 

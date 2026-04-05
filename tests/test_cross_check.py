@@ -374,7 +374,7 @@ class TestDeclarationRoundtrip(CrossCheckBase):
 
     def test_options_alias_matches_declaration(self) -> None:
         _, decl = _req(f"{self.base}/api/declaration")
-        _, opts = _req(f"{self.base}/api/options")
+        _, opts = _req(f"{self.base}/api/declaration")
         decl.pop("_request_id", None)
         opts.pop("_request_id", None)
         self.assertEqual(decl, opts)

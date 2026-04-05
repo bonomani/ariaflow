@@ -424,18 +424,6 @@ paths:
                   declaration:
                     $ref: "#/components/schemas/Declaration"
 
-  /api/options:
-    get:
-      tags: [Config]
-      summary: Get engine options
-      description: Alias for GET /api/declaration.
-      responses:
-        "200":
-          description: Declaration
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Declaration"
 
   /api/docs:
     get:
@@ -501,7 +489,7 @@ paths:
                   exit_code:
                     type: integer
 
-  /api/aria2/options:
+  /api/aria2/change_global_option:
     post:
       tags: [Config]
       summary: Change aria2 global options

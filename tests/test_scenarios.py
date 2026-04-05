@@ -445,7 +445,7 @@ class TestScenarioAria2Options(ScenarioBase):
 
         # Try unsafe option → rejected
         code, body, _ = _req(
-            f"{base}/api/aria2/options",
+            f"{base}/api/aria2/change_global_option",
             "POST",
             {
                 "dir": "/tmp/evil",
@@ -462,7 +462,7 @@ class TestScenarioAria2Options(ScenarioBase):
             patch("aria_queue.core.aria2_current_global_options", return_value={}),
         ):
             _, result, _ = _req(
-                f"{base}/api/aria2/options",
+                f"{base}/api/aria2/change_global_option",
                 "POST",
                 {
                     "max-concurrent-downloads": "5",
