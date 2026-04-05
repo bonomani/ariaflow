@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import getpass
 import platform
 import shutil
 import subprocess
@@ -8,6 +9,45 @@ from contextlib import contextmanager
 from typing import Iterator
 
 from .state import record_action
+
+
+def _device_name() -> str:
+    """Return a human-friendly device name.
+
+    macOS: model via sysctl (e.g. ``Mac mini``).
+    Others: hostname from :func:`platform.node`.
+    """
+    if platform.system() == "Darwin":
+        try:
+            import subprocess as _sp
+            result = _sp.run(
+                ["sysctl", "-n", "hw.model"],
+                capture_output=True, text=True, timeout=5,
+            )
+            model = result.stdout.strip()
+            if model:
+                return model
+        except Exception:
+            pass
+    return platform.node() or "unknown"
+
+
+def _instance_name() -> str:
+    """Build a human-friendly instance name: ``{user}'s {device} AriaFlow``.
+
+    Follows Apple convention (e.g. ``bc's Mac mini AriaFlow``).
+    Truncated to 63 bytes (RFC 6763 limit for instance names).
+    """
+    try:
+        user = getpass.getuser()
+    except Exception:
+        user = "unknown"
+    device = _device_name()
+    name = f"{user}'s {device} AriaFlow"
+    encoded = name.encode("utf-8")
+    if len(encoded) > 63:
+        name = encoded[:63].decode("utf-8", errors="ignore")
+    return name
 
 
 def _dns_sd_path() -> str | None:
@@ -39,118 +79,38 @@ def bonjour_available() -> bool:
     return _detect_backend() is not None
 
 
-def build_dns_sd_cmd(
-    *, role: str, port: int, path: str, product: str, version: str
-) -> list[str]:
+def build_dns_sd_cmd(*, port: int, path: str) -> list[str]:
     """Build dns-sd command (macOS / Windows)."""
     binary = _dns_sd_path() or "dns-sd"
     return [
         binary,
         "-R",
-        f"ariaflow-{role}",
+        _instance_name(),
         "_ariaflow._tcp",
         "local",
         str(port),
-        f"role={role}",
         f"path={path}",
-        f"product={product}",
-        f"version={version}",
-        "proto=http",
+        "tls=0",
     ]
 
 
-def build_avahi_cmd(
-    *, role: str, port: int, path: str, product: str, version: str
-) -> list[str]:
+def build_avahi_cmd(*, port: int, path: str) -> list[str]:
     """Build avahi-publish-service command (Linux)."""
     binary = _avahi_publish_path() or "avahi-publish-service"
     return [
         binary,
-        f"ariaflow-{role}",
+        _instance_name(),
         "_ariaflow._tcp",
         str(port),
-        f"role={role}",
         f"path={path}",
-        f"product={product}",
-        f"version={version}",
-        "proto=http",
+        "tls=0",
     ]
-
-
-def advertise_torrent(
-    *, name: str, infohash: str, torrent_url: str,
-    tracker: str, size: int, version: str,
-) -> subprocess.Popen | None:
-    """Register a torrent as _ariaflow-torrent._tcp. Returns process or None."""
-    backend = _detect_backend()
-    detail = {"name": name, "infohash": infohash, "backend": backend}
-    if backend is None:
-        record_action(
-            action="bonjour_torrent_register", target="system",
-            outcome="skipped", reason="no_mdns_backend", detail=detail,
-        )
-        return None
-    txt_records = [
-        f"name={name}",
-        f"infohash={infohash}",
-        f"torrent_url={torrent_url}",
-        f"tracker={tracker}",
-        f"size={size}",
-        f"version={version}",
-    ]
-    if backend == "avahi":
-        binary = _avahi_publish_path() or "avahi-publish-service"
-        cmd = [binary, f"ariaflow-torrent-{infohash[:8]}", "_ariaflow-torrent._tcp", "0"] + txt_records
-    else:
-        binary = _dns_sd_path() or "dns-sd"
-        cmd = [binary, "-R", f"ariaflow-torrent-{infohash[:8]}", "_ariaflow-torrent._tcp", "local", "0"] + txt_records
-    try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except (FileNotFoundError, PermissionError) as exc:
-        record_action(
-            action="bonjour_torrent_register", target="system",
-            outcome="failed", reason="binary_not_found", detail={**detail, "error": str(exc)},
-        )
-        return None
-    time.sleep(0.2)
-    if proc.poll() is not None:
-        record_action(
-            action="bonjour_torrent_register", target="system",
-            outcome="failed", reason="process_exited_early", detail=detail,
-        )
-        return None
-    record_action(
-        action="bonjour_torrent_register", target="system",
-        outcome="changed", reason="registered", detail=detail,
-    )
-    return proc
-
-
-def stop_torrent_advertisement(proc: subprocess.Popen | None) -> None:
-    """Stop a torrent Bonjour advertisement."""
-    if proc is None:
-        return
-    try:
-        proc.terminate()
-        try:
-            proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait(timeout=2)
-    except Exception:
-        pass
-    record_action(
-        action="bonjour_torrent_deregister", target="system",
-        outcome="changed", reason="stopped",
-    )
 
 
 @contextmanager
-def advertise_http_service(
-    *, role: str, port: int, path: str, product: str, version: str
-) -> Iterator[None]:
+def advertise_http_service(*, port: int, path: str = "/api") -> Iterator[None]:
     backend = _detect_backend()
-    detail = {"role": role, "port": port, "backend": backend}
+    detail = {"port": port, "path": path, "backend": backend}
     if backend is None:
         record_action(
             action="bonjour_register", target="system",
@@ -158,7 +118,7 @@ def advertise_http_service(
         )
         yield
         return
-    kwargs = dict(role=role, port=port, path=path, product=product, version=version)
+    kwargs = dict(port=port, path=path)
     cmd = build_avahi_cmd(**kwargs) if backend == "avahi" else build_dns_sd_cmd(**kwargs)
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

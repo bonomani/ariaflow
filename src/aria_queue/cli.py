@@ -139,13 +139,7 @@ def main() -> int:
         server = serve_api(host=args.host, port=args.port)
         print(f"Serving API on http://{args.host}:{args.port}")
         try:
-            with advertise_http_service(
-                role="api",
-                port=args.port,
-                path="/api/health",
-                product="ariaflow",
-                version=__version__,
-            ):
+            with advertise_http_service(port=args.port):
                 server.serve_forever()
         except KeyboardInterrupt:
             server.server_close()

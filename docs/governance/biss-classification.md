@@ -16,7 +16,7 @@
 | Declaration file | system-to-storage | internal | contract persistence | `declaration.json` — UIC gates, preferences, policies |
 | File lock | system-to-storage | internal | concurrency control | `.storage.lock` — fcntl + RLock mutual exclusion |
 | Config directory | system-to-filesystem | internal | configuration | `~/.config/aria-queue/` (override via `ARIA_QUEUE_DIR`) |
-| Bonjour/mDNS | system-to-network | outbound | discovery | Service advertisement on local network |
+| Bonjour/mDNS | system-to-network | outbound | discovery | `_ariaflow._tcp` service advertisement; torrent discovery via `GET /api/torrents` |
 | Internal tracker | system-to-network | outbound | distribution | Private BitTorrent tracker announce URL for torrent distribution |
 | Torrent file serving | system-to-user | outbound | distribution | `GET /api/torrents/{infohash}.torrent` serves created `.torrent` files |
 | BitTorrent swarm | system-to-network | bidirectional | distribution | aria2 seeds private torrents to peers on internal tracker |

@@ -353,58 +353,85 @@ class TestAdvertiseHttpService(unittest.TestCase):
     @patch("aria_queue.bonjour._detect_backend", return_value=None)
     def test_context_manager_noop(self, _mock: MagicMock) -> None:
         from aria_queue.bonjour import advertise_http_service
-        with advertise_http_service(
-            role="api", port=8080, path="/", product="test", version="0.1"
-        ):
+        with advertise_http_service(port=8080):
             pass  # should not crash
 
 
 class TestBonjourCommandConstruction(unittest.TestCase):
-    def test_dns_sd_cmd_structure(self) -> None:
+    @patch("aria_queue.bonjour._device_name", return_value="myhost")
+    @patch("aria_queue.bonjour.getpass.getuser", return_value="testuser")
+    def test_dns_sd_cmd_structure(self, _user: MagicMock, _dev: MagicMock) -> None:
         from aria_queue.bonjour import build_dns_sd_cmd
-        cmd = build_dns_sd_cmd(
-            role="api", port=8000, path="/api/health",
-            product="ariaflow", version="1.0.0",
-        )
-        self.assertEqual(cmd[2], "ariaflow-api")
+        cmd = build_dns_sd_cmd(port=8000, path="/api")
+        self.assertEqual(cmd[2], "testuser's myhost AriaFlow")
         self.assertEqual(cmd[3], "_ariaflow._tcp")
         self.assertEqual(cmd[4], "local")
         self.assertEqual(cmd[5], "8000")
-        self.assertIn("role=api", cmd)
-        self.assertIn("path=/api/health", cmd)
-        self.assertIn("product=ariaflow", cmd)
-        self.assertIn("version=1.0.0", cmd)
-        self.assertIn("proto=http", cmd)
+        self.assertIn("path=/api", cmd)
+        self.assertIn("tls=0", cmd)
+        # Removed TXT records should not be present
+        for arg in cmd:
+            self.assertNotIn("role=", arg) if "=" in arg and arg.startswith("role=") else None
+            self.assertNotIn("proto=", arg) if "=" in arg and arg.startswith("proto=") else None
+            self.assertNotIn("product=", arg) if "=" in arg and arg.startswith("product=") else None
 
-    def test_avahi_cmd_structure(self) -> None:
+    @patch("aria_queue.bonjour._device_name", return_value="myhost")
+    @patch("aria_queue.bonjour.getpass.getuser", return_value="testuser")
+    def test_avahi_cmd_structure(self, _user: MagicMock, _dev: MagicMock) -> None:
         from aria_queue.bonjour import build_avahi_cmd
-        cmd = build_avahi_cmd(
-            role="api", port=8000, path="/api/health",
-            product="ariaflow", version="1.0.0",
-        )
-        self.assertEqual(cmd[1], "ariaflow-api")
+        cmd = build_avahi_cmd(port=8000, path="/api")
+        self.assertEqual(cmd[1], "testuser's myhost AriaFlow")
         self.assertEqual(cmd[2], "_ariaflow._tcp")
         self.assertEqual(cmd[3], "8000")
-        self.assertIn("role=api", cmd)
-        self.assertIn("path=/api/health", cmd)
-        self.assertIn("proto=http", cmd)
+        self.assertIn("path=/api", cmd)
+        self.assertIn("tls=0", cmd)
 
-    def test_dns_sd_and_avahi_same_service_type(self) -> None:
+    @patch("aria_queue.bonjour._device_name", return_value="myhost")
+    @patch("aria_queue.bonjour.getpass.getuser", return_value="testuser")
+    def test_dns_sd_and_avahi_same_service_type(self, _user: MagicMock, _dev: MagicMock) -> None:
         from aria_queue.bonjour import build_dns_sd_cmd, build_avahi_cmd
-        kwargs = dict(role="api", port=8000, path="/api/health",
-                      product="ariaflow", version="1.0.0")
+        kwargs = dict(port=8000, path="/api")
         dns_cmd = build_dns_sd_cmd(**kwargs)
         avahi_cmd = build_avahi_cmd(**kwargs)
         self.assertEqual(dns_cmd[3], "_ariaflow._tcp")
         self.assertEqual(avahi_cmd[2], "_ariaflow._tcp")
 
-    def test_dns_sd_and_avahi_same_txt_records(self) -> None:
+    @patch("aria_queue.bonjour._device_name", return_value="myhost")
+    @patch("aria_queue.bonjour.getpass.getuser", return_value="testuser")
+    def test_dns_sd_and_avahi_same_txt_records(self, _user: MagicMock, _dev: MagicMock) -> None:
         from aria_queue.bonjour import build_dns_sd_cmd, build_avahi_cmd
-        kwargs = dict(role="api", port=8000, path="/api/health",
-                      product="ariaflow", version="1.0.0")
+        kwargs = dict(port=8000, path="/api")
         dns_txt = set(s for s in build_dns_sd_cmd(**kwargs) if "=" in s)
         avahi_txt = set(s for s in build_avahi_cmd(**kwargs) if "=" in s)
         self.assertEqual(dns_txt, avahi_txt)
+
+    def test_instance_name_truncates_at_63_bytes(self) -> None:
+        from aria_queue.bonjour import _instance_name
+        with patch("aria_queue.bonjour.getpass.getuser", return_value="a" * 80), \
+             patch("aria_queue.bonjour._device_name", return_value="host"):
+            name = _instance_name()
+            self.assertLessEqual(len(name.encode("utf-8")), 63)
+
+    def test_txt_keys_max_9_chars(self) -> None:
+        """All TXT record keys must be ≤9 characters (Apple best practice)."""
+        from aria_queue.bonjour import build_dns_sd_cmd
+        with patch("aria_queue.bonjour.getpass.getuser", return_value="test"), \
+             patch("aria_queue.bonjour._device_name", return_value="host"):
+            cmd = build_dns_sd_cmd(port=8000, path="/api")
+        for arg in cmd:
+            if "=" in arg:
+                key = arg.split("=", 1)[0]
+                self.assertLessEqual(len(key), 9, f"TXT key '{key}' exceeds 9 chars")
+
+    def test_service_type_max_15_chars(self) -> None:
+        """Service type must be ≤15 characters (excluding underscore prefix)."""
+        from aria_queue.bonjour import build_dns_sd_cmd
+        with patch("aria_queue.bonjour.getpass.getuser", return_value="test"), \
+             patch("aria_queue.bonjour._device_name", return_value="host"):
+            cmd = build_dns_sd_cmd(port=8000, path="/api")
+        svc_type = cmd[3]  # _ariaflow._tcp
+        name_part = svc_type.split(".")[0].lstrip("_")  # ariaflow
+        self.assertLessEqual(len(name_part), 15, f"Service type '{name_part}' exceeds 15 chars")
 
 
 # ── aria2_rpc.py ────────────────────────────────────────────────────
@@ -885,30 +912,13 @@ class TestBonjourRecordAction(IsolatedTestCase):
         from aria_queue.bonjour import advertise_http_service
         from aria_queue.core import ensure_storage, load_action_log
         ensure_storage()
-        with advertise_http_service(
-            role="api", port=8080, path="/", product="test", version="0.1"
-        ):
+        with advertise_http_service(port=8080):
             pass
         entries = load_action_log()
         register_entries = [e for e in entries if e.get("action") == "bonjour_register"]
         self.assertTrue(len(register_entries) >= 1)
         self.assertEqual(register_entries[0]["outcome"], "skipped")
         self.assertEqual(register_entries[0]["reason"], "no_mdns_backend")
-
-    @patch("aria_queue.bonjour._detect_backend", return_value=None)
-    def test_torrent_skipped_logs_action(self, _mock: MagicMock) -> None:
-        from aria_queue.bonjour import advertise_torrent
-        from aria_queue.core import ensure_storage, load_action_log
-        ensure_storage()
-        result = advertise_torrent(
-            name="test", infohash="abc123", torrent_url="http://x",
-            tracker="http://t", size=1000, version="1.0",
-        )
-        self.assertIsNone(result)
-        entries = load_action_log()
-        register_entries = [e for e in entries if e.get("action") == "bonjour_torrent_register"]
-        self.assertTrue(len(register_entries) >= 1)
-        self.assertEqual(register_entries[0]["outcome"], "skipped")
 
     @patch("aria_queue.bonjour.subprocess.Popen")
     @patch("aria_queue.bonjour._detect_backend", return_value="dns-sd")
@@ -922,9 +932,7 @@ class TestBonjourRecordAction(IsolatedTestCase):
         proc = MagicMock()
         proc.poll.return_value = None  # process still running
         mock_popen.return_value = proc
-        with advertise_http_service(
-            role="api", port=8080, path="/", product="test", version="0.1"
-        ):
+        with advertise_http_service(port=8080):
             pass
         entries = load_action_log()
         register = [e for e in entries if e.get("action") == "bonjour_register" and e.get("outcome") == "changed"]
