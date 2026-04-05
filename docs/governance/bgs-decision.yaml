@@ -1,6 +1,6 @@
 decision_id: ariaflow-scheduler-001
 bgs_slice: BGS-State-Modeled-Governed-Verified
-declared_scope: "scheduler execution path: session, run, queue, and job lifecycle"
+declared_scope: "scheduler execution path: session, run, queue, job lifecycle, distribution pipeline, service discovery, installation lifecycle"
 decision_reason: >
   Ariaflow is a stateful download scheduler with explicit session/run lifecycle,
   preflight readiness checks, and queue/job state transitions. The scope
@@ -40,9 +40,10 @@ evidence_refs:
   - ./tests/
 
 owner: bonomani
-date: 2026-04-03
+date: 2026-04-05
 
 limitations:
-  - BISS classification is initial and needs expansion as new boundaries are added
+  - BISS classification covers 16 boundaries and 9 interaction classes; needs expansion as new boundaries are added
   - ASM state model formalized in docs/governance/asm-state-model.md
-  - TIC oracle covers all 374 tests with trace targets across ASM/UIC/UCC/BISS
+  - TIC oracle covers all 455 tests with trace targets across ASM/UIC/UCC/BISS
+  - UIC has 2 preflight gates and 17 preferences

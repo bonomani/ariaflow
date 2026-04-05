@@ -17,6 +17,9 @@
 | File lock | system-to-storage | internal | concurrency control | `.storage.lock` — fcntl + RLock mutual exclusion |
 | Config directory | system-to-filesystem | internal | configuration | `~/.config/aria-queue/` (override via `ARIA_QUEUE_DIR`) |
 | Bonjour/mDNS | system-to-network | outbound | discovery | Service advertisement on local network |
+| Internal tracker | system-to-network | outbound | distribution | Private BitTorrent tracker announce URL for torrent distribution |
+| Torrent file serving | system-to-user | outbound | distribution | `GET /api/torrents/{infohash}.torrent` serves created `.torrent` files |
+| BitTorrent swarm | system-to-network | bidirectional | distribution | aria2 seeds private torrents to peers on internal tracker |
 | Homebrew | system-to-package-manager | external | installation | `brew install/upgrade` lifecycle |
 
 ## Interaction Classes
@@ -30,4 +33,5 @@
 | **state persistence** | `queue.json`, `state.json`, `declaration.json` are the source of truth, accessed under file lock |
 | **audit persistence** | `actions.jsonl` and `sessions.jsonl` provide full operational history |
 | **discovery** | Bonjour advertises the service for local network clients |
+| **distribution** | Private torrent creation, seeding, and file serving for internal content distribution |
 | **installation** | Homebrew manages the install/upgrade lifecycle via tap formulas |
