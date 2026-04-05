@@ -74,22 +74,22 @@ class WebSmokeTests(unittest.TestCase):
                 with (
                     patch("aria_queue.webapp.is_macos", return_value=True),
                     patch(
-                        "aria_queue.webapp.homebrew_install_ariaflow",
+                        "aria_queue.routes.lifecycle.homebrew_install_ariaflow",
                         return_value=[
                             "brew tap bonomani/ariaflow",
                             "brew install ariaflow",
                         ],
                     ),
                     patch(
-                        "aria_queue.webapp.homebrew_uninstall_ariaflow",
+                        "aria_queue.routes.lifecycle.homebrew_uninstall_ariaflow",
                         return_value=["brew uninstall ariaflow"],
                     ),
                     patch(
-                        "aria_queue.webapp.install_aria2_launchd",
+                        "aria_queue.routes.lifecycle.install_aria2_launchd",
                         return_value=["load aria2"],
                     ),
                     patch(
-                        "aria_queue.webapp.uninstall_aria2_launchd",
+                        "aria_queue.routes.lifecycle.uninstall_aria2_launchd",
                         return_value=["unload aria2"],
                     ),
                 ):

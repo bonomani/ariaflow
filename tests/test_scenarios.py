@@ -674,7 +674,7 @@ class TestScenarioLifecycle(ScenarioBase):
         with (
             patch("aria_queue.webapp.is_macos", return_value=True),
             patch(
-                "aria_queue.webapp.homebrew_install_ariaflow",
+                "aria_queue.routes.lifecycle.homebrew_install_ariaflow",
                 return_value=["brew install ariaflow"],
             ),
         ):
@@ -692,7 +692,7 @@ class TestScenarioLifecycle(ScenarioBase):
         with (
             patch("aria_queue.webapp.is_macos", return_value=True),
             patch(
-                "aria_queue.webapp.homebrew_uninstall_ariaflow",
+                "aria_queue.routes.lifecycle.homebrew_uninstall_ariaflow",
                 return_value=["brew uninstall ariaflow"],
             ),
         ):

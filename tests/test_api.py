@@ -1553,7 +1553,7 @@ class TestPostEndpoints(APIServerTestCase):
         with (
             patch("aria_queue.webapp.is_macos", return_value=True),
             patch(
-                "aria_queue.webapp.homebrew_install_ariaflow",
+                "aria_queue.routes.lifecycle.homebrew_install_ariaflow",
                 return_value=["brew install ariaflow"],
             ),
         ):
