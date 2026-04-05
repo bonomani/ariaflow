@@ -139,11 +139,23 @@ def main() -> int:
             return 1
         server = serve_api(host=args.host, port=args.port)
         start_background_process(port=6800)
+        # Start peer discovery if enabled
+        from .discovery import start_discovery, stop_discovery
+        from .contracts import load_declaration
+        decl = load_declaration()
+        discover = False
+        for pref in decl.get("uic", {}).get("preferences", []):
+            if pref.get("name") == "auto_discover_peers":
+                discover = bool(pref.get("value", False))
+        if discover:
+            start_discovery()
         print(f"Serving API on http://{args.host}:{args.port}")
         try:
             with advertise_http_service(port=args.port):
                 server.serve_forever()
         except KeyboardInterrupt:
+            if discover:
+                stop_discovery()
             server.server_close()
         return 0
 

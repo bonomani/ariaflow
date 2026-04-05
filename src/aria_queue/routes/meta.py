@@ -61,6 +61,7 @@ def _api_discovery() -> dict[str, object]:
                     "path": "/api/downloads/{id}/files",
                     "description": "List torrent/metalink files",
                 },
+                {"path": "/api/peers", "description": "Discovered ariaflow peers on the network"},
                 {"path": "/api/docs", "description": "Swagger UI"},
                 {"path": "/api/openapi.yaml", "description": "OpenAPI 3.0 spec"},
                 {"path": "/api/tests", "description": "Run test suite"},

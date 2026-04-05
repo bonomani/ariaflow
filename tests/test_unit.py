@@ -1008,5 +1008,76 @@ class TestDiskSpaceCheck(unittest.TestCase):
         mock_usage.assert_not_called()
 
 
+# ── discovery.py ───────────────────────────────────────────────────
+
+
+class TestDiscoveryParsers(unittest.TestCase):
+    def test_parse_dns_sd_browse_add(self) -> None:
+        from aria_queue.discovery import _parse_dns_sd_browse_line
+        line = "12:00:00.000  Add        3  4  local.  _ariaflow._tcp.  bc's Mac mini AriaFlow"
+        result = _parse_dns_sd_browse_line(line)
+        self.assertIsNotNone(result)
+        instance, event, is_add = result  # type: ignore[misc]
+        self.assertEqual(instance, "bc's Mac mini AriaFlow")
+        self.assertTrue(is_add)
+
+    def test_parse_dns_sd_browse_remove(self) -> None:
+        from aria_queue.discovery import _parse_dns_sd_browse_line
+        line = "12:00:01.000  Rmv        0  4  local.  _ariaflow._tcp.  bc's Mac mini AriaFlow"
+        result = _parse_dns_sd_browse_line(line)
+        self.assertIsNotNone(result)
+        instance, event, is_add = result  # type: ignore[misc]
+        self.assertEqual(instance, "bc's Mac mini AriaFlow")
+        self.assertFalse(is_add)
+
+    def test_parse_dns_sd_browse_ignores_header(self) -> None:
+        from aria_queue.discovery import _parse_dns_sd_browse_line
+        self.assertIsNone(_parse_dns_sd_browse_line("Browsing for _ariaflow._tcp"))
+
+    def test_parse_avahi_browse_resolved(self) -> None:
+        from aria_queue.discovery import _parse_avahi_browse_line
+        line = '=;eth0;IPv4;bc AriaFlow;_ariaflow._tcp;local;bc-mini.local;192.168.1.10;8080;"path=/api" "tls=0"'
+        result = _parse_avahi_browse_line(line)
+        self.assertIsNotNone(result)
+        instance, info = result  # type: ignore[misc]
+        self.assertEqual(instance, "bc AriaFlow")
+        self.assertEqual(info["host"], "bc-mini.local")
+        self.assertEqual(info["port"], 8080)
+        self.assertEqual(info["base_url"], "http://bc-mini.local:8080/api")
+        self.assertFalse(info["tls"])
+
+    def test_parse_avahi_browse_removed(self) -> None:
+        from aria_queue.discovery import _parse_avahi_browse_line
+        line = "-;eth0;IPv4;bc AriaFlow;_ariaflow._tcp;local"
+        result = _parse_avahi_browse_line(line)
+        self.assertIsNotNone(result)
+        instance, info = result  # type: ignore[misc]
+        self.assertEqual(instance, "bc AriaFlow")
+        self.assertTrue(info.get("removed"))
+
+    def test_matches_filter_empty_accepts_all(self) -> None:
+        from aria_queue.discovery import _matches_filter
+        self.assertTrue(_matches_filter({"name": "anything"}, ""))
+
+    def test_matches_filter_glob(self) -> None:
+        from aria_queue.discovery import _matches_filter
+        self.assertTrue(_matches_filter({"name": "movie.mkv"}, "*.mkv"))
+        self.assertFalse(_matches_filter({"name": "movie.avi"}, "*.mkv"))
+
+    def test_matches_allowlist_empty_accepts_all(self) -> None:
+        from aria_queue.discovery import _matches_allowlist
+        self.assertTrue(_matches_allowlist({"instance": "any"}, ""))
+
+    def test_matches_allowlist_filters(self) -> None:
+        from aria_queue.discovery import _matches_allowlist
+        self.assertTrue(_matches_allowlist({"instance": "bc's Mac"}, "bc's Mac, alice's PC"))
+        self.assertFalse(_matches_allowlist({"instance": "eve's PC"}, "bc's Mac, alice's PC"))
+
+    def test_list_peers_empty(self) -> None:
+        from aria_queue.discovery import list_peers
+        # Should return a list (may or may not be empty depending on state)
+        self.assertIsInstance(list_peers(), list)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -79,6 +79,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         "/api/status": routes.get_status,
         "/api/log": routes.get_log,
         "/api/torrents": routes.get_torrents,
+        "/api/peers": routes.get_peers,
         "/api/declaration": routes.get_declaration,
         "/api/aria2/get_global_option": routes.get_aria2_global_option,
         "/api/aria2/get_option": routes.get_aria2_option,

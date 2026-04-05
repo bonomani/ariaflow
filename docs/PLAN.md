@@ -1,66 +1,6 @@
 # Plan
 
-### [P2] Peer discovery and auto-download
-
-**What:** Background thread that browses `_ariaflow._tcp`, resolves peers, polls their `GET /api/torrents`, and auto-downloads new torrents.
-
-**Why:** Enables automatic content distribution across ariaflow instances on the LAN without user intervention.
-
-**Where:** New module `src/aria_queue/discovery.py`, new preferences in `contracts.py`, new endpoint in routes.
-
-**How it works:**
-
-1. **Browse** — continuously listen for `_ariaflow._tcp` on the local network
-   - macOS/Windows: shell out to `dns-sd -B _ariaflow._tcp local` (long-running, outputs as peers appear)
-   - Linux: shell out to `avahi-browse -r _ariaflow._tcp` (same pattern)
-   - Parse stdout lines to detect new/removed peers
-
-2. **Resolve** — for each discovered peer, get connection details
-   - macOS/Windows: `dns-sd -L "{instance}" _ariaflow._tcp local` → host, port, TXT
-   - Linux: `avahi-resolve-host-name {host}` or use output from `avahi-browse -r`
-   - Read TXT: `path=/api`, `tls=0|1` → build base URL
-
-3. **Poll** — periodically call each peer's `GET /api/torrents`
-   - Interval: `peer_poll_interval_seconds` preference (default 60)
-   - Returns list of available torrents with infohash, URL, metadata
-   - Compare against local queue — skip already known infohashes
-
-4. **Fetch** — for new torrents:
-   - Check disk space (P3) — skip if over limit
-   - Download `.torrent` file from peer → save to `torrent_dir`
-   - Submit to local aria2 via existing `add_queue_item()` with `mode=torrent`
-   - Track provenance: `source_peer` field on queue item
-
-**New preferences (`contracts.py`):**
-- `auto_discover_peers` — `false` (default off, opt-in)
-- `peer_poll_interval_seconds` — `60` (how often to check peers)
-- `peer_max_auto_downloads` — `5` (max torrents to auto-fetch per poll cycle)
-- `peer_content_filter` — `""` (glob pattern, empty = accept all)
-- `peer_allowlist` — `""` (comma-separated instance names, empty = accept all)
-
-**New endpoint:**
-- `GET /api/peers` — list of discovered peers with host, port, last_seen, torrent_count, status
-
-**New module `discovery.py` (~200 lines):**
-- `start_discovery(port)` — starts browse thread + poll thread
-- `stop_discovery()` — kills browse process, stops poll thread
-- `list_peers()` — returns current peer list
-- `_browse_loop()` — runs `dns-sd -B` / `avahi-browse`, parses output, maintains peer dict
-- `_resolve_peer(instance)` — runs `dns-sd -L` / uses avahi output, returns host:port:path
-- `_poll_loop()` — periodic: for each peer, GET /api/torrents, filter, fetch new
-- `_fetch_torrent(peer, torrent)` — download .torrent file, submit to queue
-
-**Lifecycle:**
-- Started in `cli.py` alongside scheduler (if `auto_discover_peers` is true)
-- Stopped on shutdown (in `finally` block or signal handler)
-- Paused/resumed with scheduler
-
-**Scope:** ~200 lines new module, ~30 lines preferences, ~20 lines endpoint, ~20 lines cli.py.
-**Depends on:** P1 (scheduler auto-start).
-
----
-
-**Depends on:** P1 (done), P3 (done).
+No open items.
 
 **What:** Convert `routes.py` (1290 lines, 40 handlers) into a `routes/` package with one file per resource.
 **Where:** `src/aria_queue/routes.py` → `src/aria_queue/routes/`
