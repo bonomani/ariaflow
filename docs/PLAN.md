@@ -60,56 +60,7 @@
 
 ---
 
-### [P3] Disk space management
-
-**What:** Check available disk space before downloading. Stop auto-downloads when disk usage exceeds threshold.
-
-**Where:** `src/aria_queue/scheduler.py` (check before submit), `contracts.py` (new preferences), `discovery.py` (check before auto-fetch).
-
-**Why:** Without this, peer discovery (P2) could fill the disk. Also useful for regular downloads.
-
-**New preferences:**
-- `max_disk_usage_percent` — `90` (stop downloading when disk reaches this %)
-- `torrent_dir` — `""` (default: `{config_dir}/torrents/`)
-- `download_dir` — `""` (default: current working directory, same as aria2 default)
-
-**How it works:**
-```python
-import shutil
-usage = shutil.disk_usage(download_dir)
-percent_used = (usage.used / usage.total) * 100
-if percent_used >= max_disk_usage_percent:
-    # skip download, log record_action with reason="disk_full"
-```
-
-**Where the check runs:**
-- `scheduler.py` `process_queue()` — before `aria2_add_download()`: skip queued items if disk full
-- `discovery.py` `_fetch_torrent()` — before auto-downloading from peer: skip if disk full
-- `GET /api/health` — include `disk_usage_percent` in response for monitoring
-
-**Steps:**
-1. Add preferences to `contracts.py`
-2. Add `_check_disk_space(path) -> bool` helper
-3. Add check in `process_queue()` before submitting new downloads
-4. Add `disk_usage_percent` to health endpoint
-5. Wire into discovery module (P2)
-6. Add tests
-7. Run all tests
-
-**Scope:** ~40 lines.
-**Depends on:** Nothing (but P2 uses it).
-
----
-
-### Implementation order
-
-```
-P1 → P3 → P2
-```
-
-- P1 first: simplifies the scheduler lifecycle before adding discovery
-- P3 next: disk space check is a prerequisite for safe auto-downloads
-- P2 last: depends on both P1 (scheduler always running) and P3 (disk safety)
+**Depends on:** P1 (done), P3 (done).
 
 **What:** Convert `routes.py` (1290 lines, 40 handlers) into a `routes/` package with one file per resource.
 **Where:** `src/aria_queue/routes.py` → `src/aria_queue/routes/`

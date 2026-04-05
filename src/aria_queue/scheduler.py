@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import datetime
+import shutil
 import time
 import threading
+from pathlib import Path
 from typing import Any
 
 
@@ -10,6 +12,26 @@ def _core() -> Any:
     """Lazy import to allow patching through aria_queue.core."""
     from . import core
     return core
+
+
+def check_disk_space() -> tuple[bool, float]:
+    """Check if disk usage is below the configured threshold.
+
+    Returns (ok, percent_used). ok is False if over limit.
+    """
+    core = _core()
+    raw = core._pref_value("max_disk_usage_percent", 90)
+    max_percent = int(raw) if raw is not None else 90
+    if max_percent == 0:
+        return True, 0.0
+    download_dir = str(core._pref_value("download_dir", "") or "")
+    path = Path(download_dir) if download_dir else Path.cwd()
+    try:
+        usage = shutil.disk_usage(path)
+        percent_used = round((usage.used / usage.total) * 100, 1)
+    except OSError:
+        return True, 0.0  # can't check — allow download
+    return percent_used < max_percent, percent_used
 
 
 def start_background_process(port: int = 6800) -> dict[str, Any]:
@@ -428,9 +450,18 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
 
         current_running_infos = list(running_infos)
         if not is_paused:
+            disk_ok, disk_percent = check_disk_space()
+            if not disk_ok:
+                core.record_action(
+                    action="error", target="queue", outcome="blocked",
+                    reason="disk_full",
+                    detail={"disk_usage_percent": disk_percent},
+                )
             for item in sorted(
                 items, key=lambda i: int(i.get("priority", 0)), reverse=True
             ):
+                if not disk_ok:
+                    break
                 if item.get("status") != "queued":
                     continue
                 if item.get("gid"):

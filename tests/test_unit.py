@@ -967,5 +967,46 @@ class TestOutputPathValidation(unittest.TestCase):
         self.assertIsNone(_validate_output_path(""))
 
 
+# ── scheduler.py — disk space check ────────────────────────────────
+
+
+class TestDiskSpaceCheck(unittest.TestCase):
+    @patch("aria_queue.scheduler.shutil.disk_usage")
+    @patch("aria_queue.scheduler._core")
+    def test_disk_ok_when_below_threshold(self, mock_core: MagicMock, mock_usage: MagicMock) -> None:
+        from aria_queue.scheduler import check_disk_space
+        mock_core.return_value._pref_value.side_effect = lambda name, default=None: {
+            "max_disk_usage_percent": 90, "download_dir": ""
+        }.get(name, default)
+        mock_usage.return_value = MagicMock(total=100_000_000, used=50_000_000)
+        ok, percent = check_disk_space()
+        self.assertTrue(ok)
+        self.assertEqual(percent, 50.0)
+
+    @patch("aria_queue.scheduler.shutil.disk_usage")
+    @patch("aria_queue.scheduler._core")
+    def test_disk_blocked_when_above_threshold(self, mock_core: MagicMock, mock_usage: MagicMock) -> None:
+        from aria_queue.scheduler import check_disk_space
+        mock_core.return_value._pref_value.side_effect = lambda name, default=None: {
+            "max_disk_usage_percent": 90, "download_dir": ""
+        }.get(name, default)
+        mock_usage.return_value = MagicMock(total=100_000_000, used=95_000_000)
+        ok, percent = check_disk_space()
+        self.assertFalse(ok)
+        self.assertEqual(percent, 95.0)
+
+    @patch("aria_queue.scheduler.shutil.disk_usage")
+    @patch("aria_queue.scheduler._core")
+    def test_disk_check_disabled_when_zero(self, mock_core: MagicMock, mock_usage: MagicMock) -> None:
+        from aria_queue.scheduler import check_disk_space
+        mock_core.return_value._pref_value.side_effect = lambda name, default=None: {
+            "max_disk_usage_percent": 0, "download_dir": ""
+        }.get(name, default)
+        ok, percent = check_disk_space()
+        self.assertTrue(ok)
+        self.assertEqual(percent, 0.0)
+        mock_usage.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
