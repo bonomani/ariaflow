@@ -271,11 +271,8 @@ def _browse_avahi() -> None:
 # ── Poll ───────────────────────────────────────────────────────────
 
 def _pref_value(name: str, default: Any = None) -> Any:
-    from .contracts import load_declaration
-    for pref in load_declaration().get("uic", {}).get("preferences", []):
-        if pref.get("name") == name:
-            return pref.get("value", default)
-    return default
+    from .transfers import _pref_value as _pv
+    return _pv(name, default)
 
 
 def _poll_peer_torrents(peer: dict[str, Any]) -> list[dict[str, Any]]:

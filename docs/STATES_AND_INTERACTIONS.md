@@ -171,48 +171,31 @@ Terminal states (`complete`, `error`, `removed`) appear in `tellStopped()` and c
 
 ## Section 2: ariaflow Scheduler — States and Transitions
 
-### 2.1 Scheduler States (4)
+### 2.1 Scheduler States (3)
+
+The scheduler auto-starts with `ariaflow serve` and runs continuously until shutdown. There is no idle state and no start/stop API — users can only pause/resume.
 
 ```
-              POST /api/scheduler/start (or /stop)
-              {action: start}
-                    │
-                    ▼
-    ┌───────┐    ┌──────────┐    POST /api/scheduler/start (or /stop)
-    │ idle  │───►│ running  │    {action: stop}
-    └───┬───┘    └──┬───┬───┘────────────┐
-        ▲           │   │                ▼
-        │     POST  │   │ all items   ┌──────────────┐
-        │   /api/   │   │ terminal    │stop_requested│
-        │   pause   │   │             └──────┬───────┘
-        │           ▼   │                    │ drain
-        │     ┌────────┐│                    │ complete
-        │     │ paused ││                    │
-        │     └───┬────┘│                    │
-        │  POST   │     │                    │
-        │  /api/  │     │                    │
-        │  resume │     │                    │
-        │         ▼     ▼                    │
-        └─────────────────────────────────────┘
-                   (back to idle)
+    ariaflow serve
+         │
+         ▼
+    ┌──────────┐   POST /api/scheduler/pause    ┌────────┐
+    │ starting │──►┌──────────┐◄────────────────│ paused │
+    └──────────┘   │ running  │────────────────►└────────┘
+                   └──────────┘   POST /api/scheduler/resume
 ```
 
-| State | `running` | `paused` | `stop_requested` | Description |
-|---|---|---|---|---|
-| **idle** | false | false | false | Not processing. Waiting for start command |
-| **running** | true | false | false | Scheduling and polling items every 2 s |
-| **paused** | true | true | false | Loop active but skips scheduling. Active aria2 downloads paused |
-| **stop_requested** | true | — | true | Draining: pausing all active downloads, then → idle |
+| State | `running` | `paused` | Description |
+|---|---|---|---|
+| **starting** | false | false | Brief state before scheduler thread starts |
+| **running** | true | false | Scheduling and polling items every 2 s |
+| **paused** | true | true | Loop active but skips scheduling. Active aria2 downloads paused |
 
 | Transition | Trigger | What happens |
 |---|---|---|
-| idle → running | `POST /api/scheduler/start (or /stop) {action: start}` | Spawns daemon thread running `process_queue()` |
+| starting → running | `ariaflow serve` | Spawns daemon thread running `process_queue()` |
 | running → paused | `POST /api/scheduler/pause` | `aria2.pause(gid)` on all active GIDs; `state.paused = true` |
 | paused → running | `POST /api/scheduler/resume` | `aria2.unpause(gid)` on all paused GIDs; `state.paused = false` |
-| running → stop_requested | `POST /api/scheduler/start (or /stop) {action: stop}` | `state.stop_requested = true` |
-| stop_requested → idle | Automatic | Loop pauses all GIDs, closes session, clears flags |
-| running → idle | Automatic | All queue items reached terminal status (`queue_complete`) |
-| paused → idle | Automatic | All queue items reached terminal status (`queue_complete`) |
 
 ### 2.2 Queue Model — Hybrid (queue.json + aria2)
 
@@ -295,7 +278,7 @@ Terminal states (`complete`, `error`, `removed`) appear in `tellStopped()` and c
 | **open** | Session active, accepting work |
 | **closed** | Session ended with a reason |
 
-Close reasons: `stop_requested`, `queue_complete`, `closed`, `manual_new_session`.
+Close reasons: `queue_complete`, `closed`, `manual_new_session`.
 
 ---
 
@@ -329,7 +312,7 @@ Close reasons: `stop_requested`, `queue_complete`, `closed`, `manual_new_session
 │  Phase 1: Load (file-locked)                            │
 │  ├── load queue.json                                    │
 │  ├── load state.json                                    │
-│  └── check stop_requested → if true, drain and exit     │
+│  └── check paused flag                                   │
 ├─────────────────────────────────────────────────────────┤
 │  Phase 2: RPC calls (unlocked)                          │
 │  ├── _poll_tracked_jobs()                               │
@@ -361,22 +344,7 @@ Close reasons: `stop_requested`, `queue_complete`, `closed`, `manual_new_session
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 3.3 Stop / Drain
-
-```
-User: POST /api/scheduler/start (or /stop) {action: stop}
-  └── state.stop_requested = true
-
-Next loop iteration:
-  ├── aria2.tellActive()
-  ├── aria2.pause(gid)  for each active GID
-  ├── item.status = paused for each
-  ├── state.running = false, stop_requested = false, paused = false
-  ├── close_state_session(reason="stop_requested")
-  └── exit loop
-```
-
-### 3.4 Global Pause / Resume
+### 3.3 Global Pause / Resume
 
 ```
 POST /api/scheduler/pause:
@@ -391,7 +359,7 @@ POST /api/scheduler/resume:
   └── loop resumes scheduling
 ```
 
-### 3.5 Per-Item Actions → aria2 RPC Mapping
+### 3.4 Per-Item Actions → aria2 RPC Mapping
 
 | API Endpoint | aria2 RPC Calls |
 |---|---|
@@ -400,7 +368,7 @@ POST /api/scheduler/resume:
 | `POST /api/downloads/{id}/remove` | `aria2.remove(gid)` then `aria2.removeDownloadResult(gid)` |
 | `POST /api/downloads/{id}/retry` | _(none — clears GID, re-queues for scheduling)_ |
 
-### 3.6 Download Mode → aria2 RPC
+### 3.5 Download Mode → aria2 RPC
 
 | Mode | Detection | RPC Method | Extra Options |
 |---|---|---|---|
@@ -412,7 +380,7 @@ POST /api/scheduler/resume:
 | `torrent_data` | Base64 .torrent | `aria2.addTorrent(base64)` | pause-metadata=true |
 | `metalink_data` | Base64 metalink | `aria2.addMetalink(base64)` | Returns GID[] |
 
-### 3.7 Bandwidth Control
+### 3.6 Bandwidth Control
 
 ```
 Automatic every bandwidth_probe_interval_seconds (default 180s)
@@ -438,13 +406,13 @@ Probe result stored in state.json as last_bandwidth_probe:
   cap_mbps, cap_bytes_per_sec, responsiveness_rpm, source, reason
 ```
 
-### 3.8 State File Summary
+### 3.7 State File Summary
 
 All files under `~/.config/aria-queue/` (override: `ARIA_QUEUE_DIR`), accessed under fcntl file lock.
 
 | File | Content |
 |---|---|
-| `state.json` | `running`, `paused`, `stop_requested`, `session_id`, `session_started_at`, `session_last_seen_at`, `session_closed_at`, `session_closed_reason`, `active_gid`, `active_url`, `last_bandwidth_probe`, `last_bandwidth_probe_at`, `_rev` |
+| `state.json` | `running`, `paused`, `session_id`, `session_started_at`, `session_last_seen_at`, `session_closed_at`, `session_closed_reason`, `active_gid`, `active_url`, `last_bandwidth_probe`, `last_bandwidth_probe_at`, `_rev` |
 | `queue.json` | `{items: [...]}` — each item has: id, url, status, mode, priority, gid, output, mirrors, torrent_data, metalink_data, session_id, timestamps, error fields, live_status, progress fields |
 | `archive.json` | Soft-deleted items (cancelled, cleaned up) |
 | `declaration.json` | UIC gates, preferences (concurrency, bandwidth, dedup policy), policies |

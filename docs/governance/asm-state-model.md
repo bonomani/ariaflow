@@ -19,12 +19,13 @@ Stored fields: `session_id`, `session_started_at`, `session_last_seen_at`, `sess
 
 | Atomic State | Role | Description |
 |---|---|---|
-| `idle` | stable | No run in progress (`running: false`) |
-| `running` | stable | Run loop active (`running: true`) |
-| `paused` | stable | Run loop suspended (`paused: true`) |
-| `stop_requested` | transitional | Stop signal sent, draining (`stop_requested: true`) |
+| `starting` | transitional | Brief state before scheduler thread starts (`running: false`) |
+| `running` | stable | Run loop active (`running: true`, `paused: false`) |
+| `paused` | stable | Run loop suspended (`running: true`, `paused: true`) |
 
-Stored fields: `running`, `paused`, `stop_requested`
+The scheduler auto-starts with `ariaflow serve` and runs continuously until shutdown. There is no idle state and no stop API — users can only pause/resume.
+
+Stored fields: `running`, `paused`
 
 ### Axis 3: Job (unit of work)
 
@@ -58,10 +59,8 @@ Checked dynamically via RPC probe, not persisted.
 
 | Derived State | Computed From | Meaning |
 |---|---|---|
-| `scheduler_ready` | session=open, run=idle, daemon=available | Scheduler can accept a run command |
 | `scheduler_active` | session=open, run=running, daemon=available | Scheduler is processing the queue |
-| `scheduler_draining` | session=open, run=stop_requested | Scheduler is finishing current job before stopping |
-| `queue_complete` | run=running, all jobs terminal | No more work; triggers session close |
+| `queue_complete` | run=running, all jobs terminal | No more work; clears active state (scheduler keeps running) |
 
 ## 3. Transition Catalog
 
@@ -74,16 +73,14 @@ open → closed           close_state_session(reason)
 closed → open           start_new_state_session()
 ```
 
-Close reasons: `stop_requested`, `queue_complete`, `closed`, `manual_new_session`
+Close reasons: `queue_complete`, `closed`, `manual_new_session`
 
 ### Run transitions
 
 ```
-idle → running          run loop starts
+starting → running      scheduler thread starts (automatic with `ariaflow serve`)
 running → paused        pause command
 paused → running        resume command
-running → stop_requested   stop command
-stop_requested → idle   drain complete
 ```
 
 ### Job transitions
@@ -110,12 +107,11 @@ error → cancelled       user removes (archived)
 
 | Rule | Invariant |
 |---|---|
-| CR-1 | `run=running` requires `session=open` |
+| CR-1 | `run=running` requires `session=open` (always true when scheduler is up) |
 | CR-2 | `run=running` requires `daemon=available` |
-| CR-3 | `job=downloading` requires `run=running` |
-| CR-4 | `run=stop_requested` must eventually reach `run=idle` |
-| CR-5 | `session=closed` requires all jobs not in `downloading` |
-| CR-6 | At most `max_simultaneous_downloads` jobs in `downloading` at any time |
+| CR-3 | `job=downloading` requires `run=running` (always true when scheduler is up) |
+| CR-4 | `session=closed` requires all jobs not in `downloading` |
+| CR-5 | At most `max_simultaneous_downloads` jobs in `downloading` at any time |
 
 ## 5. State Persistence
 
