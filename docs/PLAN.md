@@ -1,6 +1,33 @@
 # Plan
 
-No open items.
+### [R2] Split routes.py into routes/ package by resource group
+
+**What:** Convert `routes.py` (1290 lines, 40 handlers) into a `routes/` package with one file per resource.
+**Where:** `src/aria_queue/routes.py` → `src/aria_queue/routes/`
+**Why:** 40 handlers in one file. Grouping by resource matches the API structure.
+**Scope:** ~1290 lines moved, 0 logic changes.
+
+Files:
+- `routes/__init__.py` — re-exports all handlers (webapp.py dispatch unchanged)
+- `routes/helpers.py` — _error_payload, _validate_url, _validate_output_path, _validate_item_id, _parse_add_items, _resolve_auto_preflight_override, _ALLOWED_URL_SCHEMES
+- `routes/downloads.py` — post_add, post_cleanup, get_archive, get_status, get_item_files, post_item_files, post_item_action (~300 lines)
+- `routes/scheduler.py` — get_scheduler, post_scheduler_start, post_scheduler_stop, post_pause, post_resume, post_preflight, post_ucc (~250 lines)
+- `routes/aria2.py` — get_aria2_global_option, get_aria2_option, get_aria2_option_tiers, post_aria2_change_global_option, post_aria2_change_option, post_aria2_set_limits (~200 lines)
+- `routes/torrents.py` — get_torrents, get_torrent_file, post_torrent_stop (~100 lines)
+- `routes/sessions.py` — get_sessions, get_session_stats, post_session (~60 lines)
+- `routes/config.py` — get_declaration, post_declaration, patch_declaration_preferences (~100 lines)
+- `routes/meta.py` — get_health, get_api, get_docs, get_openapi_yaml, get_tests, get_events (~150 lines)
+- `routes/lifecycle.py` — get_lifecycle, post_lifecycle_action (~80 lines)
+- `routes/bandwidth.py` — get_bandwidth, post_bandwidth_probe (~50 lines)
+
+Steps:
+1. Create `routes/` directory
+2. Create `helpers.py` with shared utilities
+3. Create each resource file, importing from helpers
+4. Create `__init__.py` re-exporting all handlers
+5. Delete old `routes.py`
+6. Update `gen_openapi.py` to read from `routes/` package
+7. Run tests — all 441 must pass
 
 _D1-D8 (private torrent distribution pipeline) implemented. See git history._
 
