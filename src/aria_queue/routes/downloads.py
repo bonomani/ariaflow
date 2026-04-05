@@ -46,15 +46,17 @@ def _validate_output_path(output: str) -> str | None:
         return None
     if os.path.isabs(output):
         return "output must be a relative path, not absolute"
-    if ".." in output.split(os.sep) or ".." in output.split("/"):
+    parts = Path(output).parts
+    if ".." in parts:
         return "output must not contain '..'"
+    if any(p.startswith(".") for p in parts):
+        return "output must not contain hidden directories or files"
     try:
-        resolved = Path(output).resolve()
         cwd = Path.cwd().resolve()
-        if not str(resolved).startswith(str(cwd)):
-            return "output path escapes current directory"
+        resolved = (cwd / output).resolve()
+        resolved.relative_to(cwd)
     except (ValueError, OSError):
-        return "output path is invalid"
+        return "output path escapes current directory"
     return None
 
 

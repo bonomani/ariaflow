@@ -27,6 +27,7 @@ import os
 import time
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import sys
@@ -763,6 +764,198 @@ class TestThreeTierSafety(IsolatedTestCase):
         result = aria2_change_options({"dir": "/tmp"})
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"], "rejected_options")
+
+
+# ── scheduler.py — seed expiration ─────────────────────────────────
+
+
+class TestSeedExpiration(IsolatedTestCase):
+    def _make_seeding_item(self, started_at: str) -> dict[str, Any]:
+        return {
+            "id": "item-seed-1",
+            "url": "https://example.com/file.bin",
+            "status": "done",
+            "distribute_status": "seeding",
+            "distribute_started_at": started_at,
+            "distribute_seed_gid": "seed-gid-1",
+            "distribute_infohash": "abc123",
+            "distribute_torrent_path": "/tmp/test.torrent",
+            "gid": "",
+            "priority": 0,
+        }
+
+    @patch("aria_queue.core.aria2_add_download", return_value="gid-1")
+    @patch("aria_queue.core.aria2_remove")
+    @patch("aria_queue.core.aria2_tell_active", return_value=[])
+    @patch("aria_queue.core.aria2_tell_waiting", return_value=[])
+    @patch("aria_queue.core.aria2_ensure_daemon")
+    @patch("aria_queue.core.aria2_change_global_option")
+    @patch("aria_queue.core.deduplicate_active_transfers")
+    @patch("aria_queue.core.reconcile_live_queue")
+    @patch("aria_queue.core._apply_bandwidth_probe", return_value=({}, 100.0, 12500000))
+    def test_seed_expires_by_time(
+        self, _probe: MagicMock, _reconcile: MagicMock, _dedup: MagicMock,
+        _global: MagicMock, _daemon: MagicMock, _waiting: MagicMock,
+        _active: MagicMock, mock_remove: MagicMock, _add: MagicMock,
+    ) -> None:
+        import datetime
+        from aria_queue.core import (
+            ensure_storage, save_queue, save_state, load_queue,
+            ensure_state_session, process_queue,
+        )
+        ensure_storage()
+        state = ensure_state_session()
+        state["running"] = True
+        save_state(state)
+        # Seed started 100 hours ago
+        old_time = (
+            datetime.datetime.now(datetime.timezone.utc)
+            - datetime.timedelta(hours=100)
+        ).strftime("%Y-%m-%dT%H:%M:%S+0000")
+        item = self._make_seeding_item(old_time)
+        save_queue([item])
+
+        # Set max_seed_hours=72 via declaration
+        from aria_queue.contracts import ensure_declaration, declaration_path
+        import json
+        decl = ensure_declaration()
+        for pref in decl.get("uic", {}).get("preferences", []):
+            if pref["name"] == "distribute_max_seed_hours":
+                pref["value"] = 72
+        declaration_path().write_text(json.dumps(decl), encoding="utf-8")
+
+        process_queue(port=6800)
+        items = load_queue()
+        expired = [i for i in items if i.get("distribute_status") == "expired"]
+        self.assertEqual(len(expired), 1)
+        mock_remove.assert_called_once()
+
+    @patch("aria_queue.core.aria2_add_download", return_value="gid-1")
+    @patch("aria_queue.core.aria2_remove")
+    @patch("aria_queue.core.aria2_tell_active", return_value=[])
+    @patch("aria_queue.core.aria2_tell_waiting", return_value=[])
+    @patch("aria_queue.core.aria2_ensure_daemon")
+    @patch("aria_queue.core.aria2_change_global_option")
+    @patch("aria_queue.core.deduplicate_active_transfers")
+    @patch("aria_queue.core.reconcile_live_queue")
+    @patch("aria_queue.core._apply_bandwidth_probe", return_value=({}, 100.0, 12500000))
+    def test_seed_not_expired_when_recent(
+        self, _probe: MagicMock, _reconcile: MagicMock, _dedup: MagicMock,
+        _global: MagicMock, _daemon: MagicMock, _waiting: MagicMock,
+        _active: MagicMock, mock_remove: MagicMock, _add: MagicMock,
+    ) -> None:
+        import datetime
+        from aria_queue.core import (
+            ensure_storage, save_queue, save_state, load_queue,
+            ensure_state_session, process_queue,
+        )
+        ensure_storage()
+        state = ensure_state_session()
+        state["running"] = True
+        save_state(state)
+        # Seed started 1 hour ago
+        recent_time = (
+            datetime.datetime.now(datetime.timezone.utc)
+            - datetime.timedelta(hours=1)
+        ).strftime("%Y-%m-%dT%H:%M:%S+0000")
+        item = self._make_seeding_item(recent_time)
+        save_queue([item])
+
+        from aria_queue.contracts import ensure_declaration, declaration_path
+        import json
+        decl = ensure_declaration()
+        for pref in decl.get("uic", {}).get("preferences", []):
+            if pref["name"] == "distribute_max_seed_hours":
+                pref["value"] = 72
+        declaration_path().write_text(json.dumps(decl), encoding="utf-8")
+
+        process_queue(port=6800)
+        items = load_queue()
+        still_seeding = [i for i in items if i.get("distribute_status") == "seeding"]
+        self.assertEqual(len(still_seeding), 1)
+        mock_remove.assert_not_called()
+
+
+# ── bonjour.py — record_action observability ───────────────────────
+
+
+class TestBonjourRecordAction(IsolatedTestCase):
+    @patch("aria_queue.bonjour._detect_backend", return_value=None)
+    def test_http_service_skipped_logs_action(self, _mock: MagicMock) -> None:
+        from aria_queue.bonjour import advertise_http_service
+        from aria_queue.core import ensure_storage, load_action_log
+        ensure_storage()
+        with advertise_http_service(
+            role="api", port=8080, path="/", product="test", version="0.1"
+        ):
+            pass
+        entries = load_action_log()
+        register_entries = [e for e in entries if e.get("action") == "bonjour_register"]
+        self.assertTrue(len(register_entries) >= 1)
+        self.assertEqual(register_entries[0]["outcome"], "skipped")
+        self.assertEqual(register_entries[0]["reason"], "no_mdns_backend")
+
+    @patch("aria_queue.bonjour._detect_backend", return_value=None)
+    def test_torrent_skipped_logs_action(self, _mock: MagicMock) -> None:
+        from aria_queue.bonjour import advertise_torrent
+        from aria_queue.core import ensure_storage, load_action_log
+        ensure_storage()
+        result = advertise_torrent(
+            name="test", infohash="abc123", torrent_url="http://x",
+            tracker="http://t", size=1000, version="1.0",
+        )
+        self.assertIsNone(result)
+        entries = load_action_log()
+        register_entries = [e for e in entries if e.get("action") == "bonjour_torrent_register"]
+        self.assertTrue(len(register_entries) >= 1)
+        self.assertEqual(register_entries[0]["outcome"], "skipped")
+
+    @patch("aria_queue.bonjour.subprocess.Popen")
+    @patch("aria_queue.bonjour._detect_backend", return_value="dns-sd")
+    @patch("aria_queue.bonjour._dns_sd_path", return_value="/usr/bin/dns-sd")
+    def test_http_service_registered_logs_action(
+        self, _path: MagicMock, _backend: MagicMock, mock_popen: MagicMock,
+    ) -> None:
+        from aria_queue.bonjour import advertise_http_service
+        from aria_queue.core import ensure_storage, load_action_log
+        ensure_storage()
+        proc = MagicMock()
+        proc.poll.return_value = None  # process still running
+        mock_popen.return_value = proc
+        with advertise_http_service(
+            role="api", port=8080, path="/", product="test", version="0.1"
+        ):
+            pass
+        entries = load_action_log()
+        register = [e for e in entries if e.get("action") == "bonjour_register" and e.get("outcome") == "changed"]
+        deregister = [e for e in entries if e.get("action") == "bonjour_deregister"]
+        self.assertTrue(len(register) >= 1)
+        self.assertTrue(len(deregister) >= 1)
+
+
+# ── routes/downloads.py — output path validation ──────────────────
+
+
+class TestOutputPathValidation(unittest.TestCase):
+    def test_rejects_absolute_path(self) -> None:
+        from aria_queue.routes.downloads import _validate_output_path
+        self.assertIsNotNone(_validate_output_path("/etc/passwd"))
+
+    def test_rejects_dot_dot(self) -> None:
+        from aria_queue.routes.downloads import _validate_output_path
+        self.assertIsNotNone(_validate_output_path("../outside"))
+
+    def test_rejects_hidden_directory(self) -> None:
+        from aria_queue.routes.downloads import _validate_output_path
+        self.assertIsNotNone(_validate_output_path(".hidden/file.txt"))
+
+    def test_accepts_simple_relative(self) -> None:
+        from aria_queue.routes.downloads import _validate_output_path
+        self.assertIsNone(_validate_output_path("downloads/file.bin"))
+
+    def test_accepts_empty(self) -> None:
+        from aria_queue.routes.downloads import _validate_output_path
+        self.assertIsNone(_validate_output_path(""))
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import time
 import threading
 from typing import Any
@@ -63,8 +64,11 @@ def stop_background_process(port: int = 6800) -> dict[str, Any]:
     if gid:
         try:
             core.aria2_pause(gid, port=port, timeout=5)
-        except Exception:
-            pass
+        except Exception as exc:
+            core.record_action(
+                action="stop", target="queue", outcome="failed",
+                reason="aria2_pause_failed", detail={"gid": gid, "error": str(exc)},
+            )
         with core.storage_locked():
             items = core.load_queue()
             for current in items:
@@ -93,17 +97,26 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
     core.ensure_state_session()
     try:
         core.cleanup_queue_state()
-    except Exception:
-        pass
+    except Exception as exc:
+        core.record_action(
+            action="error", target="queue", outcome="failed",
+            reason="cleanup_failed", detail={"error": str(exc)},
+        )
     core.aria2_ensure_daemon(port=port)
     try:
         core.deduplicate_active_transfers(port=port)
-    except Exception:
-        pass
+    except Exception as exc:
+        core.record_action(
+            action="error", target="queue", outcome="failed",
+            reason="deduplicate_failed", detail={"error": str(exc)},
+        )
     try:
         core.reconcile_live_queue(port=port, timeout=5, adopt_missing=True)
-    except Exception:
-        pass
+    except Exception as exc:
+        core.record_action(
+            action="error", target="queue", outcome="failed",
+            reason="reconcile_failed", detail={"error": str(exc)},
+        )
     with core.storage_locked():
         state = core.load_state()
         probe, cap_mbps, cap_bytes_per_sec = core._apply_bandwidth_probe(
@@ -120,15 +133,21 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             continue
         try:
             core.aria2_set_max_download_limit(gid, cap_bytes_per_sec, port=port)
-        except Exception:
-            continue
+        except Exception as exc:
+            core.record_action(
+                action="error", target="queue_item", outcome="failed",
+                reason="set_download_limit_failed", detail={"gid": gid, "error": str(exc)},
+            )
 
     limit = core.max_simultaneous_downloads()
     if limit > 0:
         try:
             core.aria2_change_global_option({"max-concurrent-downloads": str(limit)}, port=port)
-        except Exception:
-            pass
+        except Exception as exc:
+            core.record_action(
+                action="error", target="queue", outcome="failed",
+                reason="set_concurrency_failed", detail={"error": str(exc)},
+            )
 
     def _finalize_primary_state(
         items_snapshot: list[dict[str, Any]], active_infos: list[dict[str, Any]], poll_ok: bool = True
@@ -216,8 +235,12 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     results_map[gid] = result[0]
                 else:
                     results_map[gid] = RuntimeError(f"unexpected multicall result: {result}")
-        except Exception:
+        except Exception as exc:
             # Fallback: sequential calls if multicall fails
+            core.record_action(
+                action="error", target="queue", outcome="failed",
+                reason="multicall_failed", detail={"error": str(exc), "fallback": "sequential"},
+            )
             for _, gid in pollable:
                 try:
                     results_map[gid] = core.aria2_tell_status(gid, port=port, timeout=5)
@@ -437,9 +460,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 started = item.get("distribute_started_at", "")
                 if started:
                     try:
-                        import datetime
                         start_dt = datetime.datetime.strptime(started[:19], "%Y-%m-%dT%H:%M:%S")
-                        age_hours = (datetime.datetime.now() - start_dt).total_seconds() / 3600
+                        start_dt = start_dt.replace(tzinfo=datetime.timezone.utc)
+                        age_hours = (datetime.datetime.now(datetime.timezone.utc) - start_dt).total_seconds() / 3600
                         if age_hours > max_seed_hours:
                             should_expire = True
                     except (ValueError, TypeError):
@@ -454,15 +477,23 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 if seed_gid:
                     try:
                         core.aria2_remove(seed_gid, port=port)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        core.record_action(
+                            action="error", target="queue_item", outcome="failed",
+                            reason="seed_remove_failed",
+                            detail={"gid": seed_gid, "error": str(exc)},
+                        )
                 torrent_path = item.get("distribute_torrent_path")
                 if torrent_path:
                     try:
                         import os
                         os.remove(torrent_path)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        core.record_action(
+                            action="error", target="queue_item", outcome="failed",
+                            reason="torrent_file_remove_failed",
+                            detail={"path": torrent_path, "error": str(exc)},
+                        )
                 item["distribute_status"] = "expired"
                 item.pop("distribute_seed_gid", None)
                 core.record_action(
@@ -487,7 +518,12 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 before_item = dict(item)
                 try:
                     gid = core.aria2_add_download(item, cap_bytes_per_sec=cap_bytes_per_sec, port=port)
-                except Exception:
+                except Exception as exc:
+                    core.record_action(
+                        action="error", target="queue_item", outcome="failed",
+                        reason="add_download_failed",
+                        detail={"item_id": item.get("id"), "error": str(exc)},
+                    )
                     continue
                 item["status"] = "active"
                 item.pop("live_status", None)
