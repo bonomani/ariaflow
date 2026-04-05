@@ -650,7 +650,7 @@ class TestScenarioSSE(ScenarioBase):
 
         text = data.decode("utf-8", errors="replace")
         self.assertIn("event: state_changed", text)
-        self.assertIn('"rev"', text)
+        self.assertIn('"_rev"', text)
 
 
 # ═══════════════════════════════════════════════════════

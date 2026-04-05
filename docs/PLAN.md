@@ -1,20 +1,6 @@
 # Plan
 
-### [BG-1] SSE: push full status payload, not just rev
-
-**What:** `_invalidate_status_cache()` currently pushes `{rev, server_version}` only. Push the full status payload so frontend doesn't need a follow-up GET.
-**Where:** `src/aria_queue/webapp.py` — `_invalidate_status_cache()` and `_sse_publish()`
-**Why:** Frontend must poll `/api/status` after every SSE event, adding latency and load.
-**Source:** `../ariaflow-web/BACKEND_GAPS.md` BG-1
-**Scope:** ~10 lines
-
-### [BG-2] PATCH /api/declaration/preferences — atomic partial update
-
-**What:** Add `PATCH /api/declaration/preferences` that accepts `{key: value}` and merges atomically. Frontend currently does GET → merge → POST (read-modify-write race).
-**Where:** `src/aria_queue/webapp.py` (new PATCH route), `src/aria_queue/contracts.py`
-**Why:** Avoids race condition when multiple clients change preferences simultaneously.
-**Source:** `../ariaflow-web/BACKEND_GAPS.md` BG-2
-**Scope:** ~30 lines
+No open items.
 
 _D1-D8 (private torrent distribution pipeline) implemented. See git history._
 

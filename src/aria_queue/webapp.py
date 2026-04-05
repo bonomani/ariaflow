@@ -513,11 +513,24 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         with _STATUS_CACHE_LOCK:
             STATUS_CACHE["ts"] = 0.0
             STATUS_CACHE["payload"] = None
-        state = load_state()
-        _sse_publish(
-            event,
-            {"rev": state.get("_rev", 0), "server_version": __version__},
-        )
+        # Push lightweight state via SSE — includes items and state
+        # so frontend can update without a follow-up GET
+        try:
+            state = load_state()
+            items = load_queue()
+            from .queue_ops import allowed_actions
+            for item in items:
+                item["allowed_actions"] = allowed_actions(item.get("status", ""))
+            sse_data = {
+                "_rev": state.get("_rev", 0),
+                "server_version": __version__,
+                "items": items,
+                "state": state,
+                "summary": summarize_queue(items),
+            }
+        except Exception:
+            sse_data = {"_rev": 0, "server_version": __version__}
+        _sse_publish(event, sse_data)
 
     def _status_payload(self, force: bool = False) -> dict:
         now = time.time()
@@ -595,7 +608,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self) -> None:  # noqa: N802
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
         self.send_header(
             "Access-Control-Allow-Headers",
             "Content-Type, If-None-Match",
@@ -1455,6 +1468,68 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             return
         self._invalidate_status_cache()
         self._send_json(result)
+
+    def do_PATCH(self) -> None:  # noqa: N802
+        path = urlparse(self.path).path
+        length = int(self.headers.get("Content-Length", "0"))
+        raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+        try:
+            payload = json.loads(raw or "{}")
+        except json.JSONDecodeError:
+            self._send_json(
+                _error_payload("invalid_json", "request body must be valid JSON"),
+                status=400,
+            )
+            return
+
+        if path == "/api/declaration/preferences":
+            self._patch_declaration_preferences(payload)
+            return
+
+        self._send_json(_error_payload("not_found", "resource not found"), status=404)
+
+    def _patch_declaration_preferences(self, payload: object) -> None:
+        if not isinstance(payload, dict) or not payload:
+            self._send_json(
+                _error_payload("invalid_payload", "expected {preference_name: value}"),
+                status=400,
+            )
+            return
+        from .core import load_declaration, save_declaration, record_action, storage_locked
+        with storage_locked():
+            declaration = load_declaration()
+            preferences = declaration.get("uic", {}).get("preferences", [])
+            applied = {}
+            unknown = []
+            for key, value in payload.items():
+                found = False
+                for pref in preferences:
+                    if pref.get("name") == key:
+                        before_value = pref.get("value")
+                        pref["value"] = value
+                        applied[key] = {"before": before_value, "after": value}
+                        found = True
+                        break
+                if not found:
+                    unknown.append(key)
+            if unknown:
+                self._send_json(
+                    _error_payload("unknown_preferences", f"unknown: {unknown}"),
+                    status=400,
+                )
+                return
+            saved = save_declaration(declaration)
+            record_action(
+                action="patch_preferences",
+                target="declaration",
+                outcome="changed",
+                reason="user_patch_preferences",
+                before={},
+                after={"applied": applied},
+                detail={"applied": applied},
+            )
+        self._invalidate_status_cache()
+        self._send_json({"ok": True, "applied": applied, "declaration": saved})
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A003
         return
