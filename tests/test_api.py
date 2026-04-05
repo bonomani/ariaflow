@@ -798,7 +798,7 @@ class TestSession(APIServerPerTestCase):
         _, status_before = _request(f"{self.base}/api/status")
         old_session = status_before["state"]["session_id"]
 
-        code, body = _request(f"{self.base}/api/session", "POST", {"action": "new"})
+        code, body = _request(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
         new_session = body["session"]["session_id"]
@@ -810,7 +810,7 @@ class TestSession(APIServerPerTestCase):
             "POST",
             {"items": [{"url": "https://example.com/y.bin"}]},
         )
-        _request(f"{self.base}/api/session", "POST", {"action": "new"})
+        _request(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
         # Check the log for close action
         _, log = _request(f"{self.base}/api/log?limit=10")
         actions = [entry.get("action") for entry in log["items"]]
@@ -1391,7 +1391,7 @@ class TestPostEndpoints(APIServerTestCase):
             "POST",
             {"items": [{"url": "https://example.com/sess.bin"}]},
         )
-        code, body, _ = _req(f"{self.base}/api/session", "POST", {"action": "new"})
+        code, body, _ = _req(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
         self.assertIn("session", body)

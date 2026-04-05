@@ -526,7 +526,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
 
-  /api/session:
+  /api/sessions/new:
     post:
       tags: [Observability]
       summary: Create a new session

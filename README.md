@@ -55,9 +55,9 @@ Base URL: `http://127.0.0.1:8000`
 | `/api/scheduler` | Scheduler status |
 | `/api/bandwidth` | Current bandwidth status and probe data |
 | `/api/log?limit=120` | Action log |
-| `/api/archive?limit=100` | Archived (removed/completed) items |
+| `/api/downloads/archive?limit=100` | Archived (removed/completed) items |
 | `/api/sessions` | Session history |
-| `/api/session/stats` | Session statistics |
+| `/api/sessions/stats` | Session statistics |
 | `/api/declaration` | UIC declaration (gates, preferences, policies) |
 | `/api/aria2/get_global_option` | Current aria2 global options |
 | `/api/aria2/get_option?gid=X` | Per-GID aria2 options |
@@ -87,7 +87,7 @@ Base URL: `http://127.0.0.1:8000`
 | `/api/downloads/cleanup` | `{max_done_age_days?, max_done_count?}` | Clean up terminal items |
 | `/api/declaration` | `{...declaration}` | Save UIC declaration |
 | `/api/aria2/change_global_option` | `{options: {...}}` | Change aria2 global options (3-tier safety) |
-| `/api/session` | `{close_reason?}` | Create new session |
+| `/api/sessions/new` | `{close_reason?}` | Create new session |
 | `/api/lifecycle/{target}/{action}` | `{action: ...}` | Install/service action |
 
 ## Design Goals

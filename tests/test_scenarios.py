@@ -263,7 +263,7 @@ class TestScenarioSessionManagement(ScenarioBase):
         self.assertIsNotNone(session_1)
 
         # Create new session
-        _, new_sess, _ = _req(f"{base}/api/session", "POST", {"action": "new"})
+        _, new_sess, _ = _req(f"{base}/api/sessions/new", "POST", {"action": "new"})
         session_2 = new_sess["session"]["session_id"]
         self.assertNotEqual(session_1, session_2)
 

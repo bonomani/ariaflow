@@ -65,7 +65,7 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertIn("meta", lifecycle["ariaflow"])
                 self.assertIn("session_id", lifecycle)
                 session = request_json(
-                    f"{base}/api/session",
+                    f"{base}/api/sessions/new",
                     method="POST",
                     payload={"action": "new"},
                 )

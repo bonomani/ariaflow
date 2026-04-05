@@ -476,7 +476,7 @@ class TestSessionReflectedInStatus(CrossCheckBase):
             },
         )
 
-        _, new = _req(f"{self.base}/api/session", "POST", {"action": "new"})
+        _, new = _req(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
         new_id = new["session"]["session_id"]
 
         _, status = _req(f"{self.base}/api/status")
@@ -615,7 +615,7 @@ class TestMutationsLoggedInActionLog(CrossCheckBase):
                 ],
             },
         )
-        _req(f"{self.base}/api/session", "POST", {"action": "new"})
+        _req(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
         _, log = _req(f"{self.base}/api/log?limit=10")
         actions = [e.get("action") for e in log["items"]]
         self.assertIn("session", actions)
@@ -797,7 +797,7 @@ class TestMultiStepChains(CrossCheckBase):
         _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
         item_id = added["added"][0]["id"]
 
-        _req(f"{self.base}/api/session", "POST", {"action": "new"})
+        _req(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
 
         _, status = _req(f"{self.base}/api/status")
         item = next(i for i in status["items"] if i["id"] == item_id)
@@ -834,7 +834,7 @@ class TestMutationsIncrementRevision(CrossCheckBase):
             },
         )
         rev_before = self._get_rev()
-        _req(f"{self.base}/api/session", "POST", {"action": "new"})
+        _req(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
         rev_after = self._get_rev()
         self.assertGreater(rev_after, rev_before)
 

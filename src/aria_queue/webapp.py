@@ -347,7 +347,7 @@ def _api_discovery() -> dict[str, object]:
                     "description": "Server-Sent Events stream (real-time state changes)",
                 },
                 {
-                    "path": "/api/archive",
+                    "path": "/api/downloads/archive",
                     "description": "Archived (removed/old) items",
                     "params": "?limit=100",
                 },
@@ -357,7 +357,7 @@ def _api_discovery() -> dict[str, object]:
                     "params": "?limit=50",
                 },
                 {
-                    "path": "/api/session/stats",
+                    "path": "/api/sessions/stats",
                     "description": "Per-session statistics",
                     "params": "?session_id=...",
                 },
@@ -370,7 +370,7 @@ def _api_discovery() -> dict[str, object]:
                 {"path": "/api/scheduler/ucc", "description": "Execute UCC cycle"},
                 {"path": "/api/scheduler/pause", "description": "Pause all active transfers"},
                 {"path": "/api/scheduler/resume", "description": "Resume all paused transfers"},
-                {"path": "/api/session", "description": "Create new session"},
+                {"path": "/api/sessions/new", "description": "Create new session"},
                 {"path": "/api/declaration", "description": "Save UIC declaration"},
                 {
                     "path": "/api/bandwidth/probe",
@@ -486,9 +486,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         "/api/aria2/get_option": "_get_aria2_option",
         "/api/aria2/option_tiers": "_get_aria2_option_tiers",
         "/api/lifecycle": "_get_lifecycle",
-        "/api/archive": "_get_archive",
+        "/api/downloads/archive": "_get_archive",
         "/api/sessions": "_get_sessions",
-        "/api/session/stats": "_get_session_stats",
+        "/api/sessions/stats": "_get_session_stats",
     }
 
     _POST_ROUTES: dict[str, str] = {
@@ -502,7 +502,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         "/api/scheduler/preflight": "_post_preflight",
         "/api/scheduler/ucc": "_post_ucc",
         "/api/declaration": "_post_declaration",
-        "/api/session": "_post_session",
+        "/api/sessions/new": "_post_session",
         "/api/aria2/change_global_option": "_post_aria2_change_global_option",
         "/api/aria2/change_option": "_post_aria2_change_option",
         "/api/aria2/set_limits": "_post_aria2_set_limits",
