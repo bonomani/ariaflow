@@ -1,0 +1,2 @@
+[console_scripts]
+ariaflow = aria_queue.cli:main

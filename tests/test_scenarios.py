@@ -94,10 +94,9 @@ class TestScenarioNormalDownload(ScenarioBase):
 
         # 5. Start the run
         _, run, _ = _req(
-            f"{base}/api/run",
+            f"{base}/api/scheduler/start",
             "POST",
             {
-                "action": "start",
                 "auto_preflight_on_run": False,
             },
         )
@@ -115,7 +114,7 @@ class TestScenarioNormalDownload(ScenarioBase):
         self.assertEqual(status["summary"]["complete"], 3)
 
         # 8. Stop the run
-        _, stop, _ = _req(f"{base}/api/run", "POST", {"action": "stop"})
+        _, stop, _ = _req(f"{base}/api/scheduler/stop", "POST", {})
         self.assertEqual(stop["action"], "stop")
 
         # 9. Check action log recorded the workflow
@@ -509,10 +508,9 @@ class TestScenarioPreflightBlocked(ScenarioBase):
             patch("aria_queue.webapp.preflight", return_value=failed_preflight),
         ):
             code, body, _ = _req(
-                f"{base}/api/run",
+                f"{base}/api/scheduler/start",
                 "POST",
                 {
-                    "action": "start",
                     "auto_preflight_on_run": True,
                 },
             )

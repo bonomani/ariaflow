@@ -492,10 +492,9 @@ class TestSessionReflectedInStatus(CrossCheckBase):
 class TestRunReflectedInStatus(CrossCheckBase):
     def test_run_start_sets_running(self) -> None:
         _, run = _req(
-            f"{self.base}/api/run",
+            f"{self.base}/api/scheduler/start",
             "POST",
             {
-                "action": "start",
                 "auto_preflight_on_run": False,
             },
         )
@@ -508,14 +507,13 @@ class TestRunReflectedInStatus(CrossCheckBase):
 
     def test_run_stop_clears_running(self) -> None:
         _req(
-            f"{self.base}/api/run",
+            f"{self.base}/api/scheduler/start",
             "POST",
             {
-                "action": "start",
                 "auto_preflight_on_run": False,
             },
         )
-        _req(f"{self.base}/api/run", "POST", {"action": "stop"})
+        _req(f"{self.base}/api/scheduler/stop", "POST", {})
 
         _, status = _req(f"{self.base}/api/status")
         self.assertFalse(status["state"]["running"])
@@ -641,10 +639,9 @@ class TestMutationsLoggedInActionLog(CrossCheckBase):
 
     def test_run_logged(self) -> None:
         _req(
-            f"{self.base}/api/run",
+            f"{self.base}/api/scheduler/start",
             "POST",
             {
-                "action": "start",
                 "auto_preflight_on_run": False,
             },
         )

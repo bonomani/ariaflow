@@ -138,14 +138,14 @@ class WebSmokeTests(unittest.TestCase):
                 )
                 self.assertTrue(added_many["ok"])
                 self.assertEqual(len(added_many["added"]), 2)
-                paused = request_json(f"{base}/api/pause", method="POST")
+                paused = request_json(f"{base}/api/scheduler/pause", method="POST")
                 self.assertIn("paused", paused)
-                resumed = request_json(f"{base}/api/resume", method="POST")
+                resumed = request_json(f"{base}/api/scheduler/resume", method="POST")
                 self.assertIn("resumed", resumed)
                 run = request_json(
-                    f"{base}/api/run",
+                    f"{base}/api/scheduler/start",
                     method="POST",
-                    payload={"action": "start", "auto_preflight_on_run": False},
+                    payload={"auto_preflight_on_run": False},
                 )
                 self.assertTrue(run["ok"])
                 self.assertEqual(run["action"], "start")
@@ -445,9 +445,9 @@ class WebSmokeTests(unittest.TestCase):
                 ):
                     with self.assertRaises(urllib.error.HTTPError) as run_error:
                         request_json(
-                            f"{base}/api/run",
+                            f"{base}/api/scheduler/start",
                             method="POST",
-                            payload={"action": "start", "auto_preflight_on_run": True},
+                            payload={"auto_preflight_on_run": True},
                         )
                 self.assertEqual(run_error.exception.code, 409)
                 body = json.loads(run_error.exception.read().decode("utf-8"))

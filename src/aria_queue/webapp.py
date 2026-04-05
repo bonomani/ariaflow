@@ -364,11 +364,12 @@ def _api_discovery() -> dict[str, object]:
             ],
             "POST": [
                 {"path": "/api/add", "description": "Enqueue URLs"},
-                {"path": "/api/run", "description": "Start/stop queue processor"},
+                {"path": "/api/scheduler/start", "description": "Start queue processor"},
+                {"path": "/api/scheduler/stop", "description": "Stop queue processor"},
                 {"path": "/api/preflight", "description": "Run preflight checks"},
                 {"path": "/api/ucc", "description": "Execute UCC cycle"},
-                {"path": "/api/pause", "description": "Pause all active transfers"},
-                {"path": "/api/resume", "description": "Resume all paused transfers"},
+                {"path": "/api/scheduler/pause", "description": "Pause all active transfers"},
+                {"path": "/api/scheduler/resume", "description": "Resume all paused transfers"},
                 {"path": "/api/session", "description": "Create new session"},
                 {"path": "/api/declaration", "description": "Save UIC declaration"},
                 {
@@ -495,17 +496,17 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         "/api/cleanup": "_post_cleanup",
         "/api/add": "_post_add",
         "/api/preflight": "_post_preflight",
-        "/api/run": "_post_run",
+        "/api/scheduler/start": "_post_scheduler_start",
+        "/api/scheduler/stop": "_post_scheduler_stop",
+        "/api/scheduler/pause": "_post_pause",
+        "/api/scheduler/resume": "_post_resume",
         "/api/ucc": "_post_ucc",
         "/api/declaration": "_post_declaration",
         "/api/lifecycle/action": "_post_lifecycle_action",
         "/api/session": "_post_session",
-        "/api/pause": "_post_pause",
-        "/api/resume": "_post_resume",
         "/api/aria2/change_global_option": "_post_aria2_change_global_option",
         "/api/aria2/change_option": "_post_aria2_change_option",
         "/api/aria2/set_limits": "_post_aria2_set_limits",
-        "/api/torrents/stop": "_post_torrent_stop",
     }
 
     def _invalidate_status_cache(self, event: str = "state_changed") -> None:
@@ -914,6 +915,12 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self._post_item_files(payload, path)
             return
 
+        # Parameterized route: /api/torrents/{infohash}/stop
+        if path.startswith("/api/torrents/") and path.endswith("/stop"):
+            infohash = path.split("/")[3]
+            self._post_torrent_stop({"infohash": infohash}, path)
+            return
+
         # Parameterized route: /api/item/{id}/{action}
         if path.startswith("/api/item/") and path.count("/") == 4:
             self._post_item_action(payload, path)
@@ -984,103 +991,79 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         self._invalidate_status_cache()
         self._send_json(result)
 
-    def _post_run(self, payload: object, path: str) -> None:
-        if not isinstance(payload, dict):
-            self._send_json(
-                _error_payload("invalid_payload", "expected a JSON object"),
-                status=400,
-            )
-            return
-        action = str(payload.get("action", "")).strip().lower()
-        if action not in {"start", "stop"}:
-            self._send_json(
-                _error_payload(
-                    "invalid_action",
-                    "action must be 'start' or 'stop'",
-                    action=action or None,
-                ),
-                status=400,
-            )
-            return
+    def _post_scheduler_stop(self, payload: object, path: str) -> None:
         before = {"state": load_state(), "queue": summarize_queue(load_queue())}
-        effective_auto_preflight: bool | None = None
-        if action == "stop":
-            result = stop_background_process()
-            response: dict[str, object] = {
-                "ok": True,
-                "action": "stop",
-                "result": result,
-            }
-        else:
-            override, override_error = _resolve_auto_preflight_override(payload)
-            if override_error is not None:
-                self._send_json(override_error, status=400)
-                return
-            effective_auto_preflight = (
-                auto_preflight_on_run() if override is None else override
-            )
-            if effective_auto_preflight:
-                preflight_result = preflight()
-                record_action(
-                    action="preflight",
-                    target="system",
-                    outcome="converged"
-                    if preflight_result.get("status") == "pass"
-                    else "blocked",
-                    reason=preflight_result.get("status", "unknown"),
-                    before=before,
-                    after={
-                        "state": load_state(),
-                        "queue": summarize_queue(load_queue()),
-                        "preflight": preflight_result,
-                    },
-                    detail=preflight_result,
-                )
-                if preflight_result.get("exit_code") != 0:
-                    blocked = {
-                        "ok": False,
-                        "action": "start",
-                        "error": "preflight_blocked",
-                        "message": "preflight failed before start",
-                        "effective_auto_preflight_on_run": True,
-                        "preflight": preflight_result,
-                    }
-                    record_action(
-                        action="run",
-                        target="queue",
-                        outcome="blocked",
-                        reason="preflight_blocked",
-                        before=before,
-                        after={
-                            "state": load_state(),
-                            "queue": summarize_queue(load_queue()),
-                            "scheduler": blocked,
-                        },
-                        detail=blocked,
-                    )
-                    self._invalidate_status_cache()
-                    self._send_json(blocked, status=409)
-                    return
-            result = start_background_process()
-            response = {
-                "ok": True,
-                "action": "start",
-                "effective_auto_preflight_on_run": effective_auto_preflight,
-                "result": result,
-            }
+        result = stop_background_process()
+        response: dict[str, object] = {"ok": True, "action": "stop", "result": result}
         record_action(
             action="run",
             target="queue",
-            outcome="changed"
-            if result.get("started") or result.get("stopped")
-            else "unchanged",
+            outcome="changed" if result.get("stopped") else "unchanged",
             reason=result.get("reason", "unknown"),
             before=before,
-            after={
-                "state": load_state(),
-                "queue": summarize_queue(load_queue()),
-                "scheduler": response,
-            },
+            after={"state": load_state(), "queue": summarize_queue(load_queue()), "scheduler": response},
+            detail=response,
+        )
+        self._invalidate_status_cache()
+        self._send_json(response)
+
+    def _post_scheduler_start(self, payload: object, path: str) -> None:
+        if not isinstance(payload, dict):
+            payload = {}
+        before = {"state": load_state(), "queue": summarize_queue(load_queue())}
+        override, override_error = _resolve_auto_preflight_override(payload)
+        if override_error is not None:
+            self._send_json(override_error, status=400)
+            return
+        effective_auto_preflight = (
+            auto_preflight_on_run() if override is None else override
+        )
+        if effective_auto_preflight:
+            preflight_result = preflight()
+            record_action(
+                action="preflight",
+                target="system",
+                outcome="converged" if preflight_result.get("status") == "pass" else "blocked",
+                reason=preflight_result.get("status", "unknown"),
+                before=before,
+                after={"state": load_state(), "queue": summarize_queue(load_queue()), "preflight": preflight_result},
+                detail=preflight_result,
+            )
+            if preflight_result.get("exit_code") != 0:
+                blocked = {
+                    "ok": False,
+                    "action": "start",
+                    "error": "preflight_blocked",
+                    "message": "preflight failed before start",
+                    "effective_auto_preflight_on_run": True,
+                    "preflight": preflight_result,
+                }
+                record_action(
+                    action="run",
+                    target="queue",
+                    outcome="blocked",
+                    reason="preflight_blocked",
+                    before=before,
+                    after={"state": load_state(), "queue": summarize_queue(load_queue()), "scheduler": blocked},
+                    detail=blocked,
+                )
+                self._invalidate_status_cache()
+                self._send_json(blocked, status=409)
+                return
+        result = start_background_process()
+        response: dict[str, object] = {
+            "ok": True,
+            "action": "start",
+            "effective_auto_preflight_on_run": effective_auto_preflight,
+            "result": result,
+        }
+        record_action(
+            action="run",
+            target="queue",
+            outcome="changed" if result.get("started") else "unchanged",
+            reason=result.get("reason", "unknown"),
+            before=before,
+            after={"state": load_state(), "queue": summarize_queue(load_queue()), "scheduler": response},
             detail=response,
         )
         self._invalidate_status_cache()
