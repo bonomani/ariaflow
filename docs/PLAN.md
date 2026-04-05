@@ -1,38 +1,6 @@
 # Plan
 
-### [P1] Add observability to bonjour.py
-
-**What:** Add `record_action()` calls to all Bonjour operations so they appear in the action history log. The project uses `record_action()` as its sole logging mechanism (no Python `logging` module).
-
-**Where:** `src/aria_queue/bonjour.py` (all 4 public functions)
-
-**Why:** All Bonjour operations are completely silent — no action log entries, stderr sent to DEVNULL. When Bonjour fails (no daemon, binary missing, process exits early), there's zero visibility in the frontend action history.
-
-**Scope:** ~30 lines added to `bonjour.py`. No new files. No API changes.
-
-**Changes:**
-
-1. **`advertise_http_service()`** (context manager, called from `cli.py:142`):
-   - `action="bonjour_register"`, `target="system"`, `outcome="changed"` — on successful registration
-   - `action="bonjour_register"`, `target="system"`, `outcome="skipped"` — no backend detected
-   - `action="bonjour_register"`, `target="system"`, `outcome="failed"` — process exited early or FileNotFoundError
-   - `action="bonjour_deregister"`, `target="system"`, `outcome="changed"` — on context exit (cleanup)
-
-2. **`advertise_torrent()`** (called from scheduler seed logic):
-   - `action="bonjour_torrent_register"`, `target="system"`, `outcome="changed"/"failed"/"skipped"`
-   - `detail` includes infohash, name
-
-3. **`stop_torrent_advertisement()`**:
-   - `action="bonjour_torrent_deregister"`, `target="system"`, `outcome="changed"`
-
-4. **`_detect_backend()`** — no action log (internal helper, called frequently). Detection result included in `detail` of register actions.
-
-**Dependencies:** Import `record_action` from `state.py`. Circular import risk: none — `bonjour.py` currently imports nothing from the project.
-
-**Verification:**
-- `python -m pytest tests/ -x -q`
-- Start ariaflow, check action history shows bonjour_register entry
-- If no mDNS daemon: action history shows outcome=skipped
+No open items.
 
 **What:** Convert `routes.py` (1290 lines, 40 handlers) into a `routes/` package with one file per resource.
 **Where:** `src/aria_queue/routes.py` → `src/aria_queue/routes/`
