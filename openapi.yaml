@@ -13,20 +13,161 @@ servers:
     description: Local development
 
 tags:
+  - name: Meta
+    description: API docs, discovery, and test runner
+  - name: Observability
+    description: Health, events, logs, and session management
   - name: Queue
     description: Queue and item operations
-  - name: Engine
+  - name: Scheduler
     description: Run control, preflight, UCC
   - name: Config
     description: Declaration, options, aria2 settings
+  - name: aria2
+    description: Direct aria2 option management
+  - name: Bandwidth
+    description: Bandwidth status and probing
+  - name: Torrents
+    description: Torrent seeding and file management
+  - name: Sessions
+    description: Session history and statistics
   - name: Lifecycle
     description: Install, uninstall, status
-  - name: Observability
-    description: Logs and session management
-  - name: Meta
-    description: API docs and test runner
 
 paths:
+  # ── Meta ──
+  /api:
+    get:
+      tags: [Meta]
+      summary: API discovery
+      description: Returns available endpoints and server metadata.
+      responses:
+        "200":
+          description: API index
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/docs:
+    get:
+      tags: [Meta]
+      summary: Swagger UI
+      description: Interactive API documentation rendered with Swagger UI.
+      responses:
+        "200":
+          description: HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /api/openapi.yaml:
+    get:
+      tags: [Meta]
+      summary: OpenAPI spec
+      description: Raw OpenAPI 3.0.3 specification in YAML format.
+      responses:
+        "200":
+          description: YAML spec
+          content:
+            text/yaml:
+              schema:
+                type: string
+
+  /api/tests:
+    get:
+      tags: [Meta]
+      summary: Run test suite
+      description: Executes the full test suite and returns structured results.
+      responses:
+        "200":
+          description: Test results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  total:
+                    type: integer
+                  passed:
+                    type: integer
+                  failed:
+                    type: integer
+                  tests:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        status:
+                          type: string
+                          enum: [ok, FAIL, ERROR]
+                  summary:
+                    type: string
+                  exit_code:
+                    type: integer
+
+  # ── Observability ──
+  /api/health:
+    get:
+      tags: [Observability]
+      summary: Health check
+      description: Returns basic health status of the server.
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /api/events:
+    get:
+      tags: [Observability]
+      summary: SSE event stream
+      description: Server-Sent Events stream for real-time state updates.
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/log:
+    get:
+      tags: [Observability]
+      summary: Get action log
+      description: Returns the most recent action log entries.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 120
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: Action log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+
+  # ── Queue ──
   /api/status:
     get:
       tags: [Queue]
@@ -99,6 +240,43 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
 
+  /api/downloads/cleanup:
+    post:
+      tags: [Queue]
+      summary: Archive stale items
+      description: Moves completed/failed items from the active queue to the archive.
+      responses:
+        "200":
+          description: Cleanup result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  archived:
+                    type: integer
+
+  /api/downloads/archive:
+    get:
+      tags: [Queue]
+      summary: Get archived items
+      description: Returns previously archived queue items.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        "200":
+          description: Archived items
+          content:
+            application/json:
+              schema:
+                type: object
+
   /api/downloads/{id}/pause:
     post:
       tags: [Queue]
@@ -168,6 +346,32 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/downloads/{id}/priority:
+    post:
+      tags: [Queue]
+      summary: Change item priority
+      description: Sets the priority value for a queue item.
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [priority]
+              properties:
+                priority:
+                  type: integer
+                  description: Priority value (higher = more urgent)
+      responses:
+        "200":
+          $ref: "#/components/responses/ItemResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/downloads/{id}/files:
     get:
       tags: [Queue]
@@ -200,9 +404,7 @@ paths:
     post:
       tags: [Queue]
       summary: Select files in a torrent/metalink download
-      description: |
-        Selects specific files for download via aria2.changeOption and unpauses.
-        Use after adding a .torrent or .metalink URL (which auto-pauses for selection).
+      description: Selects specific files for download via aria2.changeOption and unpauses.
       parameters:
         - $ref: "#/components/parameters/ItemId"
       requestBody:
@@ -242,13 +444,89 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── Scheduler ──
+  /api/scheduler:
+    get:
+      tags: [Scheduler]
+      summary: Scheduler status
+      description: Returns scheduler state including running, paused, and stop_requested flags.
+      responses:
+        "200":
+          description: Scheduler state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngineState"
+
+  /api/scheduler/start:
+    post:
+      tags: [Scheduler]
+      summary: Start scheduler
+      description: Starts the background scheduler loop.
+      responses:
+        "200":
+          description: Scheduler started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /api/scheduler/stop:
+    post:
+      tags: [Scheduler]
+      summary: Stop scheduler
+      description: Requests the scheduler to stop after the current cycle.
+      responses:
+        "200":
+          description: Stop requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /api/scheduler/pause:
+    post:
+      tags: [Scheduler]
+      summary: Pause all active transfers
+      description: Pauses all active downloads via aria2 global pause.
+      responses:
+        "200":
+          description: Paused
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /api/scheduler/resume:
+    post:
+      tags: [Scheduler]
+      summary: Resume all paused transfers
+      description: Resumes all paused downloads via aria2 global unpause.
+      responses:
+        "200":
+          description: Resumed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
   /api/scheduler/preflight:
     post:
-      tags: [Engine]
+      tags: [Scheduler]
       summary: Run preflight checks
-      description: |
-        Validates system readiness: aria2 availability, queue directory,
-        UIC gates and preferences. Returns structured gate results.
+      description: Validates system readiness including aria2, queue directory, UIC gates and preferences.
       responses:
         "200":
           description: Preflight result
@@ -282,7 +560,7 @@ paths:
 
   /api/scheduler/ucc:
     post:
-      tags: [Engine]
+      tags: [Scheduler]
       summary: Execute UCC cycle
       description: Runs preflight + queue processing and returns a UCC 2.0 structured result.
       responses:
@@ -308,6 +586,7 @@ paths:
                       outcome:
                         type: string
 
+  # ── Config ──
   /api/declaration:
     get:
       tags: [Config]
@@ -343,43 +622,22 @@ paths:
                   declaration:
                     $ref: "#/components/schemas/Declaration"
 
-
-  /api/docs:
-    get:
-      tags: [Meta]
-      summary: Swagger UI
-      description: Interactive API documentation rendered with Swagger UI.
+  /api/declaration/preferences:
+    patch:
+      tags: [Config]
+      summary: Update preferences atomically
+      description: Partial update of UIC declaration preferences by key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: Key-value pairs to merge into preferences
       responses:
         "200":
-          description: HTML page
-          content:
-            text/html:
-              schema:
-                type: string
-
-  /api/openapi.yaml:
-    get:
-      tags: [Meta]
-      summary: OpenAPI spec
-      description: Raw OpenAPI 3.0.3 specification in YAML format.
-      responses:
-        "200":
-          description: YAML spec
-          content:
-            text/yaml:
-              schema:
-                type: string
-
-  /api/tests:
-    get:
-      tags: [Meta]
-      summary: Run test suite
-      description: |
-        Executes the full test suite and returns structured results.
-        Each test includes name and pass/fail status.
-      responses:
-        "200":
-          description: Test results
+          description: Updated declaration
           content:
             application/json:
               schema:
@@ -387,36 +645,76 @@ paths:
                 properties:
                   ok:
                     type: boolean
-                  total:
-                    type: integer
-                  passed:
-                    type: integer
-                  failed:
-                    type: integer
-                  tests:
+                  declaration:
+                    $ref: "#/components/schemas/Declaration"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ── aria2 ──
+  /api/aria2/get_global_option:
+    get:
+      tags: [aria2]
+      summary: Get aria2 global options
+      description: Returns the current aria2 global configuration via RPC.
+      responses:
+        "200":
+          description: Global options
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/aria2/get_option:
+    get:
+      tags: [aria2]
+      summary: Get per-GID options
+      description: Returns aria2 options for a specific download GID.
+      parameters:
+        - name: gid
+          in: query
+          required: true
+          schema:
+            type: string
+          description: aria2 download GID
+      responses:
+        "200":
+          description: Per-GID options
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/aria2/option_tiers:
+    get:
+      tags: [aria2]
+      summary: Option tier classification
+      description: Returns managed, safe, and unsafe option tier lists.
+      responses:
+        "200":
+          description: Option tiers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  managed:
                     type: array
                     items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                        status:
-                          type: string
-                          enum: [ok, FAIL, ERROR]
-                  summary:
-                    type: string
-                  exit_code:
-                    type: integer
+                      type: string
+                  safe:
+                    type: array
+                    items:
+                      type: string
+                  unsafe:
+                    type: array
+                    items:
+                      type: string
 
   /api/aria2/change_global_option:
     post:
-      tags: [Config]
+      tags: [aria2]
       summary: Change aria2 global options
-      description: |
-        Modifies aria2 runtime options. Only a safe subset is allowed:
-        max-concurrent-downloads, max-connection-per-server, split,
-        min-split-size, max-overall-download-limit, max-download-limit,
-        timeout, connect-timeout.
+      description: Modifies aria2 runtime options with 3-tier safety enforcement.
       requestBody:
         required: true
         content:
@@ -445,10 +743,188 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
 
+  /api/aria2/change_option:
+    post:
+      tags: [aria2]
+      summary: Change per-GID options
+      description: Modifies aria2 options for a specific download GID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gid]
+              properties:
+                gid:
+                  type: string
+                options:
+                  type: object
+                  additionalProperties:
+                    type: string
+      responses:
+        "200":
+          description: Options applied
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/aria2/set_limits:
+    post:
+      tags: [aria2]
+      summary: Set managed bandwidth/seed limits
+      description: Sets managed bandwidth and seed limits via aria2 global options.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Limits applied
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # ── Bandwidth ──
+  /api/bandwidth:
+    get:
+      tags: [Bandwidth]
+      summary: Bandwidth status
+      description: Returns current bandwidth status and probe data.
+      responses:
+        "200":
+          description: Bandwidth info
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/bandwidth/probe:
+    post:
+      tags: [Bandwidth]
+      summary: Manual bandwidth probe
+      description: Triggers a bandwidth measurement probe and returns results.
+      responses:
+        "200":
+          description: Probe result
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ── Torrents ──
+  /api/torrents:
+    get:
+      tags: [Torrents]
+      summary: List seeded torrents
+      description: Returns currently seeded torrents.
+      responses:
+        "200":
+          description: Torrent list
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/torrents/{infohash}.torrent:
+    get:
+      tags: [Torrents]
+      summary: Download .torrent file
+      description: Returns the .torrent file for the given infohash.
+      parameters:
+        - name: infohash
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Torrent infohash
+      responses:
+        "200":
+          description: Torrent file
+          content:
+            application/x-bittorrent:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/torrents/{infohash}/stop:
+    post:
+      tags: [Torrents]
+      summary: Stop seeding a torrent
+      description: Stops seeding the torrent identified by infohash.
+      parameters:
+        - name: infohash
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Torrent infohash
+      responses:
+        "200":
+          description: Seeding stopped
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ── Sessions ──
+  /api/sessions:
+    get:
+      tags: [Sessions]
+      summary: Session history
+      description: Returns recent session records.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Session list
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/sessions/stats:
+    get:
+      tags: [Sessions]
+      summary: Session statistics
+      description: Returns aggregated statistics for a session.
+      parameters:
+        - name: session_id
+          in: query
+          schema:
+            type: string
+          description: Session ID to query stats for
+      responses:
+        "200":
+          description: Session stats
+          content:
+            application/json:
+              schema:
+                type: object
+
   /api/sessions/new:
     post:
-      tags: [Observability]
-      summary: Create a new session
+      tags: [Sessions]
+      summary: Create new session
       description: Closes the current session and starts a fresh one.
       responses:
         "200":
@@ -458,32 +934,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/EngineState"
 
-  /api/log:
-    get:
-      tags: [Observability]
-      summary: Get action log
-      description: Returns the most recent action log entries.
-      parameters:
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 120
-            minimum: 1
-            maximum: 500
-      responses:
-        "200":
-          description: Action log entries
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      type: object
-
+  # ── Lifecycle ──
   /api/lifecycle:
     get:
       tags: [Lifecycle]
@@ -502,20 +953,19 @@ paths:
       tags: [Lifecycle]
       summary: Run lifecycle action
       description: Install or uninstall components. macOS only.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [target, action]
-              properties:
-                target:
-                  type: string
-                  enum: [ariaflow, aria2-launchd]
-                action:
-                  type: string
-                  enum: [install, uninstall]
+      parameters:
+        - name: target
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [ariaflow, aria2-launchd]
+        - name: action
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [install, uninstall]
       responses:
         "200":
           description: Action result
@@ -529,7 +979,7 @@ paths:
 components:
   parameters:
     ItemId:
-      name: item_id
+      name: id
       in: path
       required: true
       schema:

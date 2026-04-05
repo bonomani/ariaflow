@@ -1,20 +1,6 @@
 # Plan
 
-### [O1] Rebuild OpenAPI spec — 22 missing endpoints
-
-**What:** OpenAPI spec (`openapi.yaml`) is missing 22 endpoints added since the original spec was written. Needs full rebuild to match actual routes.
-**Where:** `src/aria_queue/openapi.yaml`, `openapi.yaml` (root copy)
-**Why:** Swagger UI at `/api/docs` shows incomplete API. Clients generating code from the spec will miss endpoints.
-**Scope:** ~300 lines of YAML. Could auto-generate from dispatch tables + route handler docstrings.
-
-Missing endpoints:
-- `/api/health`, `/api/events`, `/api/bandwidth`, `/api/bandwidth/probe`
-- `/api/scheduler`, `/api/scheduler/start`, `/api/scheduler/stop`, `/api/scheduler/pause`, `/api/scheduler/resume`
-- `/api/sessions`, `/api/sessions/stats`, `/api/sessions/new`
-- `/api/downloads/add`, `/api/downloads/cleanup`, `/api/downloads/archive`, `/api/downloads/{id}/priority`
-- `/api/aria2/get_global_option`, `/api/aria2/get_option`, `/api/aria2/change_option`, `/api/aria2/option_tiers`, `/api/aria2/set_limits`
-- `/api/torrents`, `/api/torrents/{infohash}.torrent`, `/api/torrents/{infohash}/stop`
-- `PATCH /api/declaration/preferences`
+No open items.
 
 _D1-D8 (private torrent distribution pipeline) implemented. See git history._
 
