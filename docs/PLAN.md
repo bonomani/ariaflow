@@ -1,6 +1,151 @@
 # Plan
 
-No open items.
+### [P1] Auto-start scheduler + pause/resume only
+
+**What:** Scheduler starts automatically with `ariaflow serve`. Remove start/stop — user can only pause/resume.
+
+**Why:** Discovery (P2) needs the scheduler always running. Start/stop adds complexity with no real benefit — the scheduler should process the queue whenever ariaflow is running.
+
+**ASM state model change (Axis 2: Run):**
+```
+Before: idle → running → stop_requested → idle
+                       → paused → running
+
+After:  running ↔ paused
+```
+
+**Steps:**
+1. `cli.py` — call `start_background_process()` automatically in `serve` command, before `server.serve_forever()`
+2. `scheduler.py` — `start_background_process()` no longer needs to check "already running" (always starts). Remove `stop_background_process()`. Add `pause_scheduler()` and `resume_scheduler()` that set `state["paused"]`.
+3. `routes/scheduler.py` — remove `post_scheduler_start`, `post_scheduler_stop`. Keep `post_pause`, `post_resume`.
+4. `webapp.py` — remove `/api/scheduler/start` and `/api/scheduler/stop` from dispatch table
+5. Update `routes/meta.py` — remove start/stop from API discovery
+6. Update openapi.yaml via `make docs`
+7. Update ASM state model doc
+8. Update tests
+9. Run all tests
+
+**API change (breaking):**
+- Remove `POST /api/scheduler/start`
+- Remove `POST /api/scheduler/stop`
+- Keep `POST /api/scheduler/pause`
+- Keep `POST /api/scheduler/resume`
+
+**Scope:** ~60 lines removed, ~20 lines added.
+**Depends on:** Nothing.
+
+---
+
+### [P2] Peer discovery and auto-download
+
+**What:** Background thread that browses `_ariaflow._tcp`, resolves peers, polls their `GET /api/torrents`, and auto-downloads new torrents.
+
+**Why:** Enables automatic content distribution across ariaflow instances on the LAN without user intervention.
+
+**Where:** New module `src/aria_queue/discovery.py`, new preferences in `contracts.py`, new endpoint in routes.
+
+**How it works:**
+
+1. **Browse** — continuously listen for `_ariaflow._tcp` on the local network
+   - macOS/Windows: shell out to `dns-sd -B _ariaflow._tcp local` (long-running, outputs as peers appear)
+   - Linux: shell out to `avahi-browse -r _ariaflow._tcp` (same pattern)
+   - Parse stdout lines to detect new/removed peers
+
+2. **Resolve** — for each discovered peer, get connection details
+   - macOS/Windows: `dns-sd -L "{instance}" _ariaflow._tcp local` → host, port, TXT
+   - Linux: `avahi-resolve-host-name {host}` or use output from `avahi-browse -r`
+   - Read TXT: `path=/api`, `tls=0|1` → build base URL
+
+3. **Poll** — periodically call each peer's `GET /api/torrents`
+   - Interval: `peer_poll_interval_seconds` preference (default 60)
+   - Returns list of available torrents with infohash, URL, metadata
+   - Compare against local queue — skip already known infohashes
+
+4. **Fetch** — for new torrents:
+   - Check disk space (P3) — skip if over limit
+   - Download `.torrent` file from peer → save to `torrent_dir`
+   - Submit to local aria2 via existing `add_queue_item()` with `mode=torrent`
+   - Track provenance: `source_peer` field on queue item
+
+**New preferences (`contracts.py`):**
+- `auto_discover_peers` — `false` (default off, opt-in)
+- `peer_poll_interval_seconds` — `60` (how often to check peers)
+- `peer_max_auto_downloads` — `5` (max torrents to auto-fetch per poll cycle)
+- `peer_content_filter` — `""` (glob pattern, empty = accept all)
+- `peer_allowlist` — `""` (comma-separated instance names, empty = accept all)
+
+**New endpoint:**
+- `GET /api/peers` — list of discovered peers with host, port, last_seen, torrent_count, status
+
+**New module `discovery.py` (~200 lines):**
+- `start_discovery(port)` — starts browse thread + poll thread
+- `stop_discovery()` — kills browse process, stops poll thread
+- `list_peers()` — returns current peer list
+- `_browse_loop()` — runs `dns-sd -B` / `avahi-browse`, parses output, maintains peer dict
+- `_resolve_peer(instance)` — runs `dns-sd -L` / uses avahi output, returns host:port:path
+- `_poll_loop()` — periodic: for each peer, GET /api/torrents, filter, fetch new
+- `_fetch_torrent(peer, torrent)` — download .torrent file, submit to queue
+
+**Lifecycle:**
+- Started in `cli.py` alongside scheduler (if `auto_discover_peers` is true)
+- Stopped on shutdown (in `finally` block or signal handler)
+- Paused/resumed with scheduler
+
+**Scope:** ~200 lines new module, ~30 lines preferences, ~20 lines endpoint, ~20 lines cli.py.
+**Depends on:** P1 (scheduler auto-start).
+
+---
+
+### [P3] Disk space management
+
+**What:** Check available disk space before downloading. Stop auto-downloads when disk usage exceeds threshold.
+
+**Where:** `src/aria_queue/scheduler.py` (check before submit), `contracts.py` (new preferences), `discovery.py` (check before auto-fetch).
+
+**Why:** Without this, peer discovery (P2) could fill the disk. Also useful for regular downloads.
+
+**New preferences:**
+- `max_disk_usage_percent` — `90` (stop downloading when disk reaches this %)
+- `torrent_dir` — `""` (default: `{config_dir}/torrents/`)
+- `download_dir` — `""` (default: current working directory, same as aria2 default)
+
+**How it works:**
+```python
+import shutil
+usage = shutil.disk_usage(download_dir)
+percent_used = (usage.used / usage.total) * 100
+if percent_used >= max_disk_usage_percent:
+    # skip download, log record_action with reason="disk_full"
+```
+
+**Where the check runs:**
+- `scheduler.py` `process_queue()` — before `aria2_add_download()`: skip queued items if disk full
+- `discovery.py` `_fetch_torrent()` — before auto-downloading from peer: skip if disk full
+- `GET /api/health` — include `disk_usage_percent` in response for monitoring
+
+**Steps:**
+1. Add preferences to `contracts.py`
+2. Add `_check_disk_space(path) -> bool` helper
+3. Add check in `process_queue()` before submitting new downloads
+4. Add `disk_usage_percent` to health endpoint
+5. Wire into discovery module (P2)
+6. Add tests
+7. Run all tests
+
+**Scope:** ~40 lines.
+**Depends on:** Nothing (but P2 uses it).
+
+---
+
+### Implementation order
+
+```
+P1 → P3 → P2
+```
+
+- P1 first: simplifies the scheduler lifecycle before adding discovery
+- P3 next: disk space check is a prerequisite for safe auto-downloads
+- P2 last: depends on both P1 (scheduler always running) and P3 (disk safety)
 
 **What:** Convert `routes.py` (1290 lines, 40 handlers) into a `routes/` package with one file per resource.
 **Where:** `src/aria_queue/routes.py` → `src/aria_queue/routes/`
