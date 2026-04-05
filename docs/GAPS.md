@@ -18,11 +18,11 @@ For frontend-only items, see `../ariaflow-web/GAPS.md`.
 
 ### 2.3 Per-item action API
 
-Per-item endpoints: `POST /api/item/<id>/pause`, `resume`, `remove`, `retry`. Each validates state, logs to `actions.jsonl`, and triggers SSE events.
+Per-item endpoints: `POST /api/downloads/<id>/pause`, `resume`, `remove`, `retry`. Each validates state, logs to `actions.jsonl`, and triggers SSE events.
 
 ### 3.1 Torrent/metalink file selection
 
-Supports `.torrent`, `.metalink`, magnet URLs with `--pause-metadata=true`. File picker via `GET /api/item/<id>/files` and selection via `POST /api/item/<id>/files` with `{select: [1,3,5]}`.
+Supports `.torrent`, `.metalink`, magnet URLs with `--pause-metadata=true`. File picker via `GET /api/downloads/<id>/files` and selection via `POST /api/downloads/<id>/files` with `{select: [1,3,5]}`.
 
 ### 4.1 aria2 global options proxy
 

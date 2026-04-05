@@ -174,11 +174,11 @@ Terminal states (`complete`, `error`, `removed`) appear in `tellStopped()` and c
 ### 2.1 Scheduler States (4)
 
 ```
-              POST /api/run
+              POST /api/scheduler/start (or /stop)
               {action: start}
                     │
                     ▼
-    ┌───────┐    ┌──────────┐    POST /api/run
+    ┌───────┐    ┌──────────┐    POST /api/scheduler/start (or /stop)
     │ idle  │───►│ running  │    {action: stop}
     └───┬───┘    └──┬───┬───┘────────────┐
         ▲           │   │                ▼
@@ -206,10 +206,10 @@ Terminal states (`complete`, `error`, `removed`) appear in `tellStopped()` and c
 
 | Transition | Trigger | What happens |
 |---|---|---|
-| idle → running | `POST /api/run {action: start}` | Spawns daemon thread running `process_queue()` |
-| running → paused | `POST /api/pause` | `aria2.pause(gid)` on all active GIDs; `state.paused = true` |
-| paused → running | `POST /api/resume` | `aria2.unpause(gid)` on all paused GIDs; `state.paused = false` |
-| running → stop_requested | `POST /api/run {action: stop}` | `state.stop_requested = true` |
+| idle → running | `POST /api/scheduler/start (or /stop) {action: start}` | Spawns daemon thread running `process_queue()` |
+| running → paused | `POST /api/scheduler/pause` | `aria2.pause(gid)` on all active GIDs; `state.paused = true` |
+| paused → running | `POST /api/scheduler/resume` | `aria2.unpause(gid)` on all paused GIDs; `state.paused = false` |
+| running → stop_requested | `POST /api/scheduler/start (or /stop) {action: stop}` | `state.stop_requested = true` |
 | stop_requested → idle | Automatic | Loop pauses all GIDs, closes session, clears flags |
 | running → idle | Automatic | All queue items reached terminal status (`queue_complete`) |
 | paused → idle | Automatic | All queue items reached terminal status (`queue_complete`) |
@@ -280,12 +280,12 @@ Terminal states (`complete`, `error`, `removed`) appear in `tellStopped()` and c
 | `waiting` → `active` | aria2 slot available | _(poll via `aria2_tell_status`)_ | aria2-owned |
 | `active` → `complete` | aria2 reports `complete` | _(poll via `aria2_tell_status`)_ | post-completion |
 | `active` → `error` | aria2 reports `error` or 5× RPC failures | _(poll via `aria2_tell_status`)_ | aria2-owned |
-| `active` → `paused` | `POST /api/item/{id}/pause` | `aria2_pause(gid)` | aria2-owned |
+| `active` → `paused` | `POST /api/downloads/{id}/pause` | `aria2_pause(gid)` | aria2-owned |
 | `active` → `stopped` | aria2 reports `removed` | _(poll via `aria2_tell_status`)_ | aria2-owned |
-| `paused` → `active` | `POST /api/item/{id}/resume` (has GID) | `aria2_unpause(gid)` | aria2-owned |
-| `paused` → `queued` | `POST /api/item/{id}/resume` (no GID) | _(eager re-submission attempted)_ | fallback |
-| `queued`/`paused` → `cancelled` | `POST /api/item/{id}/remove` | `aria2_remove(gid)` + `aria2_remove_download_result(gid)` | removal |
-| `error` → `queued` | `POST /api/item/{id}/retry` | _(eager re-submission attempted)_ | fallback |
+| `paused` → `active` | `POST /api/downloads/{id}/resume` (has GID) | `aria2_unpause(gid)` | aria2-owned |
+| `paused` → `queued` | `POST /api/downloads/{id}/resume` (no GID) | _(eager re-submission attempted)_ | fallback |
+| `queued`/`paused` → `cancelled` | `POST /api/downloads/{id}/remove` | `aria2_remove(gid)` + `aria2_remove_download_result(gid)` | removal |
+| `error` → `queued` | `POST /api/downloads/{id}/retry` | _(eager re-submission attempted)_ | fallback |
 
 ### 2.5 Session States (3)
 
@@ -364,7 +364,7 @@ Close reasons: `stop_requested`, `queue_complete`, `closed`, `manual_new_session
 ### 3.3 Stop / Drain
 
 ```
-User: POST /api/run {action: stop}
+User: POST /api/scheduler/start (or /stop) {action: stop}
   └── state.stop_requested = true
 
 Next loop iteration:
@@ -379,13 +379,13 @@ Next loop iteration:
 ### 3.4 Global Pause / Resume
 
 ```
-POST /api/pause:
+POST /api/scheduler/pause:
   ├── aria2.tellActive()
   ├── aria2.pause(gid)  for each
   ├── state.paused = true
   └── loop continues, skips scheduling
 
-POST /api/resume:
+POST /api/scheduler/resume:
   ├── aria2.unpause(gid)  for each paused item
   ├── state.paused = false
   └── loop resumes scheduling
@@ -395,10 +395,10 @@ POST /api/resume:
 
 | API Endpoint | aria2 RPC Calls |
 |---|---|
-| `POST /api/item/{id}/pause` | `aria2.pause(gid)` |
-| `POST /api/item/{id}/resume` | `aria2.unpause(gid)` (or none if no GID) |
-| `POST /api/item/{id}/remove` | `aria2.remove(gid)` then `aria2.removeDownloadResult(gid)` |
-| `POST /api/item/{id}/retry` | _(none — clears GID, re-queues for scheduling)_ |
+| `POST /api/downloads/{id}/pause` | `aria2.pause(gid)` |
+| `POST /api/downloads/{id}/resume` | `aria2.unpause(gid)` (or none if no GID) |
+| `POST /api/downloads/{id}/remove` | `aria2.remove(gid)` then `aria2.removeDownloadResult(gid)` |
+| `POST /api/downloads/{id}/retry` | _(none — clears GID, re-queues for scheduling)_ |
 
 ### 3.6 Download Mode → aria2 RPC
 

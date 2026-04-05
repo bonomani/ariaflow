@@ -242,47 +242,6 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/scheduler/start_and_stop_DEPRECATED:
-    post:
-      tags: [Engine]
-      summary: Start or stop the queue processor
-      description: |
-        Start begins background queue processing. Stop signals graceful shutdown.
-        When starting, auto-preflight may run first depending on declaration preferences.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [action]
-              properties:
-                action:
-                  type: string
-                  enum: [start, stop]
-                auto_preflight_on_run:
-                  type: boolean
-                  nullable: true
-                  description: Override the declaration preference for this run
-      responses:
-        "200":
-          description: Run action result
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                  action:
-                    type: string
-                  result:
-                    type: object
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "409":
-          description: Preflight blocked start
-
   /api/scheduler/preflight:
     post:
       tags: [Engine]
@@ -348,46 +307,6 @@ paths:
                         type: string
                       outcome:
                         type: string
-
-  /api/scheduler/pause_DEPRECATED:
-    post:
-      tags: [Engine]
-      summary: Pause all active transfers
-      description: Pauses all active aria2 downloads and sets engine paused state.
-      responses:
-        "200":
-          description: Pause result
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  paused:
-                    type: boolean
-                  gids:
-                    type: array
-                    items:
-                      type: string
-
-  /api/scheduler/resume_DEPRECATED:
-    post:
-      tags: [Engine]
-      summary: Resume all paused transfers
-      description: Resumes all paused aria2 downloads and clears engine paused state.
-      responses:
-        "200":
-          description: Resume result
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  resumed:
-                    type: boolean
-                  gids:
-                    type: array
-                    items:
-                      type: string
 
   /api/declaration:
     get:

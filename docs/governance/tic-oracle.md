@@ -181,7 +181,7 @@ Core scheduler, state machine, and UCC contract tests.
 | # | Test | Intent | Oracle | Trace Target |
 |---|---|---|---|---|
 | 109 | `test_get_declaration` | Get declaration returns UCC-shaped response | code 200, meta.contract == "UCC" | UIC: declaration CRUD |
-| 110 | `test_get_options_is_alias` | /api/options is alias for /api/declaration | declaration == options (minus request_id) | UIC: declaration CRUD |
+| 110 | `test_get_options_is_alias` | /api/declaration is alias for /api/declaration | declaration == options (minus request_id) | UIC: declaration CRUD |
 | 111 | `test_save_declaration` | Save declaration returns saved confirmation | code 200, saved == True | UIC: declaration CRUD |
 | 112 | `test_save_declaration_roundtrip` | Save+reload preserves custom preference | test_pref in reloaded preference names | UIC: declaration persistence |
 
@@ -250,11 +250,11 @@ Core scheduler, state machine, and UCC contract tests.
 | 139 | `test_get_api_log_default` | GET /api/log returns items list | code 200, items is list | UCC: audit trail |
 | 140 | `test_get_api_log_with_limit` | GET /api/log?limit=5 respects limit | code 200, len(items) <= 5 | UCC: audit trail |
 | 141 | `test_get_api_declaration` | GET /api/declaration returns UCC-shaped declaration | code 200, meta.contract == "UCC", uic.gates/preferences | UIC: declaration CRUD |
-| 142 | `test_get_api_options` | GET /api/options returns uic section | code 200, uic present | UIC: declaration CRUD |
+| 142 | `test_get_api_options` | GET /api/declaration returns uic section | code 200, uic present | UIC: declaration CRUD |
 | 143 | `test_get_api_lifecycle` | GET /api/lifecycle returns component statuses | code 200, ariaflow.meta.contract == "UCC" | UCC: lifecycle |
-| 144 | `test_get_api_item_files_no_gid` | GET /api/item/{id}/files without gid returns 400 | code 400, error == "no_gid" | UCC: error semantics |
-| 145 | `test_get_api_item_files_with_gid` | GET /api/item/{id}/files with gid returns file list | code 200, len(files) == 1 | UCC: file selection |
-| 146 | `test_get_api_item_files_not_found` | GET /api/item/nonexistent/files returns 404 | code 404 | UCC: error semantics |
+| 144 | `test_get_api_item_files_no_gid` | GET /api/downloads/{id}/files without gid returns 400 | code 400, error == "no_gid" | UCC: error semantics |
+| 145 | `test_get_api_item_files_with_gid` | GET /api/downloads/{id}/files with gid returns file list | code 200, len(files) == 1 | UCC: file selection |
+| 146 | `test_get_api_item_files_not_found` | GET /api/downloads/nonexistent/files returns 404 | code 404 | UCC: error semantics |
 | 147 | `test_get_api_docs` | GET /api/docs returns Swagger UI HTML | code 200, text/html, swagger-ui | UCC: API contract |
 | 148 | `test_get_api_openapi_yaml` | GET /api/openapi.yaml returns valid YAML | code 200, yaml content-type, openapi: | UCC: API contract |
 | 149 | `test_get_api_tests` | GET /api/tests runs tests and returns results | code 200, ok, total == 1 | UCC: API contract |
@@ -264,26 +264,26 @@ Core scheduler, state machine, and UCC contract tests.
 
 | # | Test | Intent | Oracle | Trace Target |
 |---|---|---|---|---|
-| 151 | `test_post_api_add` | POST /api/add succeeds | code 200, ok, count == 1 | UCC: execution |
-| 152 | `test_post_api_add_invalid` | POST /api/add with empty items returns 400 | code 400 | UCC: error semantics |
-| 153 | `test_post_api_run_start` | POST /api/run start returns ok | code 200, ok, action == "start" | ASM: Run axis |
-| 154 | `test_post_api_run_stop` | POST /api/run stop returns ok | code 200, action == "stop" | ASM: Run axis |
-| 155 | `test_post_api_run_invalid` | POST /api/run invalid action returns 400 | code 400 | UCC: error semantics |
-| 156 | `test_post_api_preflight` | POST /api/preflight returns pass | code 200, status == "pass" | UIC: gate evaluation |
-| 157 | `test_post_api_ucc` | POST /api/ucc returns structured result | code 200, meta + result present | UCC: contract shape |
-| 158 | `test_post_api_pause` | POST /api/pause returns paused key | code 200, paused present | ASM: Run axis |
-| 159 | `test_post_api_resume` | POST /api/resume returns resumed key | code 200, resumed present | ASM: Run axis |
+| 151 | `test_post_api_add` | POST /api/downloads/add succeeds | code 200, ok, count == 1 | UCC: execution |
+| 152 | `test_post_api_add_invalid` | POST /api/downloads/add with empty items returns 400 | code 400 | UCC: error semantics |
+| 153 | `test_post_api_run_start` | POST /api/scheduler/start (or /stop) start returns ok | code 200, ok, action == "start" | ASM: Run axis |
+| 154 | `test_post_api_run_stop` | POST /api/scheduler/start (or /stop) stop returns ok | code 200, action == "stop" | ASM: Run axis |
+| 155 | `test_post_api_run_invalid` | POST /api/scheduler/start (or /stop) invalid action returns 400 | code 400 | UCC: error semantics |
+| 156 | `test_post_api_preflight` | POST /api/scheduler/preflight returns pass | code 200, status == "pass" | UIC: gate evaluation |
+| 157 | `test_post_api_ucc` | POST /api/scheduler/ucc returns structured result | code 200, meta + result present | UCC: contract shape |
+| 158 | `test_post_api_pause` | POST /api/scheduler/pause returns paused key | code 200, paused present | ASM: Run axis |
+| 159 | `test_post_api_resume` | POST /api/scheduler/resume returns resumed key | code 200, resumed present | ASM: Run axis |
 | 160 | `test_post_api_session` | POST /api/session new returns ok | code 200, ok, session present | ASM: Session axis |
 | 161 | `test_post_api_declaration` | POST /api/declaration saves successfully | code 200, saved == True | UIC: declaration CRUD |
 | 162 | `test_post_api_bandwidth_probe` | POST /api/bandwidth/probe returns probe data | code 200, ok, downlink_mbps/uplink_mbps present | UCC: observation |
 | 163 | `test_post_api_aria2_options_safe` | POST /api/aria2/options safe option accepted | code 200, ok | UIC: policy enforcement |
 | 164 | `test_post_api_aria2_options_unsafe` | POST /api/aria2/options unsafe option rejected | code 400, error == "rejected_options" | UIC: policy enforcement |
-| 165 | `test_post_api_item_pause` | POST /api/item/{id}/pause sets paused | code 200, status == "paused" | ASM: Job queued→paused |
-| 166 | `test_post_api_item_resume` | POST /api/item/{id}/resume resumes | code 200, status in (queued, downloading) | ASM: Job paused→queued |
-| 167 | `test_post_api_item_remove` | POST /api/item/{id}/remove removes | code 200, removed == True | ASM: Job →cancelled |
-| 168 | `test_post_api_item_retry` | POST /api/item/{id}/retry requeues error item | code 200, status == "queued" | ASM: Job error→queued |
-| 169 | `test_post_api_item_files_select` | POST /api/item/{id}/files selects files | code 200, selected == [1, 2] | UCC: execution |
-| 170 | `test_post_api_item_files_select_invalid` | POST /api/item/{id}/files empty select returns 400 | code 400 | UCC: error semantics |
+| 165 | `test_post_api_item_pause` | POST /api/downloads/{id}/pause sets paused | code 200, status == "paused" | ASM: Job queued→paused |
+| 166 | `test_post_api_item_resume` | POST /api/downloads/{id}/resume resumes | code 200, status in (queued, downloading) | ASM: Job paused→queued |
+| 167 | `test_post_api_item_remove` | POST /api/downloads/{id}/remove removes | code 200, removed == True | ASM: Job →cancelled |
+| 168 | `test_post_api_item_retry` | POST /api/downloads/{id}/retry requeues error item | code 200, status == "queued" | ASM: Job error→queued |
+| 169 | `test_post_api_item_files_select` | POST /api/downloads/{id}/files selects files | code 200, selected == [1, 2] | UCC: execution |
+| 170 | `test_post_api_item_files_select_invalid` | POST /api/downloads/{id}/files empty select returns 400 | code 400 | UCC: error semantics |
 | 171 | `test_post_api_lifecycle_action_non_macos` | POST /api/lifecycle/action non-macOS returns 400 | code 400, error == "macos_only" | UCC: lifecycle |
 | 172 | `test_post_api_lifecycle_action_install` | POST /api/lifecycle/action install succeeds | code 200, ok | UCC: lifecycle |
 
@@ -359,7 +359,7 @@ Core scheduler, state machine, and UCC contract tests.
 |---|---|---|---|---|
 | 207 | `test_saved_declaration_readable` | Save then reload preserves all preferences | saved_names == reloaded_names | UIC: declaration persistence |
 | 208 | `test_bandwidth_config_reflects_declaration_change` | Bandwidth config reflects declaration preference change | down_free_percent == 40, down_use_percent == 0.6 | UIC: declaration→config |
-| 209 | `test_options_alias_matches_declaration` | /api/options matches /api/declaration | decl == opts | UIC: declaration CRUD |
+| 209 | `test_options_alias_matches_declaration` | /api/declaration matches /api/declaration | decl == opts | UIC: declaration CRUD |
 | 210 | `test_declaration_gate_change_reflected` | Custom gate persisted in declaration | "xc_test_gate" in gate_names | UIC: declaration persistence |
 | 211 | `test_declaration_preference_value_change_reflected` | Preference value change persisted | max_simultaneous_downloads.value == 5 | UIC: declaration persistence |
 | 212 | `test_all_bandwidth_prefs_in_declaration_and_config` | All bandwidth prefs in declaration, all config keys in bandwidth | expected subset of names, expected_config subset of keys | UIC: declaration persistence |

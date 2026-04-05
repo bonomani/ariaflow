@@ -24,7 +24,7 @@
 | Class | Description |
 |---|---|
 | **execution** | af-scheduler delegates download work to aria2 via JSON-RPC. All 36 aria2 methods have dedicated `aria2_*` wrapper functions in `core.py`. |
-| **query/command** | External clients read state or issue commands via af-api (`/api/status`, `/api/add`, `/api/item/{id}/pause`, etc.) |
+| **query/command** | External clients read state or issue commands via af-api (`/api/status`, `/api/downloads/add`, `/api/downloads/{id}/pause`, etc.) |
 | **real-time push** | SSE stream at `/api/events` pushes `state_changed` events to connected clients |
 | **documentation** | OpenAPI spec and Swagger UI for API discovery |
 | **state persistence** | `queue.json`, `state.json`, `declaration.json` are the source of truth, accessed under file lock |

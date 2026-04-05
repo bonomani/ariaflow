@@ -102,15 +102,15 @@ Mode is auto-detected from the URL when adding. The frontend can display an icon
 **Torrent/metalink file selection flow:**
 1. User adds a `.torrent` URL → item becomes `queued` with `mode=torrent`
 2. Engine downloads metadata and pauses → item gets a `gid`
-3. Frontend calls `GET /api/item/{id}/files` → shows file picker
-4. User selects files → frontend calls `POST /api/item/{id}/files` with `{select: [1,3,5]}`
+3. Frontend calls `GET /api/downloads/{id}/files` → shows file picker
+4. User selects files → frontend calls `POST /api/downloads/{id}/files` with `{select: [1,3,5]}`
 5. Item transitions to `active`
 
 ### 1.4 Queue Operations
 
 #### Add items
 ```
-POST /api/add
+POST /api/downloads/add
 {
   "items": [
     {
@@ -132,10 +132,10 @@ POST /api/add
 
 #### Per-item actions
 ```
-POST /api/item/{id}/pause    → { "ok": true, "item": {...} }
-POST /api/item/{id}/resume   → { "ok": true, "item": {...} }
-POST /api/item/{id}/remove   → { "ok": true, "removed": true }
-POST /api/item/{id}/retry    → { "ok": true, "item": {...} }
+POST /api/downloads/{id}/pause    → { "ok": true, "item": {...} }
+POST /api/downloads/{id}/resume   → { "ok": true, "item": {...} }
+POST /api/downloads/{id}/remove   → { "ok": true, "removed": true }
+POST /api/downloads/{id}/retry    → { "ok": true, "item": {...} }
 ```
 
 Each returns the updated item (or confirmation). All actions:
@@ -146,8 +146,8 @@ Each returns the updated item (or confirmation). All actions:
 
 #### File selection (torrent/metalink)
 ```
-GET  /api/item/{id}/files           → { "files": [...] }
-POST /api/item/{id}/files           → { "ok": true, "selected": [1,3] }
+GET  /api/downloads/{id}/files           → { "files": [...] }
+POST /api/downloads/{id}/files           → { "ok": true, "selected": [1,3] }
      body: { "select": [1, 3, 5] }
 ```
 
@@ -175,14 +175,14 @@ The response always includes:
 
 #### Archive (removed items)
 ```
-GET /api/archive?limit=100   → { "items": [...] }
+GET /api/downloads/archive?limit=100   → { "items": [...] }
 ```
 
 Removed items are soft-deleted here. Useful for "recently removed" UI or undo.
 
 #### Auto-cleanup
 ```
-POST /api/cleanup
+POST /api/downloads/cleanup
 { "max_done_age_days": 7, "max_done_count": 100 }
 → { "ok": true, "archived": 3, "remaining": 12 }
 ```
@@ -194,7 +194,7 @@ Moves stale complete/error items to archive automatically.
 Items are processed in **priority order** (higher first, then FIFO within same priority).
 
 ```
-POST /api/add  { "items": [
+POST /api/downloads/add  { "items": [
   {"url": "...", "priority": 0},    // normal
   {"url": "...", "priority": 10},   // processed first
   {"url": "...", "priority": -1}    // processed last

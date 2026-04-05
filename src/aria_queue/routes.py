@@ -427,7 +427,7 @@ def get_openapi_yaml(h: object, parsed: object) -> None:
     spec_path = _find_openapi_spec()
     if spec_path is None:
         h._send_json(
-            {"error": "not_found", "message": "openapi.yaml not found"},
+            _error_payload("not_found", "openapi.yaml not found"),
             status=404,
         )
         return
@@ -959,7 +959,7 @@ def post_lifecycle_action(h: object, payload: object, path: str) -> None:
         )
         h._invalidate_status_cache()
         h._send_json(
-            {"error": "lifecycle_action_failed", "message": "internal error"},
+            _error_payload("lifecycle_action_failed", "internal error"),
             status=500,
         )
         return
