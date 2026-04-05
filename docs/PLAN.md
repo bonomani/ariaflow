@@ -1,6 +1,6 @@
 # Plan
 
-### [R2] Split routes.py into routes/ package by resource group
+No open items.
 
 **What:** Convert `routes.py` (1290 lines, 40 handlers) into a `routes/` package with one file per resource.
 **Where:** `src/aria_queue/routes.py` → `src/aria_queue/routes/`

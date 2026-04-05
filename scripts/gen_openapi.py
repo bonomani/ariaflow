@@ -55,16 +55,18 @@ def _extract_dispatch_tables() -> tuple[dict[str, str], dict[str, str]]:
 
 def _extract_docstrings() -> dict[str, str]:
     """Extract first line of each route function docstring."""
-    text = (_SRC / "routes.py").read_text()
-    tree = ast.parse(text)
     docs = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.col_offset == 0:
-            doc = ast.get_docstring(node)
-            if doc:
-                docs[node.name] = doc.split("\n")[0].strip()
-            else:
-                docs[node.name] = ""
+    routes_dir = _SRC / "routes"
+    for py_file in sorted(routes_dir.glob("*.py")):
+        text = py_file.read_text()
+        tree = ast.parse(text)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.col_offset == 0:
+                doc = ast.get_docstring(node)
+                if doc:
+                    docs[node.name] = doc.split("\n")[0].strip()
+                else:
+                    docs[node.name] = ""
     return docs
 
 
