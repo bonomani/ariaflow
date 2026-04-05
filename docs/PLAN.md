@@ -1,6 +1,18 @@
 # Plan
 
-No open items.
+### [R1] Split webapp.py: extract route handlers to routes.py
+
+**What:** Move all `_get_*`, `_post_*`, `_patch_*` handler methods from `AriaFlowHandler` class into standalone functions in a new `routes.py` module. webapp.py keeps: server class skeleton, dispatch tables, SSE, cache, serve().
+**Where:** `src/aria_queue/webapp.py` → `src/aria_queue/routes.py`
+**Why:** webapp.py is 1546 lines — largest module. Route handlers (~900 lines) are independent of server plumbing.
+**Scope:** ~900 lines moved. No behavior change. No test changes needed (tests call HTTP endpoints, not handler methods directly).
+
+Steps:
+1. Create `routes.py` with handler functions (not methods — receive `handler` as first arg)
+2. Update `AriaFlowHandler` dispatch tables to call `routes.func(self, ...)` 
+3. Move helper functions used only by handlers (`_parse_add_items`, `_validate_url`, `_validate_output_path`, `_validate_item_id`, `_resolve_auto_preflight_override`, `_error_payload`, `_session_fields`, `_lifecycle_payload`, `_api_discovery`, `_swagger_ui_html`, `_run_tests`, `_find_openapi_spec`) to routes.py
+4. Keep in webapp.py: `AriaFlowHandler` class with `_send_json`, `_invalidate_status_cache`, `_status_payload`, dispatch tables, `do_GET`/`do_POST`/`do_PATCH`/`do_OPTIONS`, SSE functions, serve()
+5. Run tests — all 455 must pass
 
 _D1-D8 (private torrent distribution pipeline) implemented. See git history._
 
