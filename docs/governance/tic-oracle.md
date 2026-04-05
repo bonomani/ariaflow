@@ -273,7 +273,7 @@ Core scheduler, state machine, and UCC contract tests.
 | 157 | `test_post_api_ucc` | POST /api/scheduler/ucc returns structured result | code 200, meta + result present | UCC: contract shape |
 | 158 | `test_post_api_pause` | POST /api/scheduler/pause returns paused key | code 200, paused present | ASM: Run axis |
 | 159 | `test_post_api_resume` | POST /api/scheduler/resume returns resumed key | code 200, resumed present | ASM: Run axis |
-| 160 | `test_post_api_session` | POST /api/session new returns ok | code 200, ok, session present | ASM: Session axis |
+| 160 | `test_post_api_session` | POST /api/sessions/new returns ok | code 200, ok, session present | ASM: Session axis |
 | 161 | `test_post_api_declaration` | POST /api/declaration saves successfully | code 200, saved == True | UIC: declaration CRUD |
 | 162 | `test_post_api_bandwidth_probe` | POST /api/bandwidth/probe returns probe data | code 200, ok, downlink_mbps/uplink_mbps present | UCC: observation |
 | 163 | `test_post_api_aria2_options_safe` | POST /api/aria2/options safe option accepted | code 200, ok | UIC: policy enforcement |
