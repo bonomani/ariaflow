@@ -187,6 +187,14 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         actives = aria2_tell_active(timeout=3)
         if actives:
             payload["actives"] = actives
+        # BG-8: include health fields so frontend can drop /api/health polling
+        from .scheduler import check_disk_space
+        disk_ok, disk_percent = check_disk_space()
+        payload["health"] = {
+            "disk_usage_percent": disk_percent,
+            "disk_ok": disk_ok,
+            **get_metrics(),
+        }
         with _STATUS_CACHE_LOCK:
             STATUS_CACHE["ts"] = now
             STATUS_CACHE["payload"] = payload

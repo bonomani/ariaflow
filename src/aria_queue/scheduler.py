@@ -339,6 +339,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 item.pop("live_status", None)
         return running_infos, had_rpc_success
 
+    backoff_seconds = 2
+    _BACKOFF_MIN = 2
+    _BACKOFF_MAX = 60
     while True:
         # Phase 1: load state (locked)
         with core.storage_locked():
@@ -500,12 +503,16 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 core._aria2_apply_priority(gid, int(item.get("priority", 0)))
 
         # Phase 3: save state (locked)
-        # Phase 3: save state (locked)
         with core.storage_locked():
             core.save_queue(items)
             _finalize_primary_state(items, current_running_infos, poll_ok=poll_ok)
 
-        time.sleep(2)
+        # BG-9: exponential backoff when RPC is failing
+        if poll_ok:
+            backoff_seconds = _BACKOFF_MIN
+        else:
+            backoff_seconds = min(backoff_seconds * 2, _BACKOFF_MAX)
+        time.sleep(backoff_seconds)
 
 
 def auto_preflight_on_run() -> bool:

@@ -98,6 +98,7 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
         "active": {"type": "object", "nullable": True},
         "actives": {"type": "array", "items": {"type": "object"}, "nullable": True},
         "filtered": {"type": "boolean", "nullable": True},
+        "health": {"type": "object"},
         **_META,
     },
     "GET /api/downloads/archive": {

@@ -36,5 +36,8 @@ Historical resolved entries are preserved in git history.
 | ID | What | Blocks frontend gap | Resolution |
 |----|------|---------------------|------------|
 | BG-6 | Bonjour TXT records need hostname | FE-14 (skip self-discoveries) | Added `hostname=<short_hostname>` TXT record to `_ariaflow._tcp` registration |
+| BG-7 | SSE push action log entries | FE-15 (drop /api/log poll) | `append_action_log()` now publishes `action_logged` SSE event |
+| BG-8 | Merge /api/health into /api/status | FE-16 (drop _heroTimer) | `health` object added to `/api/status` response |
+| BG-9 | Scheduler backoff when aria2 unreachable | (none — backend-internal) | Exponential backoff 2s→60s in `process_queue()` loop |
 
 *(BG-1 through BG-5 cleaned 2026-04-06 — see git log for history)*

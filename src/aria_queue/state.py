@@ -60,6 +60,13 @@ def append_action_log(entry: dict[str, Any]) -> None:
         with action_log_path().open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(payload, sort_keys=True) + "\n")
         _rotate_action_log()
+    # BG-7: push to SSE subscribers (outside storage lock to avoid holding
+    # it during network I/O)
+    try:
+        from . import webapp as _wa
+        _wa._sse_publish("action_logged", payload)
+    except Exception:
+        pass
 
 
 def load_action_log(limit: int = 200) -> list[dict[str, Any]]:

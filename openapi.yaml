@@ -4,7 +4,7 @@ info:
   description: |
     Headless download engine API. Manages queue state, sessions, runs,
     and policy on top of aria2.
-  version: 0.1.119
+  version: 0.1.125
   license:
     name: MIT
 
@@ -33,6 +33,7 @@ tags:
     description: Session history and statistics
   - name: Lifecycle
     description: Install, uninstall, status
+
 
 
 
@@ -981,6 +982,8 @@ paths:
                   filtered:
                     nullable: true
                     type: boolean
+                  health:
+                    type: object
                   items:
                     items:
                       type: object
@@ -1262,6 +1265,7 @@ components:
                 type: boolean
               item:
                 $ref: "#/components/schemas/QueueItem"
+
 
 
 
