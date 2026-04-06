@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import getpass
 import platform
 import shutil
 import subprocess
@@ -11,39 +10,20 @@ from typing import Iterator
 from .state import record_action
 
 
-def _device_name() -> str:
-    """Return a human-friendly device name.
-
-    macOS: model via sysctl (e.g. ``Mac mini``).
-    Others: hostname from :func:`platform.node`.
-    """
-    if platform.system() == "Darwin":
-        try:
-            import subprocess as _sp
-            result = _sp.run(
-                ["sysctl", "-n", "hw.model"],
-                capture_output=True, text=True, timeout=5,
-            )
-            model = result.stdout.strip()
-            if model:
-                return model
-        except Exception:
-            pass
-    return platform.node() or "unknown"
+def _short_hostname() -> str:
+    """Return the short hostname (first label of platform.node())."""
+    return (platform.node() or "unknown").split(".")[0]
 
 
 def _instance_name() -> str:
-    """Build a human-friendly instance name: ``{user}'s {device} AriaFlow``.
+    """Build a Bonjour instance name: ``{hostname}``.
 
-    Follows Apple convention (e.g. ``bc's Mac mini AriaFlow``).
-    Truncated to 63 bytes (RFC 6763 limit for instance names).
+    Uses the short hostname so the same machine is identified consistently
+    across local/discovered views in the frontend (BG-5). The service type
+    ``_ariaflow._tcp`` already identifies the software. Truncated to 63 bytes
+    (RFC 6763 limit for instance names).
     """
-    try:
-        user = getpass.getuser()
-    except Exception:
-        user = "unknown"
-    device = _device_name()
-    name = f"{user}'s {device} AriaFlow"
+    name = _short_hostname()
     encoded = name.encode("utf-8")
     if len(encoded) > 63:
         name = encoded[:63].decode("utf-8", errors="ignore")

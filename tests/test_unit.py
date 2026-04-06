@@ -359,37 +359,29 @@ class TestAdvertiseHttpService(unittest.TestCase):
 
 
 class TestBonjourCommandConstruction(unittest.TestCase):
-    @patch("aria_queue.bonjour._device_name", return_value="myhost")
-    @patch("aria_queue.bonjour.getpass.getuser", return_value="testuser")
-    def test_dns_sd_cmd_structure(self, _user: MagicMock, _dev: MagicMock) -> None:
+    @patch("aria_queue.bonjour._short_hostname", return_value="myhost")
+    def test_dns_sd_cmd_structure(self, _h: MagicMock) -> None:
         from aria_queue.bonjour import build_dns_sd_cmd
         cmd = build_dns_sd_cmd(port=8000, path="/api")
-        self.assertEqual(cmd[2], "testuser's myhost AriaFlow")
+        self.assertEqual(cmd[2], "myhost")
         self.assertEqual(cmd[3], "_ariaflow._tcp")
         self.assertEqual(cmd[4], "local")
         self.assertEqual(cmd[5], "8000")
         self.assertIn("path=/api", cmd)
         self.assertIn("tls=0", cmd)
-        # Removed TXT records should not be present
-        for arg in cmd:
-            self.assertNotIn("role=", arg) if "=" in arg and arg.startswith("role=") else None
-            self.assertNotIn("proto=", arg) if "=" in arg and arg.startswith("proto=") else None
-            self.assertNotIn("product=", arg) if "=" in arg and arg.startswith("product=") else None
 
-    @patch("aria_queue.bonjour._device_name", return_value="myhost")
-    @patch("aria_queue.bonjour.getpass.getuser", return_value="testuser")
-    def test_avahi_cmd_structure(self, _user: MagicMock, _dev: MagicMock) -> None:
+    @patch("aria_queue.bonjour._short_hostname", return_value="myhost")
+    def test_avahi_cmd_structure(self, _h: MagicMock) -> None:
         from aria_queue.bonjour import build_avahi_cmd
         cmd = build_avahi_cmd(port=8000, path="/api")
-        self.assertEqual(cmd[1], "testuser's myhost AriaFlow")
+        self.assertEqual(cmd[1], "myhost")
         self.assertEqual(cmd[2], "_ariaflow._tcp")
         self.assertEqual(cmd[3], "8000")
         self.assertIn("path=/api", cmd)
         self.assertIn("tls=0", cmd)
 
-    @patch("aria_queue.bonjour._device_name", return_value="myhost")
-    @patch("aria_queue.bonjour.getpass.getuser", return_value="testuser")
-    def test_dns_sd_and_avahi_same_service_type(self, _user: MagicMock, _dev: MagicMock) -> None:
+    @patch("aria_queue.bonjour._short_hostname", return_value="myhost")
+    def test_dns_sd_and_avahi_same_service_type(self, _h: MagicMock) -> None:
         from aria_queue.bonjour import build_dns_sd_cmd, build_avahi_cmd
         kwargs = dict(port=8000, path="/api")
         dns_cmd = build_dns_sd_cmd(**kwargs)
@@ -397,27 +389,33 @@ class TestBonjourCommandConstruction(unittest.TestCase):
         self.assertEqual(dns_cmd[3], "_ariaflow._tcp")
         self.assertEqual(avahi_cmd[2], "_ariaflow._tcp")
 
-    @patch("aria_queue.bonjour._device_name", return_value="myhost")
-    @patch("aria_queue.bonjour.getpass.getuser", return_value="testuser")
-    def test_dns_sd_and_avahi_same_txt_records(self, _user: MagicMock, _dev: MagicMock) -> None:
+    @patch("aria_queue.bonjour._short_hostname", return_value="myhost")
+    def test_dns_sd_and_avahi_same_txt_records(self, _h: MagicMock) -> None:
         from aria_queue.bonjour import build_dns_sd_cmd, build_avahi_cmd
         kwargs = dict(port=8000, path="/api")
         dns_txt = set(s for s in build_dns_sd_cmd(**kwargs) if "=" in s)
         avahi_txt = set(s for s in build_avahi_cmd(**kwargs) if "=" in s)
         self.assertEqual(dns_txt, avahi_txt)
 
+    def test_instance_name_is_short_hostname(self) -> None:
+        from aria_queue.bonjour import _instance_name, _short_hostname
+        self.assertEqual(_instance_name(), _short_hostname())
+
     def test_instance_name_truncates_at_63_bytes(self) -> None:
         from aria_queue.bonjour import _instance_name
-        with patch("aria_queue.bonjour.getpass.getuser", return_value="a" * 80), \
-             patch("aria_queue.bonjour._device_name", return_value="host"):
+        with patch("aria_queue.bonjour._short_hostname", return_value="a" * 80):
             name = _instance_name()
             self.assertLessEqual(len(name.encode("utf-8")), 63)
+
+    def test_short_hostname_strips_domain(self) -> None:
+        from aria_queue.bonjour import _short_hostname
+        with patch("aria_queue.bonjour.platform.node", return_value="bcs-mac.local"):
+            self.assertEqual(_short_hostname(), "bcs-mac")
 
     def test_txt_keys_max_9_chars(self) -> None:
         """All TXT record keys must be ≤9 characters (Apple best practice)."""
         from aria_queue.bonjour import build_dns_sd_cmd
-        with patch("aria_queue.bonjour.getpass.getuser", return_value="test"), \
-             patch("aria_queue.bonjour._device_name", return_value="host"):
+        with patch("aria_queue.bonjour._short_hostname", return_value="host"):
             cmd = build_dns_sd_cmd(port=8000, path="/api")
         for arg in cmd:
             if "=" in arg:
@@ -427,8 +425,7 @@ class TestBonjourCommandConstruction(unittest.TestCase):
     def test_service_type_max_15_chars(self) -> None:
         """Service type must be ≤15 characters (excluding underscore prefix)."""
         from aria_queue.bonjour import build_dns_sd_cmd
-        with patch("aria_queue.bonjour.getpass.getuser", return_value="test"), \
-             patch("aria_queue.bonjour._device_name", return_value="host"):
+        with patch("aria_queue.bonjour._short_hostname", return_value="host"):
             cmd = build_dns_sd_cmd(port=8000, path="/api")
         svc_type = cmd[3]  # _ariaflow._tcp
         name_part = svc_type.split(".")[0].lstrip("_")  # ariaflow

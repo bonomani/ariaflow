@@ -23,3 +23,4 @@ _No open gaps._
 | BG-2 | No PATCH for preferences | FE-8 (GET→merge→POST race) | `PATCH /api/declaration/preferences` added |
 | BG-3 | openapi.yaml lacks response field schemas | (none — infrastructure; now consumed by frontend `TestBackendFieldCoverage` auto-discovery) | `openapi_schemas.py` + `gen_openapi.py` emit explicit `properties` per endpoint |
 | BG-4 | openapi.yaml `info.version` stale | (none — spec hygiene) | `gen_openapi.py` now injects `__version__` into `info.version` on every regeneration |
+| BG-5 | Bonjour instance name user+model vs hostname | (none — cosmetic) | `_instance_name()` now returns the short hostname directly (service type identifies software) |
