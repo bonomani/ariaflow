@@ -9,4 +9,4 @@
 - The frontend is a separate project. All communication is through the API.
 - You MAY NOT read, write, or reference any files in the frontend repo. No exceptions.
 - If the user asks you to operate on the frontend repo, remind them of this boundary and suggest they use a separate session from the frontend repo.
-- The frontend agent may write to `docs/BACKEND_GAPS.md` to report API gaps. Check this file when starting work — resolve gaps and remove completed items.
+- The frontend agent may write to `docs/BACKEND_GAPS_REQUESTED_BY_FRONTEND.md` to report API gaps. Check this file when starting work — resolve gaps and move them to the Resolved section. Do not add or delete entries yourself (that's the frontend's responsibility).

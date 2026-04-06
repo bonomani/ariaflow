@@ -40,7 +40,7 @@ Completed files sit in aria2's download directory with no API to serve them. **R
 
 ## Cross-project gaps
 
-Backend gaps reported by the frontend are tracked in `docs/BACKEND_GAPS.md`
+Backend gaps reported by the frontend are tracked in `docs/BACKEND_GAPS_REQUESTED_BY_FRONTEND.md`
 (written by the frontend agent per the cross-repo boundary rules).
 
 Current status:
