@@ -25,7 +25,7 @@ Stored fields: `session_id`, `session_started_at`, `session_last_seen_at`, `sess
 
 The scheduler auto-starts with `ariaflow serve` and runs continuously until shutdown. There is no idle state and no stop API — users can only pause/resume.
 
-Stored fields: `running`, `paused`
+Stored fields: `running`, `paused`, `active_gid`, `active_url`
 
 ### Axis 3: Job (unit of work)
 

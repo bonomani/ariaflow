@@ -37,3 +37,43 @@
 | **peer auto-download** | `discovery.py` polls discovered peers and auto-fetches new torrents (`peer_discovered`, `peer_fetch`, `peer_removed` actions) |
 | **distribution** | Private torrent creation, seeding, and file serving for internal content distribution |
 | **installation** | Homebrew manages the install/upgrade lifecycle via tap formulas |
+
+## Action Catalog
+
+Every `record_action(action=...)` value is listed here with its target and BGS trace.
+
+| Action | Target | Trace | Description |
+|---|---|---|---|
+| `add` | queue | ASM Job: → queued | New download enqueued |
+| `pause` | queue_item / active_transfer | ASM Job: → paused | User pauses a download |
+| `resume` | queue_item / active_transfer | ASM Job: paused → | User resumes a paused download |
+| `remove` | queue_item / active_transfer | ASM Job: → cancelled | User removes a download |
+| `retry` | queue_item | ASM Job: error → queued | User retries a failed download |
+| `priority` | queue_item | Job ordering | User changes item priority |
+| `select_files` | queue_item | UIC: file selection | Torrent/metalink file selection |
+| `run` | queue | ASM Run: → running | Scheduler processing event |
+| `stop` | queue | ASM Run: → idle | Scheduler stop event (legacy; scheduler now auto-runs) |
+| `complete` | queue_item | ASM Job: → complete | Download finished successfully |
+| `error` | queue / queue_item | ASM Job: → error | Download failed or RPC failure |
+| `auto_retry` | queue_item | ASM Job: error → queued | Automatic retry by scheduler |
+| `poll` | queue_item | ASM Job: polled | Scheduler poll cycle on active download |
+| `preflight` | system | UIC: gate evaluation | Preflight readiness check |
+| `ucc` | queue | UCC: execution cycle | UCC structured execution |
+| `probe` | bandwidth / system | UCC: observation | Bandwidth probe |
+| `session` | system | ASM Session: → open | New session created |
+| `cleanup` | queue | Reconcile | Startup cleanup of stale queue state |
+| `reconcile` | queue | Reconcile | Live queue reconciliation with aria2 |
+| `deduplicate` | queue | UIC: dedup policy | Duplicate active transfer cleanup |
+| `auto_cleanup` | queue | Auto-archive | Old done items archived automatically |
+| `change_options` | queue | UIC: 3-tier safety | aria2 global option change |
+| `patch_preferences` | declaration | UIC: atomic patch | `PATCH /api/declaration/preferences` |
+| `lifecycle_action` | system | Install/uninstall | macOS lifecycle event |
+| `bonjour_register` | system | Discovery boundary | Bonjour service registration |
+| `bonjour_deregister` | system | Discovery boundary | Bonjour service deregistration on shutdown |
+| `seed_expired` | queue_item | Distribution: expiration | Seeded torrent reached time/count limit |
+| `seed_stopped` | queue_item | Distribution | Seeded torrent manually stopped |
+| `discovery_start` | system | Peer polling boundary | Peer discovery thread started |
+| `discovery_stop` | system | Peer polling boundary | Peer discovery thread stopped |
+| `peer_discovered` | system | Peer polling boundary | New peer appeared on the network |
+| `peer_removed` | system | Peer polling boundary | Peer disappeared from the network |
+| `peer_fetch` | queue_item | Peer polling boundary | Auto-downloaded a torrent from a discovered peer |

@@ -72,7 +72,13 @@ def create_private_torrent(
     if file_size == 0:
         raise ValueError("Cannot create torrent from empty file")
 
-    torrent_dir = file_path.parent
+    from .contracts import pref_value
+    configured_dir = str(pref_value("torrent_dir", "") or "")
+    if configured_dir:
+        torrent_dir = Path(configured_dir)
+        torrent_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        torrent_dir = file_path.parent
     torrent_path = torrent_dir / (file_path.name + ".torrent")
 
     # Try mktorrent first (faster, handles large files well)
