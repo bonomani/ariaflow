@@ -1,4 +1,4 @@
-.PHONY: test lint check docs install clean help
+.PHONY: test lint check docs install clean help check-drift
 
 help: ## Show this help
 	@grep -E '^[a-z_-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  %-15s %s\n", $$1, $$2}'
@@ -21,6 +21,11 @@ docs: ## Regenerate auto-generated docs
 	python scripts/gen_rpc_docs.py
 	python scripts/gen_all_variables.py
 	python scripts/gen_openapi.py
+
+check-drift: ## Check for BGS, declaration, and API surface drift
+	python scripts/check_bgs_drift.py
+	python scripts/check_api_surface.py
+	python scripts/check_declaration_drift.py || true  # warn but don't fail CI on local declaration drift
 
 install: ## Install in development mode
 	pip install -e .
