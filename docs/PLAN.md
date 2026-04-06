@@ -1,6 +1,68 @@
 # Plan
 
-No open items.
+### [P1] BG-3: Add explicit response schemas to openapi.yaml
+
+**What:** Extend `scripts/gen_openapi.py` to emit explicit `properties` for each GET endpoint's response schema (instead of `{type: object}`). Source the schemas from a new dict module.
+
+**Where:**
+- New: `src/aria_queue/openapi_schemas.py` — dict mapping path → response schema properties
+- Modified: `scripts/gen_openapi.py` — read schemas, inject into generated spec
+- Generated: `openapi.yaml` and `src/aria_queue/openapi.yaml` — now contains typed responses
+
+**Why:** Resolves BG-3 reported by the frontend. Current openapi.yaml has empty response schemas so the frontend hand-maintains `EXPECTED_FIELDS` per endpoint. New backend fields (e.g. the metrics I just added: `uptime_seconds`, `sse_clients`, `errors_total`) are silently invisible to the frontend until someone remembers to update the frontend's hand-maintained list.
+
+**Design:**
+
+`openapi_schemas.py` layout (single source of truth):
+```python
+RESPONSE_SCHEMAS = {
+    "GET /api/health": {
+        "status": {"type": "string"},
+        "version": {"type": "string"},
+        "disk_usage_percent": {"type": "number"},
+        "disk_ok": {"type": "boolean"},
+        "requests_total": {"type": "integer"},
+        "bytes_sent_total": {"type": "integer"},
+        "bytes_received_total": {"type": "integer"},
+        "errors_total": {"type": "integer"},
+        "uptime_seconds": {"type": "number"},
+        "started_at": {"type": "string"},
+        "sse_clients": {"type": "integer"},
+    },
+    "GET /api/scheduler": {
+        "status": {"type": "string"},
+        "running": {"type": "boolean"},
+        "paused": {"type": "boolean"},
+        ...
+    },
+    ...
+}
+```
+
+`gen_openapi.py` changes:
+1. Import `RESPONSE_SCHEMAS` from `openapi_schemas`
+2. When emitting each endpoint's `responses.200.content.application/json.schema`, look up `"{METHOD} {path}"` in the dict
+3. If present, emit `type: object` + `properties: {...}` + `required: [keys]`
+4. If missing, fall back to current empty object (so partial adoption works)
+
+**Test coverage:**
+- New test `test_openapi_schemas_cover_all_get_endpoints` — assert every GET endpoint in webapp dispatch has an entry in `RESPONSE_SCHEMAS`
+- New test `test_openapi_schema_fields_match_handler_output` — for a few representative endpoints (`/api/health`, `/api/scheduler`), actually call the handler with mocks and compare keys to declared schema
+- This gives compile-time enforcement that new fields force a schema update
+
+**Scope:** ~150 lines for schemas (covering ~15 GET endpoints), ~30 lines in generator, ~40 lines of tests.
+
+**Not in scope:**
+- POST request body schemas (BG-3 only mentions responses; can be separate item)
+- Path parameter schemas (already handled by existing generator)
+- Auto-discovery from handler source (too fragile per earlier analysis)
+
+**Depends on:** Nothing.
+
+**Verification:**
+1. Run `python scripts/gen_openapi.py`
+2. Check `openapi.yaml` has `properties` on health/scheduler/status endpoints
+3. Frontend (separate session) can remove `EXPECTED_FIELDS` hand-maintained dict
 
 ---
 
