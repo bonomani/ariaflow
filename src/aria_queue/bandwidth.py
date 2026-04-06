@@ -54,20 +54,21 @@ def _coerce_float(value: object) -> float | None:
 
 
 def bandwidth_config() -> dict[str, Any]:
+    from .contracts import pref_value
     core = _core()
     down_free_pct = max(
-        0, min(100, int(core._pref_value("bandwidth_down_free_percent", 20) or 20))
+        0, min(100, int(pref_value("bandwidth_down_free_percent", 20) or 20))
     )
     down_free_abs = max(
-        0.0, float(core._pref_value("bandwidth_down_free_absolute_mbps", 0) or 0)
+        0.0, float(pref_value("bandwidth_down_free_absolute_mbps", 0) or 0)
     )
     up_free_pct = max(
-        0, min(100, int(core._pref_value("bandwidth_up_free_percent", 50) or 50))
+        0, min(100, int(pref_value("bandwidth_up_free_percent", 50) or 50))
     )
     up_free_abs = max(
-        0.0, float(core._pref_value("bandwidth_up_free_absolute_mbps", 0) or 0)
+        0.0, float(pref_value("bandwidth_up_free_absolute_mbps", 0) or 0)
     )
-    interval = max(30, int(core._pref_value("bandwidth_probe_interval_seconds", 180) or 180))
+    interval = max(30, int(pref_value("bandwidth_probe_interval_seconds", 180) or 180))
     return {
         "down_free_percent": down_free_pct,
         "down_free_absolute_mbps": down_free_abs,

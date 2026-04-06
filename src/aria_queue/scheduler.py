@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 
+
 def _core() -> Any:
     """Lazy import to allow patching through aria_queue.core."""
     from . import core
@@ -20,11 +21,12 @@ def check_disk_space() -> tuple[bool, float]:
     Returns (ok, percent_used). ok is False if over limit.
     """
     core = _core()
-    raw = core._pref_value("max_disk_usage_percent", 90)
+    from .contracts import pref_value
+    raw = pref_value("max_disk_usage_percent", 90)
     max_percent = int(raw) if raw is not None else 90
     if max_percent == 0:
         return True, 0.0
-    download_dir = str(core._pref_value("download_dir", "") or "")
+    download_dir = str(pref_value("download_dir", "") or "")
     path = Path(download_dir) if download_dir else Path.cwd()
     try:
         usage = shutil.disk_usage(path)
@@ -351,8 +353,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         )
 
         # Auto-retry: re-queue error items that haven't exhausted retries
-        max_retries = int(core._pref_value("max_retries", 3) or 3)
-        backoff = int(core._pref_value("retry_backoff_seconds", 30) or 30)
+        from .contracts import pref_value
+        max_retries = int(pref_value("max_retries", 3) or 3)
+        backoff = int(pref_value("retry_backoff_seconds", 30) or 30)
         now_ts = time.time()
         if max_retries > 0 and not is_paused:
             for item in items:
@@ -389,8 +392,8 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 )
 
         # Expire old seeds
-        max_seed_hours = int(core._pref_value("distribute_max_seed_hours", 72) or 72)
-        max_active_seeds = int(core._pref_value("distribute_max_active_seeds", 10) or 10)
+        max_seed_hours = int(pref_value("distribute_max_seed_hours", 72) or 72)
+        max_active_seeds = int(pref_value("distribute_max_active_seeds", 10) or 10)
         seeding_items = sorted(
             [i for i in items if i.get("distribute_status") == "seeding"],
             key=lambda i: i.get("distribute_started_at", ""),

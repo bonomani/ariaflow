@@ -678,10 +678,11 @@ def post_action(item: dict[str, Any]) -> dict[str, Any]:
 
     # Distribution: create private torrent and seed
     core = _core()
+    from .contracts import pref_value as _pv
     should_distribute = item.get("distribute") or bool(
-        core._pref_value("distribute_completed_downloads", False)
+        _pv("distribute_completed_downloads", False)
     )
-    tracker_url = str(core._pref_value("internal_tracker_url", "") or "")
+    tracker_url = str(_pv("internal_tracker_url", "") or "")
 
     if should_distribute and tracker_url and item.get("mode") in ("http", None, ""):
         try:
@@ -705,7 +706,7 @@ def post_action(item: dict[str, Any]) -> dict[str, Any]:
                     file_path, tracker_url,
                     comment=f"ariaflow distribute: {item.get('url', '')}",
                 )
-                seed_ratio = str(core._pref_value("distribute_seed_ratio", 0) or 0)
+                seed_ratio = str(_pv("distribute_seed_ratio", 0) or 0)
                 seed_gid = core.aria2_add_torrent(
                     torrent_info["torrent_b64"],
                     options={

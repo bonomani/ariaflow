@@ -346,10 +346,11 @@ def _is_metadata_url(url: str) -> bool:
 
 
 def aria2_add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800) -> str:
+    from .contracts import pref_value as _pref_value
 
     core = _core()
-    max_tries = str(int(core._pref_value("aria2_max_tries", 5) or 5))
-    retry_wait = str(int(core._pref_value("aria2_retry_wait", 10) or 10))
+    max_tries = str(int(_pref_value("aria2_max_tries", 5) or 5))
+    retry_wait = str(int(_pref_value("aria2_retry_wait", 10) or 10))
     options: dict[str, str] = {
         "max-download-limit": _aria2_speed_value(cap_bytes_per_sec),
         "allow-overwrite": "true",
@@ -523,6 +524,7 @@ _SAFE_ARIA2_OPTIONS = {
 
 
 def aria2_change_options(options: dict[str, str], port: int = 6800) -> dict[str, Any]:
+    from .contracts import pref_value as _pref_value
     core = _core()
     managed = [k for k in options if k in _MANAGED_ARIA2_OPTIONS]
     if managed:
@@ -531,7 +533,7 @@ def aria2_change_options(options: dict[str, str], port: int = 6800) -> dict[str,
             "error": "managed_options",
             "message": f"use dedicated aria2_set_* functions for: {managed}",
         }
-    unsafe_mode = bool(core._pref_value("aria2_unsafe_options", False))
+    unsafe_mode = bool(_pref_value("aria2_unsafe_options", False))
     if not unsafe_mode:
         rejected = [k for k in options if k not in _SAFE_ARIA2_OPTIONS]
     else:

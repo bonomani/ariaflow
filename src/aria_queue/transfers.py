@@ -12,11 +12,6 @@ def _core() -> Any:
     return core
 
 
-def _pref_value(name: str, default: Any = None) -> Any:
-    from .contracts import pref_value
-    return pref_value(name, default)
-
-
 def dedup_active_transfer_action() -> str:
     from .contracts import load_declaration
 

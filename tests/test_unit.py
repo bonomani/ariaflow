@@ -972,10 +972,10 @@ class TestOutputPathValidation(unittest.TestCase):
 
 class TestDiskSpaceCheck(unittest.TestCase):
     @patch("aria_queue.scheduler.shutil.disk_usage")
-    @patch("aria_queue.scheduler._core")
-    def test_disk_ok_when_below_threshold(self, mock_core: MagicMock, mock_usage: MagicMock) -> None:
+    @patch("aria_queue.contracts.pref_value")
+    def test_disk_ok_when_below_threshold(self, mock_pv: MagicMock, mock_usage: MagicMock) -> None:
         from aria_queue.scheduler import check_disk_space
-        mock_core.return_value._pref_value.side_effect = lambda name, default=None: {
+        mock_pv.side_effect = lambda name, default=None: {
             "max_disk_usage_percent": 90, "download_dir": ""
         }.get(name, default)
         mock_usage.return_value = MagicMock(total=100_000_000, used=50_000_000)
@@ -984,10 +984,10 @@ class TestDiskSpaceCheck(unittest.TestCase):
         self.assertEqual(percent, 50.0)
 
     @patch("aria_queue.scheduler.shutil.disk_usage")
-    @patch("aria_queue.scheduler._core")
-    def test_disk_blocked_when_above_threshold(self, mock_core: MagicMock, mock_usage: MagicMock) -> None:
+    @patch("aria_queue.contracts.pref_value")
+    def test_disk_blocked_when_above_threshold(self, mock_pv: MagicMock, mock_usage: MagicMock) -> None:
         from aria_queue.scheduler import check_disk_space
-        mock_core.return_value._pref_value.side_effect = lambda name, default=None: {
+        mock_pv.side_effect = lambda name, default=None: {
             "max_disk_usage_percent": 90, "download_dir": ""
         }.get(name, default)
         mock_usage.return_value = MagicMock(total=100_000_000, used=95_000_000)
@@ -996,10 +996,10 @@ class TestDiskSpaceCheck(unittest.TestCase):
         self.assertEqual(percent, 95.0)
 
     @patch("aria_queue.scheduler.shutil.disk_usage")
-    @patch("aria_queue.scheduler._core")
-    def test_disk_check_disabled_when_zero(self, mock_core: MagicMock, mock_usage: MagicMock) -> None:
+    @patch("aria_queue.contracts.pref_value")
+    def test_disk_check_disabled_when_zero(self, mock_pv: MagicMock, mock_usage: MagicMock) -> None:
         from aria_queue.scheduler import check_disk_space
-        mock_core.return_value._pref_value.side_effect = lambda name, default=None: {
+        mock_pv.side_effect = lambda name, default=None: {
             "max_disk_usage_percent": 0, "download_dir": ""
         }.get(name, default)
         ok, percent = check_disk_space()
