@@ -12,7 +12,7 @@ decision_record_path: "./docs/governance/bgs-decision.yaml"
 last_reviewed: 2026-04-05
 
 members_used:
-  - BISS — boundary classification (16 boundaries, 9 interaction classes)
+  - BISS — boundary classification (17 boundaries, 10 interaction classes)
   - ASM — state model (4 axes: session, run, job, daemon; 6 coherence rules)
   - UIC — preflight gates (aria2_available, queue_readable) + 27 preferences
   - UCC — structured execution results (UCCResult dataclass)

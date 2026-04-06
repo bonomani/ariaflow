@@ -22,8 +22,9 @@ docs: ## Regenerate auto-generated docs
 	python scripts/gen_all_variables.py
 	python scripts/gen_openapi.py
 
-check-drift: ## Check for BGS, declaration, and API surface drift
+check-drift: ## Check for BGS, declaration, API surface, and governance coverage drift
 	python scripts/check_bgs_drift.py
+	python scripts/check_coverage.py
 	python scripts/check_api_surface.py
 	python scripts/check_declaration_drift.py || true  # warn but don't fail CI on local declaration drift
 

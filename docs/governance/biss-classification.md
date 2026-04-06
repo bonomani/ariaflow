@@ -17,6 +17,7 @@
 | File lock | system-to-storage | internal | concurrency control | `.storage.lock` — fcntl + RLock mutual exclusion |
 | Config directory | system-to-filesystem | internal | configuration | `~/.config/aria-queue/` (override via `ARIA_QUEUE_DIR`) |
 | Bonjour/mDNS | system-to-network | outbound | discovery | `_ariaflow._tcp` service advertisement; torrent discovery via `GET /api/torrents` |
+| Peer polling | system-to-peer | outbound | peer auto-download | `discovery.py` browses `_ariaflow._tcp`, polls peer `GET /api/torrents`, auto-fetches new torrents (gated by `auto_discover_peers`) |
 | Internal tracker | system-to-network | outbound | distribution | Private BitTorrent tracker announce URL for torrent distribution |
 | Torrent file serving | system-to-user | outbound | distribution | `GET /api/torrents/{infohash}.torrent` serves created `.torrent` files |
 | BitTorrent swarm | system-to-network | bidirectional | distribution | aria2 seeds private torrents to peers on internal tracker |
@@ -33,5 +34,6 @@
 | **state persistence** | `queue.json`, `state.json`, `declaration.json` are the source of truth, accessed under file lock |
 | **audit persistence** | `actions.jsonl` and `sessions.jsonl` provide full operational history |
 | **discovery** | Bonjour advertises the service for local network clients |
+| **peer auto-download** | `discovery.py` polls discovered peers and auto-fetches new torrents (`peer_discovered`, `peer_fetch`, `peer_removed` actions) |
 | **distribution** | Private torrent creation, seeding, and file serving for internal content distribution |
 | **installation** | Homebrew manages the install/upgrade lifecycle via tap formulas |
