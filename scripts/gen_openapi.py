@@ -216,11 +216,27 @@ def _load_components() -> str:
 
 
 def _load_header() -> str:
-    """Load the header (info, servers, tags) from existing spec."""
+    """Load the header (info, servers, tags) from existing spec.
+
+    Injects the live package version into ``info.version`` (BG-4).
+    """
     text = (_SRC / "openapi.yaml").read_text()
     # Everything before "paths:"
     idx = text.index("\npaths:")
-    return text[:idx]
+    header = text[:idx]
+    # Replace info.version with current __version__
+    try:
+        from aria_queue import __version__ as _v
+        header = re.sub(
+            r"^(\s*version:\s*)\S+",
+            r"\g<1>" + _v,
+            header,
+            count=1,
+            flags=re.MULTILINE,
+        )
+    except Exception:
+        pass
+    return header
 
 
 def _yaml_str(s: str) -> str:

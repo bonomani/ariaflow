@@ -22,3 +22,4 @@ _No open gaps._
 | BG-1 | SSE pushed rev-only | FE-7 (poll after each event) | SSE now pushes full payload (items, state, summary) |
 | BG-2 | No PATCH for preferences | FE-8 (GET→merge→POST race) | `PATCH /api/declaration/preferences` added |
 | BG-3 | openapi.yaml lacks response field schemas | (none — infrastructure; now consumed by frontend `TestBackendFieldCoverage` auto-discovery) | `openapi_schemas.py` + `gen_openapi.py` emit explicit `properties` per endpoint |
+| BG-4 | openapi.yaml `info.version` stale | (none — spec hygiene) | `gen_openapi.py` now injects `__version__` into `info.version` on every regeneration |
