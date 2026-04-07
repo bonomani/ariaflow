@@ -16,6 +16,9 @@ from pathlib import Path
 
 _PROJECT = Path(__file__).resolve().parents[1]
 _DECISION = _PROJECT / "docs" / "governance" / "bgs-decision.yaml"
+_ENTRY = _PROJECT / "docs" / "governance" / "BGS.md"
+_BGS_REPO = _PROJECT.parent / "BGSPrivate"
+_UPSTREAM_VALIDATOR = _BGS_REPO / "bgs" / "tools" / "check-bgs-compliance.py"
 _MEMBER_REPOS = {
     # All members live in the BGSPrivate monorepo (single git repo).
     "biss": _PROJECT.parent / "BGSPrivate",
@@ -143,6 +146,37 @@ def _check_slice_requirements(decision: dict) -> list[str]:
     return errors
 
 
+def _run_upstream_validator() -> list[str]:
+    """Invoke check-bgs-compliance.py from BGSPrivate against the entry file.
+
+    The local checks above verify slice membership, evidence presence, and
+    member ref resolution. The upstream validator additionally enforces
+    schema compliance, control vocabulary, profile/policy admission, and
+    staleness — keeping both in sync prevents drift between local and
+    upstream truth.
+    """
+    if not _UPSTREAM_VALIDATOR.exists():
+        return [f"upstream validator not found at {_UPSTREAM_VALIDATOR}"]
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(_UPSTREAM_VALIDATOR),
+            str(_ENTRY),
+            "--member-repos-root",
+            str(_BGS_REPO),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return []
+    errors = [f"upstream validator FAIL (exit {result.returncode})"]
+    for line in (result.stdout + result.stderr).splitlines():
+        if line.strip():
+            errors.append(f"  {line.rstrip()}")
+    return errors
+
+
 def main() -> int:
     if not _DECISION.exists():
         print(f"ERROR: {_DECISION} not found", file=sys.stderr)
@@ -154,6 +188,7 @@ def main() -> int:
     all_errors.extend(_check_slice_requirements(decision))
     all_errors.extend(_check_evidence_refs(decision))
     all_errors.extend(_check_member_version_refs(decision))
+    all_errors.extend(_run_upstream_validator())
 
     if all_errors:
         print("BGS drift detected:", file=sys.stderr)
