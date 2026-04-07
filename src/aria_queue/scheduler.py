@@ -39,6 +39,7 @@ def check_disk_space() -> tuple[bool, float]:
 def start_background_process(port: int = 6800) -> dict[str, Any]:
     core = _core()
     with core.storage_locked():
+        # ASM CR-1: ensure session=open before any run=running write.
         state = core.ensure_state_session()
         if state.get("running"):
             return {"started": False, "reason": "already_running"}
@@ -67,6 +68,7 @@ def start_background_process(port: int = 6800) -> dict[str, Any]:
 def process_queue(port: int = 6800) -> list[dict[str, Any]]:
     core = _core()
     core.ensure_storage()
+    # ASM CR-1: session=open is established before run=running is set below.
     core.ensure_state_session()
     try:
         core.cleanup_queue_state()
@@ -75,6 +77,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             action="error", target="queue", outcome="failed",
             reason="cleanup_failed", detail={"error": str(exc)},
         )
+    # ASM CR-2: daemon=available must hold before run=running is set.
     core.aria2_ensure_daemon(port=port)
     try:
         core.deduplicate_active_transfers(port=port)
@@ -111,6 +114,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 reason="set_download_limit_failed", detail={"gid": gid, "error": str(exc)},
             )
 
+    # ASM CR-5: at most max_simultaneous_downloads jobs in the active tier.
+    # Enforced by aria2 itself via the max-concurrent-downloads global option;
+    # ariaflow pushes the cap on every process_queue cycle.
     limit = core.max_simultaneous_downloads()
     if limit > 0:
         try:

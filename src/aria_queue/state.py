@@ -199,6 +199,21 @@ def touch_state_session() -> dict[str, Any]:
 def close_state_session(reason: str = "closed") -> dict[str, Any]:
     core = _core()
     with storage_locked():
+        # ASM CR-4: a session may not transition to closed while jobs are
+        # still in the active/waiting tier (the ASM "downloading" axis
+        # value). Refuse the close — callers must pause or cancel active
+        # jobs first. start_new_state_session() handles this by pausing
+        # active items before invoking close.
+        items = core.load_queue()
+        active = [
+            it for it in items
+            if str(it.get("status") or "") in ("active", "waiting")
+        ]
+        if active:
+            raise RuntimeError(
+                f"ASM CR-4: cannot close session with {len(active)} "
+                f"active/waiting job(s); pause or cancel them first"
+            )
         state = core.load_state()
         if state.get("session_id") and not state.get("session_closed_at"):
             now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
@@ -213,6 +228,19 @@ def close_state_session(reason: str = "closed") -> dict[str, Any]:
 def start_new_state_session(reason: str = "manual_new_session") -> dict[str, Any]:
     core = _core()
     with storage_locked():
+        # ASM CR-4: pause any active/waiting jobs in queue.json before
+        # closing the session, so the close transition is admissible.
+        # This is a state-record pause only — aria2 itself is not paused
+        # here because the daemon may not be reachable during rollover;
+        # the next session resumes them via the normal scheduler loop.
+        items = core.load_queue()
+        paused_any = False
+        for it in items:
+            if str(it.get("status") or "") in ("active", "waiting"):
+                it["status"] = "paused"
+                paused_any = True
+        if paused_any:
+            core.save_queue(items)
         core.close_state_session(reason=reason)
         state = core.load_state()
         state["session_id"] = str(uuid4())
