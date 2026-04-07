@@ -2,23 +2,26 @@
 
 ## Open items
 
-### [P3] BG-10: Specify response schemas for /api/declaration, /api/lifecycle, /api/log
+### [P3] BG-11: Residual under-specified fields after BG-10
 
-**What:** Three OpenAPI endpoints declare their response body as bare `type: object` with no nested property names. The frontend's contract cross-check (`tests/test_openapi_alignment.py` in ariaflow-web) emits warnings because of this. Marked low-priority by frontend; no runtime breakage but contract drift is invisible.
+**What:** Frontend filed BG-11 in `docs/BACKEND_GAPS_REQUESTED_BY_FRONTEND.md` after the BG-10 sweep. Their `tests/test_openapi_alignment.py` still surfaces 14 field-level gaps across 5 endpoints — mostly fields the BG-10 sweep missed because they live in shapes BG-10 didn't touch.
 
-**Where:** `src/aria_queue/openapi.yaml`
-- `/api/declaration` (line 263) — `uic.preferences[]` items, plus the `ucc` and `policy` buckets, are typed as untyped object. Add named properties: `value`, `rationale`, plus typed `ucc` and `policy` schemas.
-- `/api/lifecycle` (line 643) — per-target entries are untyped. Add: `result`, `outcome`, `observation`, `reason`.
-- `/api/log` (line 715) — `items[]` is `type: object` with no nested properties. Add: `action`, `outcome`, `timestamp`, `target`.
+**Affected endpoints (per the frontend file):**
+| Endpoint | Missing in openapi.yaml |
+|---|---|
+| `GET /api/status` | `created_at`, `enabled`, `output`, `percent`, `pid`, `reachable` |
+| `GET /api/declaration` | `policy`, `ucc` (top-level buckets) |
+| `GET /api/sessions` | `ended_at` |
+| `GET /api/peers` | `ip` |
+| `GET /api/downloads/archive` | `created_at`, `ended_at`, `next_cursor`, `output` |
 
-**Why:** Closes BG-10 from the frontend gap file. After this, ariaflow-web's contract cross-check stops emitting false positives and any future schema drift becomes visible.
+**Where:** `src/aria_queue/openapi_schemas.py` for each endpoint. Some fields require checking the actual code path that builds them (e.g. `/api/peers ip` — the `_resolve_dns_sd` builder uses `host`, not `ip`; the frontend may be expecting a key that doesn't exist).
 
-**Scope:** ~50 lines of YAML in one file. After editing, regenerate the public copy with `python scripts/gen_openapi.py`. Move BG-10 in `docs/BACKEND_GAPS_REQUESTED_BY_FRONTEND.md` from open to Resolved (frontend agent's responsibility per cross-repo rule — flag in commit message that they should do it).
+**Why:** Closes the last drift between the OpenAPI spec and the runtime shape. Once 0, the frontend can tighten `test_openapi_alignment.py` from `warnings.warn` to a hard assertion.
 
-**Verify:**
-- `python -c "import yaml; yaml.safe_load(open('src/aria_queue/openapi.yaml'))"` — file still parses.
-- `make verify` — clean.
-- Spot-check that openapi.yaml schemas still match what `openapi_schemas.py` and `_send_json` actually return.
+**Scope:** Smaller than BG-10 — each endpoint is 1-6 fields. Verify each missing field actually exists in the code path before adding it (some may be frontend-side aspirations rather than real omissions).
+
+**Verify:** Same pattern as BG-10 — add a live-shape pinning test for each fixed endpoint, then `make verify` clean.
 
 ### [P3] Pre-existing lint and format debt blocking a strict `make ci`
 
