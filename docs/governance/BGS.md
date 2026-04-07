@@ -21,7 +21,7 @@ members_used:
 overlays_used: []
 
 external_controls:
-  IAM_and_authorization: not_applicable
+  iam_and_authorization: not_applicable
   sandboxing_or_runtime_isolation: delegated
   secret_and_token_lifecycle: not_applicable
   rate_limiting_and_budget_control: implemented
@@ -29,6 +29,7 @@ external_controls:
 
 bgs_version_ref: bgs@58c1467
 member_version_refs:
+  biss: biss@58c1467
   ucc: ucc@58c1467
   uic: uic@58c1467
   asm: asm@58c1467

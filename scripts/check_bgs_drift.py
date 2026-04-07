@@ -18,6 +18,7 @@ _PROJECT = Path(__file__).resolve().parents[1]
 _DECISION = _PROJECT / "docs" / "governance" / "bgs-decision.yaml"
 _MEMBER_REPOS = {
     # All members live in the BGSPrivate monorepo (single git repo).
+    "biss": _PROJECT.parent / "BGSPrivate",
     "ucc": _PROJECT.parent / "BGSPrivate",
     "uic": _PROJECT.parent / "BGSPrivate",
     "asm": _PROJECT.parent / "BGSPrivate",

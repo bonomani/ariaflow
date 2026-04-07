@@ -21,13 +21,14 @@ overlays_used: []
 member_version_refs:
   # All members live in the BGSPrivate monorepo (single git repo).
   # Every ref pins the same SHA of that repo.
+  biss: biss@58c1467
   ucc: ucc@58c1467
   uic: uic@58c1467
   asm: asm@58c1467
   tic: tic@58c1467
 
 external_controls:
-  IAM_and_authorization: not_applicable        # local CLI tool, no multi-user auth
+  iam_and_authorization: not_applicable        # local CLI tool, no multi-user auth
   sandboxing_or_runtime_isolation: delegated    # OS-level process isolation for aria2 daemon
   secret_and_token_lifecycle: not_applicable    # no secrets managed by the engine
   rate_limiting_and_budget_control: implemented # max_simultaneous_downloads policy in declaration
