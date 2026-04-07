@@ -42,6 +42,8 @@ evidence_refs:
   - ./tic-oracle.md                             # TIC oracle with trace targets
   - ../../src/aria_queue/contracts.py           # UCC declaration + UIC gates/preferences
   - ../ARCHITECTURE.md                          # architectural overview
+  - ../STATES_AND_INTERACTIONS.md               # aria2 state model + RPC mapping (BISS + ASM evidence)
+  - ../ARIA2_RPC_WRAPPERS.md                    # auto-generated 36-wrapper inventory (BISS aria2 boundary)
   - ../../tests/
 
 owner: bonomani
