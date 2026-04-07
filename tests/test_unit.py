@@ -1137,6 +1137,65 @@ class TestOpenapiSchemas(unittest.TestCase):
             self.assertIn("_schema", props, f"{key} missing _schema")
             self.assertIn("_request_id", props, f"{key} missing _request_id")
 
+    def test_bg10_declaration_schema_matches_live_response(self) -> None:
+        """BG-10: GET /api/declaration declared keys match the live shape."""
+        from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
+        from aria_queue.contracts import load_declaration
+        live = load_declaration()
+        declared = set(RESPONSE_SCHEMAS["GET /api/declaration"].keys()) - {
+            "_schema", "_request_id"
+        }
+        # Every declared top-level key must exist in the live response.
+        for key in declared:
+            self.assertIn(key, live, f"declared key {key!r} missing from live")
+        # And the documented uic sub-keys must exist too.
+        uic_props = (
+            RESPONSE_SCHEMAS["GET /api/declaration"]["uic"]["properties"]
+        )
+        for sub in uic_props:
+            self.assertIn(sub, live.get("uic", {}), f"uic.{sub} missing from live")
+
+    def test_bg10_lifecycle_schema_matches_live_response(self) -> None:
+        """BG-10: GET /api/lifecycle declared keys match the live shape."""
+        from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
+        from aria_queue.routes.lifecycle import _lifecycle_payload
+        live = _lifecycle_payload()
+        declared = set(RESPONSE_SCHEMAS["GET /api/lifecycle"].keys()) - {
+            "_schema", "_request_id"
+        }
+        for key in declared:
+            self.assertIn(key, live, f"declared key {key!r} missing from live")
+
+
+class TestBg10LogItemSchema(IsolatedTestCase):
+    def test_bg10_log_item_schema_matches_live_entry(self) -> None:
+        """BG-10: GET /api/log items[] required keys match what record_action emits."""
+        from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
+        from aria_queue.core import (
+            ensure_storage,
+            load_action_log,
+            record_action,
+        )
+        ensure_storage()
+        record_action(
+            action="bg10_probe",
+            target="system",
+            outcome="ok",
+            reason="schema_test",
+        )
+        items = load_action_log(limit=5)
+        self.assertTrue(items, "expected at least one log entry")
+        entry = items[-1]
+        item_props = (
+            RESPONSE_SCHEMAS["GET /api/log"]["items"]["items"]["properties"]
+        )
+        # Required (non-nullable) keys must be present in the live entry.
+        for name, definition in item_props.items():
+            if not definition.get("nullable", False):
+                self.assertIn(
+                    name, entry, f"required log item key {name!r} missing"
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

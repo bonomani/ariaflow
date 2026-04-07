@@ -17,6 +17,38 @@ _META: dict[str, dict] = {
     "_request_id": {"type": "string"},
 }
 
+# UCC envelope shape produced by install.ucc_envelope(). Reused across the
+# /api/lifecycle per-target entries to avoid copy/paste drift.
+_UCC_ENVELOPE: dict = {
+    "type": "object",
+    "properties": {
+        "meta": {
+            "type": "object",
+            "properties": {
+                "contract": {"type": "string"},
+                "version": {"type": "string"},
+                "target": {"type": "string"},
+            },
+        },
+        "result": {
+            "type": "object",
+            "properties": {
+                "observation": {"type": "string"},
+                "outcome": {"type": "string"},
+                "reason": {"type": "string"},
+                "target": {"type": "string"},
+                "completion": {"type": "string", "nullable": True},
+                "message": {"type": "string", "nullable": True},
+                "commands": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "nullable": True,
+                },
+            },
+        },
+    },
+}
+
 
 RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
     # ── meta ──────────────────────────────────────────────────────────────
@@ -52,7 +84,24 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
         **_META,
     },
     "GET /api/log": {
-        "items": {"type": "array", "items": {"type": "object"}},
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string"},
+                    "target": {"type": "string"},
+                    "outcome": {"type": "string"},
+                    "observation": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "timestamp": {"type": "string"},
+                    "session_id": {"type": "string", "nullable": True},
+                    "observed_before": {"type": "object", "nullable": True},
+                    "observed_after": {"type": "object", "nullable": True},
+                    "detail": {"type": "object", "nullable": True},
+                },
+            },
+        },
         **_META,
     },
     # /api/docs and /api/openapi.yaml return non-JSON (HTML/YAML) and are not
@@ -134,12 +183,55 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
     },
 
     # ── declaration (UIC) ─────────────────────────────────────────────────
+    # Top-level shape: meta / uic / targets — load_declaration() returns the
+    # raw DEFAULT_DECLARATION dict from contracts.py with no flattening.
     "GET /api/declaration": {
-        "version": {"type": "integer", "nullable": True},
-        "gates": {"type": "object", "nullable": True},
-        "preferences": {"type": "object", "nullable": True},
-        "bandwidth": {"type": "object", "nullable": True},
-        "updated_at": {"type": "string", "nullable": True},
+        "meta": {
+            "type": "object",
+            "properties": {
+                "contract": {"type": "string"},
+                "version": {"type": "string"},
+            },
+        },
+        "uic": {
+            "type": "object",
+            "properties": {
+                "gates": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "class": {"type": "string"},
+                            "blocking": {"type": "string"},
+                        },
+                    },
+                },
+                "preferences": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "value": {"type": "object", "nullable": True},
+                            "options": {"type": "array"},
+                            "rationale": {"type": "string"},
+                        },
+                    },
+                },
+                "policies": {"type": "array", "items": {"type": "object"}},
+            },
+        },
+        "targets": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "type": {"type": "string"},
+                },
+            },
+        },
         **_META,
     },
 
@@ -164,11 +256,14 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
     },
 
     # ── lifecycle ─────────────────────────────────────────────────────────
+    # Each per-target entry is a UCC envelope (meta + result) produced by
+    # ucc_record() in install.py. Session fields are merged in by
+    # routes/lifecycle.py::_lifecycle_payload().
     "GET /api/lifecycle": {
-        "aria2": {"type": "object", "nullable": True},
-        "ariaflow": {"type": "object", "nullable": True},
-        "homebrew": {"type": "object", "nullable": True},
-        "launchd": {"type": "object", "nullable": True},
+        "ariaflow": _UCC_ENVELOPE,
+        "aria2": _UCC_ENVELOPE,
+        "networkquality": _UCC_ENVELOPE,
+        "aria2-launchd": _UCC_ENVELOPE,
         "session_id": {"type": "string", "nullable": True},
         "session_started_at": {"type": "string", "nullable": True},
         "session_last_seen_at": {"type": "string", "nullable": True},

@@ -171,6 +171,49 @@ def _needs_body(method: str) -> bool:
     return method in ("post", "patch")
 
 
+def _emit_scalar(lines: list, key: str, value: object, indent: str) -> None:
+    """Emit a `key: value` line for a scalar OpenAPI field."""
+    if isinstance(value, bool):
+        lines.append(f"{indent}{key}: {str(value).lower()}")
+    elif isinstance(value, (int, float)):
+        lines.append(f"{indent}{key}: {value}")
+    else:
+        # Strings (type names, descriptions, enum values)
+        lines.append(f"{indent}{key}: {value}")
+
+
+def _emit_schema_node(lines: list, node: dict, indent: str) -> None:
+    """Emit one OpenAPI schema fragment of arbitrary nesting depth.
+
+    Recognized keys: type, nullable, description, enum, properties, items.
+    Anything else is emitted as a scalar at this level (best-effort).
+    """
+    # Scalar fields first, sorted for stable output.
+    for key in sorted(node.keys()):
+        if key in ("properties", "items"):
+            continue
+        _emit_scalar(lines, key, node[key], indent)
+    if "items" in node:
+        items = node["items"]
+        if isinstance(items, dict):
+            lines.append(f"{indent}items:")
+            _emit_schema_node(lines, items, indent + "  ")
+        else:
+            lines.append(f"{indent}items: {items}")
+    if "properties" in node:
+        props = node["properties"]
+        lines.append(f"{indent}properties:")
+        _emit_properties(lines, props, indent + "  ")
+
+
+def _emit_properties(lines: list, props: dict, indent: str) -> None:
+    """Emit a `properties:` block. Each value is itself a schema node."""
+    for pname in sorted(props.keys()):
+        pdef = props[pname]
+        lines.append(f"{indent}{pname}:")
+        _emit_schema_node(lines, pdef, indent + "  ")
+
+
 def _generate_path_entry(method: str, path: str, func_name: str, docstrings: dict) -> dict:
     """Generate a single path operation."""
     tag = _tag_for_path(path)
@@ -306,19 +349,7 @@ def render_yaml(gets: dict, posts: dict, parameterized: list, docstrings: dict) 
                     props = schema.get("properties")
                     if props:
                         lines.append("                properties:")
-                        for pname in sorted(props.keys()):
-                            pdef = props[pname]
-                            lines.append(f"                  {pname}:")
-                            for k in sorted(pdef.keys()):
-                                v = pdef[k]
-                                if isinstance(v, bool):
-                                    lines.append(f"                    {k}: {str(v).lower()}")
-                                elif isinstance(v, dict):
-                                    lines.append(f"                    {k}:")
-                                    for sk, sv in sorted(v.items()):
-                                        lines.append(f"                      {sk}: {sv}")
-                                else:
-                                    lines.append(f"                    {k}: {v}")
+                        _emit_properties(lines, props, indent="                  ")
 
     lines.append("")
     lines.append(components)

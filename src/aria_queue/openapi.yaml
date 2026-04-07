@@ -4,7 +4,7 @@ info:
   description: |
     Headless download engine API. Manages queue state, sessions, runs,
     and policy on top of aria2.
-  version: 0.1.125
+  version: 0.1.144
   license:
     name: MIT
 
@@ -33,6 +33,9 @@ tags:
     description: Session history and statistics
   - name: Lifecycle
     description: Install, uninstall, status
+
+
+
 
 
 
@@ -167,13 +170,13 @@ paths:
                   _schema:
                     type: string
                   managed:
+                    type: array
                     items:
                       type: string
-                    type: array
                   safe:
+                    type: array
                     items:
                       type: string
-                    type: array
                   unsafe_enabled:
                     type: boolean
   /api/aria2/set_limits:
@@ -276,21 +279,54 @@ paths:
                     type: string
                   _schema:
                     type: string
-                  bandwidth:
-                    nullable: true
+                  meta:
                     type: object
-                  gates:
-                    nullable: true
+                    properties:
+                      contract:
+                        type: string
+                      version:
+                        type: string
+                  targets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        type:
+                          type: string
+                  uic:
                     type: object
-                  preferences:
-                    nullable: true
-                    type: object
-                  updated_at:
-                    nullable: true
-                    type: string
-                  version:
-                    nullable: true
-                    type: integer
+                    properties:
+                      gates:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            blocking:
+                              type: string
+                            class:
+                              type: string
+                            name:
+                              type: string
+                      policies:
+                        type: array
+                        items:
+                          type: object
+                      preferences:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                            options:
+                              type: array
+                            rationale:
+                              type: string
+                            value:
+                              nullable: true
+                              type: object
     post:
       tags: [Config]
       summary: Save UIC declaration
@@ -372,9 +408,9 @@ paths:
                   _schema:
                     type: string
                   items:
+                    type: array
                     items:
                       type: object
-                    type: array
   /api/downloads/cleanup:
     post:
       tags: [Queue]
@@ -419,10 +455,10 @@ paths:
                     nullable: true
                     type: string
                   files:
-                    items:
-                      type: object
                     nullable: true
                     type: array
+                    items:
+                      type: object
                   gid:
                     nullable: true
                     type: string
@@ -657,17 +693,141 @@ paths:
                   _schema:
                     type: string
                   aria2:
-                    nullable: true
                     type: object
+                    properties:
+                      meta:
+                        type: object
+                        properties:
+                          contract:
+                            type: string
+                          target:
+                            type: string
+                          version:
+                            type: string
+                      result:
+                        type: object
+                        properties:
+                          commands:
+                            nullable: true
+                            type: array
+                            items:
+                              type: string
+                          completion:
+                            nullable: true
+                            type: string
+                          message:
+                            nullable: true
+                            type: string
+                          observation:
+                            type: string
+                          outcome:
+                            type: string
+                          reason:
+                            type: string
+                          target:
+                            type: string
+                  aria2-launchd:
+                    type: object
+                    properties:
+                      meta:
+                        type: object
+                        properties:
+                          contract:
+                            type: string
+                          target:
+                            type: string
+                          version:
+                            type: string
+                      result:
+                        type: object
+                        properties:
+                          commands:
+                            nullable: true
+                            type: array
+                            items:
+                              type: string
+                          completion:
+                            nullable: true
+                            type: string
+                          message:
+                            nullable: true
+                            type: string
+                          observation:
+                            type: string
+                          outcome:
+                            type: string
+                          reason:
+                            type: string
+                          target:
+                            type: string
                   ariaflow:
-                    nullable: true
                     type: object
-                  homebrew:
-                    nullable: true
+                    properties:
+                      meta:
+                        type: object
+                        properties:
+                          contract:
+                            type: string
+                          target:
+                            type: string
+                          version:
+                            type: string
+                      result:
+                        type: object
+                        properties:
+                          commands:
+                            nullable: true
+                            type: array
+                            items:
+                              type: string
+                          completion:
+                            nullable: true
+                            type: string
+                          message:
+                            nullable: true
+                            type: string
+                          observation:
+                            type: string
+                          outcome:
+                            type: string
+                          reason:
+                            type: string
+                          target:
+                            type: string
+                  networkquality:
                     type: object
-                  launchd:
-                    nullable: true
-                    type: object
+                    properties:
+                      meta:
+                        type: object
+                        properties:
+                          contract:
+                            type: string
+                          target:
+                            type: string
+                          version:
+                            type: string
+                      result:
+                        type: object
+                        properties:
+                          commands:
+                            nullable: true
+                            type: array
+                            items:
+                              type: string
+                          completion:
+                            nullable: true
+                            type: string
+                          message:
+                            nullable: true
+                            type: string
+                          observation:
+                            type: string
+                          outcome:
+                            type: string
+                          reason:
+                            type: string
+                          target:
+                            type: string
                   session_closed_at:
                     nullable: true
                     type: string
@@ -729,9 +889,34 @@ paths:
                   _schema:
                     type: string
                   items:
+                    type: array
                     items:
                       type: object
-                    type: array
+                      properties:
+                        action:
+                          type: string
+                        detail:
+                          nullable: true
+                          type: object
+                        observation:
+                          type: string
+                        observed_after:
+                          nullable: true
+                          type: object
+                        observed_before:
+                          nullable: true
+                          type: object
+                        outcome:
+                          type: string
+                        reason:
+                          type: string
+                        session_id:
+                          nullable: true
+                          type: string
+                        target:
+                          type: string
+                        timestamp:
+                          type: string
   /api/openapi.yaml:
     get:
       tags: [Meta]
@@ -760,9 +945,9 @@ paths:
                   _schema:
                     type: string
                   peers:
+                    type: array
                     items:
                       type: object
-                    type: array
   /api/scheduler:
     get:
       tags: [Scheduler]
@@ -885,9 +1070,9 @@ paths:
                   _schema:
                     type: string
                   sessions:
+                    type: array
                     items:
                       type: object
-                    type: array
   /api/sessions/new:
     post:
       tags: [Sessions]
@@ -968,10 +1153,10 @@ paths:
                     nullable: true
                     type: object
                   actives:
-                    items:
-                      type: object
                     nullable: true
                     type: array
+                    items:
+                      type: object
                   aria2:
                     type: object
                   ariaflow:
@@ -985,9 +1170,9 @@ paths:
                   health:
                     type: object
                   items:
+                    type: array
                     items:
                       type: object
-                    type: array
                   state:
                     type: object
                   summary:
@@ -1044,9 +1229,9 @@ paths:
                   count:
                     type: integer
                   torrents:
+                    type: array
                     items:
                       type: object
-                    type: array
   /api/torrents/{infohash}.torrent:
     get:
       tags: [Torrents]
@@ -1265,6 +1450,9 @@ components:
                 type: boolean
               item:
                 $ref: "#/components/schemas/QueueItem"
+
+
+
 
 
 
