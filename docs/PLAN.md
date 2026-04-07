@@ -4,18 +4,13 @@
 
 Source: coherence analysis 2026-04-07 (governance ↔ code, governance ↔ governance, ASM rules ↔ enforcement).
 
-### [P3] Add inline ASM CR-N traceability comments
+### [P3] CR-3 enforcement is structural only — decide whether to add an explicit guard
 
-**What:** The 5 ASM coherence rules (CR-1…CR-5) are enforced in code but with no inline `# ASM CR-N` markers, so traceability is implicit.
-**Where:**
-- `src/aria_queue/scheduler.py:42-49` (CR-1)
-- `src/aria_queue/scheduler.py:78` (CR-2)
-- `src/aria_queue/scheduler.py:99-100`, `src/aria_queue/reconcile.py:264-278` (CR-3)
-- `src/aria_queue/state.py:199-210` (CR-4)
-- `src/aria_queue/scheduler.py:114`, `src/aria_queue/transfers.py:27-35` (CR-5)
-**Why:** Lets a reviewer (or TIC oracle) confirm rule coverage by grep instead of inferring it from behavior.
-**Scope:** 5 one-line comments, 3 files.
-**Verify each line first** — line numbers come from a static analysis pass and may have shifted.
+**What:** During the P3 verification pass, CR-3 (`job=downloading ⇒ run=running`) turned out not to have an explicit guard. It holds because all job-state transitions happen inside `process_queue()` which sets `running=True` first, but a future refactor could break the invariant silently.
+**Where:** `src/aria_queue/scheduler.py:67-101` (process_queue), and any future job-mutation paths.
+**Why:** Bring CR-3 to parity with CR-1/CR-2/CR-4/CR-5, all of which now have explicit enforcement and `# ASM CR-N` markers.
+**Scope:** TBD — likely a single guard at the top of any function that transitions a job into `active`, or a property check in `save_queue`.
+**Decision needed:** add the guard now, or leave structural and document the assumption in `asm-state-model.md`.
 
 ---
 
