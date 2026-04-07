@@ -5,17 +5,6 @@
 Source: `docs/governance/BGS-GAPS.md` (analysis of BGSPrivate @ 58c1467).
 Goal: make `check-bgs-compliance.py` pass against ariaflow.
 
-### [P1] Fix entry-relative paths in BGS.md and bgs-decision.yaml (G2 + G3)
-
-**What:** Rewrite `decision_record_path` and every `evidence_refs` entry so they resolve relative to their own file's directory (the validator joins them to the parent dir, not the project root).
-**Where:**
-- `docs/governance/BGS.md:11` — `decision_record_path: ./bgs-decision.yaml`
-- `docs/governance/bgs-decision.yaml:34-40` — rewrite each evidence path (`./biss-classification.md`, `../../src/aria_queue/contracts.py`, `../../tests/`, etc.)
-- Re-check `read_next:` paths in `BGS.md` for the same issue.
-**Why:** Validator currently FAILs with `decision record not found` and 6× `evidence_ref not found`.
-**Scope:** ~10 lines, 2 files.
-**Verify:** `python ../BGSPrivate/bgs/tools/check-bgs-compliance.py docs/governance/BGS.md --member-repos-root ../BGSPrivate` — path errors gone.
-
 ### [P1] Repin members for BGSPrivate monorepo layout (G1)
 
 **What:** Replace per-member SHAs with a single BGSPrivate ref. BGSPrivate is one git repo; `ucc/`, `uic/`, `asm/`, `tic/` are subfolders without `.git`, so `ucc@370c1f7` etc. cannot resolve.
