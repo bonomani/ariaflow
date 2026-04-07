@@ -5,31 +5,6 @@
 Source: `scripts/check_tic_coverage.py` output (2026-04-08).
 Goal: bring TIC oracle coverage to 100%, then flip the checker to enforcing so any new uncovered test fails `make verify` immediately.
 
-### [P1] Clean 11 stale oracle entries
-
-**What:** `docs/governance/tic-oracle.md` has 11 entries that reference tests no longer in the suite (renamed or removed). Each is a pure documentation artifact — find the row, delete or remap it.
-
-**The 11 stale names:**
-- `test_preflight_blocked_start`
-- `test_preflight_blocks_start`
-- `test_regression_paused_cleared_on_queue_complete`
-- `test_run_logged`
-- `test_run_start`
-- `test_run_start_empty_body_ok`
-- `test_run_start_honors_request_auto_preflight_override`
-- `test_run_start_sets_running`
-- `test_run_stop`
-- `test_run_stop_clears_running`
-- `test_scheduler_always_running`
-
-**Where:** `docs/governance/tic-oracle.md` — grep for each name, decide per row whether to (a) delete the entry (test removed), or (b) point it at the renamed test if `git log -S '<old_name>'` finds a rename.
-
-**Why:** Stale entries break the oracle's promise that every listed test exists in the suite. They also hide real coverage gaps inside `check_tic_coverage.py` output.
-
-**Scope:** ~11 line deletions / line edits, 1 file. After this, `check_tic_coverage.py` reports 0 stale, N missing.
-
-**Verify:** `python scripts/check_tic_coverage.py` shows `0 stale`. `make verify` clean.
-
 ### [P2] Register the 78 unregistered tests in tic-oracle.md
 
 **What:** 78 tests run but have no oracle entry. The oracle promises every test has explicit `Intent / Oracle / Trace Target` columns; today 78 of them have nothing.
