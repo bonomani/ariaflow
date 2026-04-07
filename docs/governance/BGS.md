@@ -29,10 +29,10 @@ external_controls:
 
 bgs_version_ref: bgs@58c1467
 member_version_refs:
-  ucc: ucc@370c1f7
-  uic: uic@11bd400
-  asm: asm@dca032b
-  tic: tic@7cfba80
+  ucc: ucc@58c1467
+  uic: uic@58c1467
+  asm: asm@58c1467
+  tic: tic@58c1467
 
 read_next:
   - "./docs/ARCHITECTURE.md"

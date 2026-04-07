@@ -17,10 +17,11 @@ from pathlib import Path
 _PROJECT = Path(__file__).resolve().parents[1]
 _DECISION = _PROJECT / "docs" / "governance" / "bgs-decision.yaml"
 _MEMBER_REPOS = {
-    "ucc": _PROJECT.parent / "ucc",
-    "uic": _PROJECT.parent / "uic",
-    "asm": _PROJECT.parent / "asm",
-    "tic": _PROJECT.parent / "tic",
+    # All members live in the BGSPrivate monorepo (single git repo).
+    "ucc": _PROJECT.parent / "BGSPrivate",
+    "uic": _PROJECT.parent / "BGSPrivate",
+    "asm": _PROJECT.parent / "BGSPrivate",
+    "tic": _PROJECT.parent / "BGSPrivate",
     "bgs": _PROJECT.parent / "BGSPrivate",
 }
 

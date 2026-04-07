@@ -19,10 +19,12 @@ members_used:
 overlays_used: []
 
 member_version_refs:
-  ucc: ucc@370c1f7
-  uic: uic@11bd400
-  asm: asm@dca032b
-  tic: tic@7cfba80
+  # All members live in the BGSPrivate monorepo (single git repo).
+  # Every ref pins the same SHA of that repo.
+  ucc: ucc@58c1467
+  uic: uic@58c1467
+  asm: asm@58c1467
+  tic: tic@58c1467
 
 external_controls:
   IAM_and_authorization: not_applicable        # local CLI tool, no multi-user auth
