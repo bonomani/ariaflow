@@ -50,3 +50,10 @@ Current status:
 | BG-1 | SSE pushes rev-only | Done (SSE now pushes full payload) |
 | BG-2 | No PATCH for declaration preferences | Done (`PATCH /api/declaration/preferences` added) |
 | BG-3 | openapi.yaml lacks response field schemas | Done (openapi_schemas.py + gen_openapi.py) |
+| BG-4 | openapi.yaml info.version is hardcoded | Done (gen_openapi.py injects `__version__`) |
+| BG-5 | Bonjour instance name should be the short hostname | Done (`bonjour.py` `_short_hostname` + `_instance_name`) |
+| BG-6 | Bonjour TXT records need a `hostname` key | Done (`hostname=<short>` added to dns-sd/avahi cmds) |
+| BG-7 | SSE push for action_log entries (drop `/api/log` polling) | Done (`append_action_log` publishes `action_logged` event) |
+| BG-8 | Merge `/api/health` into `/api/status` (drop `_heroTimer` polling) | Done (`/api/status` carries a `health` object) |
+| BG-9 | Scheduler backoff when aria2 unreachable | Done (exponential 2s→60s in `process_queue`) |
+| BG-10 | Under-specified response schemas in openapi.yaml for `/api/declaration`, `/api/lifecycle`, `/api/log` | Open (low priority, see PLAN.md) |

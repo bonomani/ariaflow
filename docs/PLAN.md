@@ -2,6 +2,24 @@
 
 ## Open items
 
+### [P3] BG-10: Specify response schemas for /api/declaration, /api/lifecycle, /api/log
+
+**What:** Three OpenAPI endpoints declare their response body as bare `type: object` with no nested property names. The frontend's contract cross-check (`tests/test_openapi_alignment.py` in ariaflow-web) emits warnings because of this. Marked low-priority by frontend; no runtime breakage but contract drift is invisible.
+
+**Where:** `src/aria_queue/openapi.yaml`
+- `/api/declaration` (line 263) — `uic.preferences[]` items, plus the `ucc` and `policy` buckets, are typed as untyped object. Add named properties: `value`, `rationale`, plus typed `ucc` and `policy` schemas.
+- `/api/lifecycle` (line 643) — per-target entries are untyped. Add: `result`, `outcome`, `observation`, `reason`.
+- `/api/log` (line 715) — `items[]` is `type: object` with no nested properties. Add: `action`, `outcome`, `timestamp`, `target`.
+
+**Why:** Closes BG-10 from the frontend gap file. After this, ariaflow-web's contract cross-check stops emitting false positives and any future schema drift becomes visible.
+
+**Scope:** ~50 lines of YAML in one file. After editing, regenerate the public copy with `python scripts/gen_openapi.py`. Move BG-10 in `docs/BACKEND_GAPS_REQUESTED_BY_FRONTEND.md` from open to Resolved (frontend agent's responsibility per cross-repo rule — flag in commit message that they should do it).
+
+**Verify:**
+- `python -c "import yaml; yaml.safe_load(open('src/aria_queue/openapi.yaml'))"` — file still parses.
+- `make verify` — clean.
+- Spot-check that openapi.yaml schemas still match what `openapi_schemas.py` and `_send_json` actually return.
+
 ### [P3] Pre-existing lint and format debt blocking a strict `make ci`
 
 **What:** `make lint` reports **27 ruff errors** (mostly unused imports — e.g. `tests/test_unit.py:723` imports `allowed_actions` "just to verify import works"). `ruff format --check` reports **35 files** that would be reformatted. Both predate this session.
