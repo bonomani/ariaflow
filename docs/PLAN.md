@@ -5,18 +5,6 @@
 Source: `docs/governance/BGS-GAPS.md` (analysis of BGSPrivate @ 58c1467).
 Goal: make `check-bgs-compliance.py` pass against ariaflow.
 
-### [P1] Repin members for BGSPrivate monorepo layout (G1)
-
-**What:** Replace per-member SHAs with a single BGSPrivate ref. BGSPrivate is one git repo; `ucc/`, `uic/`, `asm/`, `tic/` are subfolders without `.git`, so `ucc@370c1f7` etc. cannot resolve.
-**Where:**
-- `docs/governance/bgs-decision.yaml:21-25` — set every entry to `<name>@58c1467` (the BGSPrivate HEAD).
-- `docs/governance/BGS.md:31-35` — same.
-- `scripts/check_bgs_drift.py:19-25` — point all five members at `_PROJECT.parent / "BGSPrivate"`.
-**Why:** Without this, the upstream validator FAILs 4× on member refs and the local drift checker drifts from upstream truth.
-**Scope:** ~15 lines, 3 files.
-**Decision needed first:** confirm option (A) "pin everything to bgs@<sha>" before editing — see G1 in BGS-GAPS.md.
-**Depends on:** none, but do after the path fixes so each commit is independently green.
-
 ### [P2] Schema-align external_controls casing + add biss ref (G5 + G6)
 
 **What:** Lowercase `IAM_and_authorization` → `iam_and_authorization` in both files; add `biss: bgs@58c1467` to `member_version_refs` since `BISS` is in `members_used`.
