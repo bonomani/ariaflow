@@ -51,8 +51,8 @@ Every `record_action(action=...)` value is listed here with its target and BGS t
 | `retry` | queue_item | ASM Job: error → queued | User retries a failed download |
 | `priority` | queue_item | Job ordering | User changes item priority |
 | `select_files` | queue_item | UIC: file selection | Torrent/metalink file selection |
-| `run` | queue | ASM Run: → running | Scheduler processing event |
-| `stop` | queue | ASM Run: → idle | Scheduler stop event (legacy; scheduler now auto-runs) |
+| `run` | queue_item | ASM Job: queued/paused → active | Recorded by scheduler.py when an item is submitted to aria2 (`reason=download_started`); Job-axis transition, not Run-axis |
+| `stop` | queue | (deprecated) | Removed legacy scheduler stop event — kept here for historical action_log entries; scheduler now auto-runs |
 | `complete` | queue_item | ASM Job: → complete | Download finished successfully |
 | `error` | queue / queue_item | ASM Job: → error | Download failed or RPC failure |
 | `auto_retry` | queue_item | ASM Job: error → queued | Automatic retry by scheduler |
