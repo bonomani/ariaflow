@@ -9,7 +9,7 @@ decision_reason: >
   ASM-based state model with preflight governance.
 applies_to_scope: "engine execution path: session → run → queue → job lifecycle, distribution pipeline, service discovery, installation lifecycle"
 decision_record_path: "./bgs-decision.yaml"
-last_reviewed: 2026-04-05
+last_reviewed: 2026-04-07
 
 members_used:
   - BISS — boundary classification (17 boundaries, 10 interaction classes)

@@ -1,23 +1,6 @@
 # Plan
 
-## Open items
-
-Source: `docs/governance/BGS-GAPS.md` (analysis of BGSPrivate @ 58c1467).
-Goal: make `check-bgs-compliance.py` pass against ariaflow.
-
-### [P3] Refresh last_reviewed (G9)
-
-**What:** Bump `last_reviewed: 2026-04-05` → `2026-04-07` in `BGS.md`.
-**Where:** `docs/governance/BGS.md:12`.
-**Why:** Reflect that the entry was just re-validated against the new suite.
-**Scope:** 1 line.
-**Depends on:** all P1/P2 items merged (only bump after the file is actually clean).
-
----
-
-Deferred (informational only, no action this round):
-- **G4** — document the single-SHA pinning convention once G1 lands.
-- **G8** — Grade-2 fields (`profiles[]`, `policies[]`) — adopt only if we ship a typed profile.
+No open items.
 
 ---
 
