@@ -32,12 +32,14 @@ external_controls:
   privacy_and_data_boundary_control: not_applicable  # no PII processed
 
 evidence_refs:
-  - ./docs/governance/biss-classification.md
-  - ./docs/governance/asm-state-model.md        # ASM formalized state model
-  - ./docs/governance/tic-oracle.md             # TIC oracle with trace targets
-  - ./src/aria_queue/contracts.py               # UCC declaration + UIC gates/preferences
-  - ./docs/ARCHITECTURE.md                      # architectural overview
-  - ./tests/
+  # Paths are resolved relative to this file (docs/governance/) by
+  # check-bgs-compliance.py — do not rewrite as project-relative.
+  - ./biss-classification.md
+  - ./asm-state-model.md                        # ASM formalized state model
+  - ./tic-oracle.md                             # TIC oracle with trace targets
+  - ../../src/aria_queue/contracts.py           # UCC declaration + UIC gates/preferences
+  - ../ARCHITECTURE.md                          # architectural overview
+  - ../../tests/
 
 owner: bonomani
 date: 2026-04-05

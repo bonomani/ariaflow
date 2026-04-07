@@ -86,8 +86,11 @@ def _check_evidence_refs(decision: dict) -> list[str]:
     refs = decision.get("evidence_refs", [])
     if not isinstance(refs, list):
         return ["evidence_refs is not a list"]
+    decision_dir = _DECISION.parent
     for ref in refs:
-        path = _PROJECT / ref.lstrip("./")
+        # Resolve relative to the decision file's directory, matching
+        # check-bgs-compliance.py's convention.
+        path = (decision_dir / ref).resolve()
         if not path.exists():
             errors.append(f"missing: {ref}")
         elif path.is_file() and path.stat().st_size == 0:
