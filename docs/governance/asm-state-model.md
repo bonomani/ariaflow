@@ -113,6 +113,8 @@ error → cancelled       user removes (archived)
 | CR-4 | `session=closed` requires all jobs not in `downloading` |
 | CR-5 | At most `max_simultaneous_downloads` jobs in `downloading` at any time |
 
+CR-3 is enforced at two points: structurally by `process_queue()` (the sole entry into `run=running` and the sole submission path into the active tier), and explicitly by the scheduler crash handler in `start_background_process()`, which calls `aria2_pause_all()` before writing `run=False` so the source of truth (aria2) stops transferring at the same moment the mirror (queue.json) loses its `running` claim. Any future code path that flips `run=False` must call `aria2_pause_all()` for the same reason.
+
 ## 5. State Persistence
 
 - **Scheduler state** (`state.json`): session + run axes — persisted atomically under file lock

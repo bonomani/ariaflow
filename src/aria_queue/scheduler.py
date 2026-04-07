@@ -52,6 +52,14 @@ def start_background_process(port: int = 6800) -> dict[str, Any]:
         try:
             core.process_queue(port=port)
         except Exception as exc:
+            # ASM CR-3: run is leaving the running state, so no job may
+            # remain in the active tier in aria2. Pause everything in
+            # aria2 before writing running=False — best-effort, since
+            # the daemon itself may be the cause of the crash.
+            try:
+                core.aria2_pause_all(port=port, timeout=5)
+            except Exception:
+                pass
             current = core.load_state()
             current["last_error"] = str(exc)
             current["running"] = False
@@ -66,6 +74,12 @@ def start_background_process(port: int = 6800) -> dict[str, Any]:
 
 
 def process_queue(port: int = 6800) -> list[dict[str, Any]]:
+    # ASM CR-3 (structural): this is the sole entry point that sets
+    # run=running and the sole submission path into the active tier,
+    # so jobs cannot become active outside a running scheduler. The
+    # crash handler in start_background_process pairs an explicit
+    # aria2_pause_all with the run=False write to keep the invariant
+    # on the way out as well.
     core = _core()
     core.ensure_storage()
     # ASM CR-1: session=open is established before run=running is set below.
