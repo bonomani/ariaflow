@@ -53,9 +53,14 @@ def _collect_tests() -> set[str]:
 
 
 def _registered_tests() -> set[str]:
-    """Return the set of test names referenced in tic-oracle.md."""
+    """Return the set of test names referenced in tic-oracle.md.
+
+    Accepts both bare ``test_name`` and ``ClassName::test_name`` forms
+    inside backticks, since the oracle uses the qualified form for some
+    parameter-table sections (e.g. the aria2 RPC wrapper inventory).
+    """
     text = _TIC_ORACLE.read_text(encoding="utf-8")
-    return set(re.findall(r"`(test_\w+)`", text))
+    return set(re.findall(r"`(?:\w+::)?(test_\w+)`", text))
 
 
 def main() -> int:
