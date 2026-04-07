@@ -5,7 +5,7 @@ TIC ref: tic@7cfba80
 Generated: 2026-04-05
 Test runner: `python -m unittest discover -s tests -v`
 
-## Test Inventory — All 473 Tests
+## Test Inventory — All 485 Tests
 
 ---
 
@@ -21,7 +21,7 @@ Core scheduler, state machine, and UCC contract tests.
 | 4 | `test_preflight_emits_gate_results` | Preflight produces structured gate results | result contains "gates", "status", exit_code in {0,1}, no action_log leak | UIC: gate evaluation |
 | 5 | `test_preflight_bootstraps_aria2_when_rpc_is_initially_unavailable` | Preflight recovers by starting aria2 when initially unreachable | aria2_available gate satisfied, ensure_daemon called once | ASM: daemon absent→available (recovery) |
 | 6 | `test_auto_preflight_default_is_disabled` | Auto-preflight preference defaults to off | auto_preflight_on_run.value == False | UIC: preference default |
-| 7 | `test_concurrency_default_is_sequential` | Default concurrency is 1 (sequential) | max_simultaneous_downloads.value == 1 | UIC: preference default, Coherence CR-6 |
+| 7 | `test_concurrency_default_is_sequential` | Default concurrency is 1 (sequential) | max_simultaneous_downloads.value == 1 | UIC: preference default, ASM: Coherence CR-5 |
 | 8 | `test_duplicate_active_transfer_default_is_remove` | Duplicate transfer policy defaults to "remove" | duplicate_active_transfer_action.value == "remove" | UIC: preference default |
 | 9 | `test_probe_fallback_reports_reason` | Probe fallback uses safe default when tool unavailable | source == "default", reason == "probe_unavailable", cap_bytes_per_sec == 250000 | UCC: observation/fallback |
 | 10 | `test_probe_uses_machine_readable_networkquality_output` | Probe parses networkQuality JSON correctly | source == "networkquality", downlink_mbps == 80.0, cap_mbps == 64.0 | UCC: observation |
@@ -35,8 +35,8 @@ Core scheduler, state machine, and UCC contract tests.
 | 18 | `test_reconcile_live_queue_adopts_unmatched_active_job` | Unmatched live download is adopted into queue | changed == True, recovered == 1 | ASM: recovery, Job: →downloading |
 | 19 | `test_reconcile_live_queue_updates_old_session_item_in_place` | Stale session item updated to match live state | changed == True, recovered == 1 | ASM: session transition |
 | 20 | `test_reconcile_live_queue_collapses_duplicate_rows_for_same_live_download` | Duplicate queue rows for same URL collapsed to one | len(saved) == 1, gid == live gid, completedLength preserved | Job: dedup |
-| 21 | `test_deduplicate_active_transfers_removes_less_advanced_duplicates_by_default` | Dedup keeps most-advanced transfer, removes others | kept contains "gid-keep", paused contains "gid-drop", action == "remove" | UIC: duplicate policy, Coherence CR-6 |
-| 22 | `test_poll_marks_item_error_after_consecutive_rpc_failures` | After 5 consecutive RPC failures, item marked error | result[0].status == "error", error_code == "rpc_unreachable" | ASM: Coherence CR-4 |
+| 21 | `test_deduplicate_active_transfers_removes_less_advanced_duplicates_by_default` | Dedup keeps most-advanced transfer, removes others | kept contains "gid-keep", paused contains "gid-drop", action == "remove" | UIC: duplicate policy |
+| 22 | `test_poll_marks_item_error_after_consecutive_rpc_failures` | After 5 consecutive RPC failures, item marked error | result[0].status == "error", error_code == "rpc_unreachable" | ASM: Job active→error |
 | 23 | `test_process_queue_marks_completed_tracked_download_done` | Completed download transitions to "done" with post_action | result[0].status == "done", gid == "gid-1", post_action present | ASM: Job downloading→complete→done, Run running→idle |
 | 24 | `test_process_queue_does_not_auto_resume_paused_items` | Paused items stay paused, user must explicitly resume | add_download not called, result[0].status == "paused" | ASM: Job paused stays paused |
 | 25 | `test_ucc_returns_structured_result` | run_ucc produces UCC-compliant structured output | result contains "result", "meta", result.observation, result.outcome | UCC: contract shape |
@@ -725,7 +725,7 @@ Validates the allowed_actions state table for each item status.
 |---|---|---|---|---|
 | 325 | `test_regression_recovered_item_gets_current_session_id` | Recovered item gets current session_id, not old one | session_id == "new-session", recovery_session_id set | ASM: recovery |
 | 326 | `test_regression_paused_item_promoted_via_merge_active_status` | Paused item promoted to downloading when live is active | saved[0].status == "downloading" | ASM: Job paused→downloading |
-| 327 | `test_regression_rpc_watchdog_marks_error_after_failures` | After 5 RPC failures, item marked error (prevents infinite loop) | status == "error", error_code == "rpc_unreachable" | ASM: Coherence CR-4 |
+| 327 | `test_regression_rpc_watchdog_marks_error_after_failures` | After 5 RPC failures, item marked error (prevents infinite loop) | status == "error", error_code == "rpc_unreachable" | ASM: Job active→error |
 | 328 | `test_regression_dedup_default_is_remove` | Dedup policy defaults to "remove" (not "pause") | action == "remove" | UIC: preference default |
 | 329 | `test_regression_resume_sets_downloading_not_queued` | Resume sets "downloading" not "queued" (prevents re-add) | status == "downloading" for resumed item with gid | ASM: Job paused→downloading |
 | 330 | `test_regression_action_log_rotation_exists` | Action log rotation constants exist (max 10000, keep 5000) | MAX == 10000, KEEP == 5000 | UCC: audit trail |
@@ -952,11 +952,24 @@ Runs the gen_all_variables.py --check script to validate all identifier naming r
 |---|---|---|---|---|
 | 449 | `test_process_queue_submits_all_queued_items_to_aria2` | All queued items submitted to aria2 | add_download called twice | ASM: Run+Job axis |
 | 450 | `test_process_queue_respects_runner_paused_state_and_starts_no_new_downloads` | Paused runner starts no new downloads | add_download not called, paused stays True | ASM: Run axis |
-| 451 | `test_process_queue_honors_active_slot_limit_before_starting_new_work` | Slot limit respected (1 active, 1 queued → only queued submitted) | add_download called once | ASM: Coherence CR-6 |
+| 451 | `test_process_queue_honors_active_slot_limit_before_starting_new_work` | Slot limit respected (1 active, 1 queued → only queued submitted) | add_download called once | ASM: Coherence CR-5 |
 | 452 | `test_cleanup_queue_state_collapses_duplicate_nonterminal_rows` | Duplicate paused rows collapsed to one (keeps most advanced) | len(items) == 1, completedLength == "20" | UCC: queue integrity |
 | 453 | `test_cleanup_queue_state_collapses_duplicate_error_rows` | Duplicate error rows collapsed to one | len(items) == 1, recovery fields preserved | UCC: queue integrity |
 | 454 | `test_cleanup_queue_state_normalizes_stale_live_status_for_paused_item` | Paused item with live_status=active normalized to paused | live_status == "paused", normalized == 1 | ASM: Job state normalization |
 | 455 | `test_process_queue_runs_startup_cleanup_before_reconcile` | Startup cleanup runs before reconcile, deduplicates | len(items) == 1, completedLength == "20" | UCC: execution order |
+
+---
+
+### `tests/test_tic.py` — TicAsmCoherenceTests (4 tests)
+
+Pin the explicit ASM coherence-rule guards added to ariaflow.
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 456 | `test_cr4_close_session_refuses_with_active_jobs` | close_state_session refuses while jobs are active/waiting | RuntimeError raised, message contains "CR-4" | ASM: Coherence CR-4 |
+| 457 | `test_cr4_rollover_pauses_active_jobs_before_close` | start_new_state_session pauses active items before close | active/waiting items become paused; queued untouched | ASM: Coherence CR-4 |
+| 458 | `test_cr3_scheduler_crash_pauses_aria2` | Scheduler crash handler calls aria2_pause_all before run=False | aria2_pause_all called once | ASM: Coherence CR-3 |
+| 459 | `test_cr3_crash_handler_swallows_pause_failure` | Crash handler still completes when aria2_pause_all fails | save_state called with running=False and last_error set | ASM: Coherence CR-3 (best-effort) |
 
 ---
 

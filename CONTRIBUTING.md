@@ -41,7 +41,7 @@ python scripts/gen_all_variables.py --check  # naming compliance
 src/aria_queue/
   storage.py      — file I/O, locking, paths
   state.py        — state, sessions, action log, archive
-  aria2_rpc.py    — aria_rpc + 44 aria2_* wrappers
+  aria2_rpc.py    — aria_rpc + 36 aria2_* RPC wrappers + 12 helpers
   bandwidth.py    — probe, apply, networkQuality
   queue_ops.py    — QueueItem, CRUD, per-item operations
   transfers.py    — discover, pause/resume all, preferences

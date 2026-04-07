@@ -105,6 +105,11 @@ error → cancelled       user removes (archived)
 
 ## 4. Coherence Rules
 
+> Note: in the rules below, `job=downloading` is the **ASM axis label** for the
+> "actively transferring" tier — concretely, any job whose `status` field is
+> `active` or `waiting` in `queue.json` (the two states that occupy a slot in
+> aria2's active queue). It is not a literal `status` value.
+
 | Rule | Invariant |
 |---|---|
 | CR-1 | `run=running` requires `session=open` (always true when scheduler is up) |
