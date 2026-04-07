@@ -5,14 +5,6 @@
 Source: `docs/governance/BGS-GAPS.md` (analysis of BGSPrivate @ 58c1467).
 Goal: make `check-bgs-compliance.py` pass against ariaflow.
 
-### [P2] Wire upstream validator into make check-drift (G7)
-
-**What:** Have `scripts/check_bgs_drift.py` shell out to `../BGSPrivate/bgs/tools/check-bgs-compliance.py docs/governance/BGS.md --member-repos-root ../BGSPrivate` and propagate its exit code. Surface stdout on failure.
-**Where:** `scripts/check_bgs_drift.py` (add a step at the end of `main()`); no Makefile change needed since it already calls this script.
-**Why:** Local `make check-drift` currently reports `BGS clean` while upstream reports 10 FAILs. The two checks must agree.
-**Scope:** ~20 lines, 1 file.
-**Depends on:** P1 items above (otherwise the new step fails immediately).
-
 ### [P3] Refresh last_reviewed (G9)
 
 **What:** Bump `last_reviewed: 2026-04-05` → `2026-04-07` in `BGS.md`.
