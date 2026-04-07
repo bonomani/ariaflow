@@ -1,4 +1,4 @@
-.PHONY: test lint check docs install clean help check-drift
+.PHONY: test lint check docs install clean help check-drift verify
 
 help: ## Show this help
 	@grep -E '^[a-z_-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  %-15s %s\n", $$1, $$2}'
@@ -27,7 +27,12 @@ check-drift: ## Check for BGS, declaration, API surface, coverage, and concept d
 	python scripts/check_coverage.py
 	python scripts/check_concepts.py
 	python scripts/check_api_surface.py
+	python scripts/check_tic_coverage.py
 	python scripts/check_declaration_drift.py || true  # warn but don't fail CI on local declaration drift
+
+verify: check-drift test ## Full verification: check-drift + tests + naming
+	python scripts/gen_all_variables.py --check
+	@echo "All verification checks passed."
 
 install: ## Install in development mode
 	pip install -e .
