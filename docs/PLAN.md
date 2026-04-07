@@ -5,16 +5,6 @@
 Source: `docs/governance/BGS-GAPS.md` (analysis of BGSPrivate @ 58c1467).
 Goal: make `check-bgs-compliance.py` pass against ariaflow.
 
-### [P2] Schema-align external_controls casing + add biss ref (G5 + G6)
-
-**What:** Lowercase `IAM_and_authorization` → `iam_and_authorization` in both files; add `biss: bgs@58c1467` to `member_version_refs` since `BISS` is in `members_used`.
-**Where:**
-- `docs/governance/bgs-decision.yaml:28`
-- `docs/governance/BGS.md:24`
-- `docs/governance/bgs-decision.yaml:21` and `BGS.md:31` (add biss line).
-**Why:** Validator passes today via key normalization, but the JSON schema declares the canonical key as lowercase — any stricter runner fails. Adding `biss` matches the declared members list.
-**Scope:** 4 lines, 2 files.
-
 ### [P2] Wire upstream validator into make check-drift (G7)
 
 **What:** Have `scripts/check_bgs_drift.py` shell out to `../BGSPrivate/bgs/tools/check-bgs-compliance.py docs/governance/BGS.md --member-repos-root ../BGSPrivate` and propagate its exit code. Surface stdout on failure.
