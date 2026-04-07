@@ -1,6 +1,28 @@
 # Plan
 
-No open items.
+## Open items
+
+### [P3] Pre-existing lint and format debt blocking a strict `make ci`
+
+**What:** `make lint` reports **27 ruff errors** (mostly unused imports — e.g. `tests/test_unit.py:723` imports `allowed_actions` "just to verify import works"). `ruff format --check` reports **35 files** that would be reformatted. Both predate this session.
+
+**Why:** A `make ci` target that runs `verify + lint + format --check` was proposed but skipped because both pre-existing failures would make it red on first invocation. Once cleared, `make ci` becomes a 1-line addition.
+
+**Where:**
+- `make lint` output enumerates the 27 errors. Most are `F401` unused imports — `ruff check --fix src/ tests/` will auto-resolve 24 of them. The remaining 3 need hand inspection.
+- `ruff format src/ tests/` (without `--check`) will rewrite the 35 files in place. Verify the resulting diff doesn't introduce semantic changes (it shouldn't — ruff format is whitespace/style only).
+
+**Scope:**
+- Lint pass: ~5 min for the auto-fixable 24, plus inspection for the 3 holdouts.
+- Format pass: 1 command, 35-file diff. Single commit.
+- `make ci` addition: 4 lines.
+
+**Decision needed before starting:** confirm the bulk format diff is acceptable as a single commit (35 files touched, whitespace-only). If yes, do format → lint → add `make ci` as three commits in sequence.
+
+---
+
+Deferred (informational only):
+- `check_declaration_drift.py` reports 23 prefs missing from the *user's local* `~/.config/aria-queue/declaration.json`. Not a repo issue — per-machine state. The existing `|| true` in the Makefile is correct.
 
 ---
 
