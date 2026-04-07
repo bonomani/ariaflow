@@ -2,10 +2,14 @@ decision_id: ariaflow-scheduler-001
 bgs_slice: BGS-State-Modeled-Governed-Verified
 declared_scope: "scheduler execution path: session, run, queue, job lifecycle, distribution pipeline, service discovery, installation lifecycle"
 decision_reason: >
-  Ariaflow is a stateful download scheduler with explicit session/run lifecycle,
-  preflight readiness checks, and queue/job state transitions. The scope
-  depends on installation, runtime readiness, recovery, and transition
-  legality — an ASM-based slice is the natural fit per CR-1b.
+  Ariaflow is a download manager (BGS DECISION-TREE §2.5) whose governed
+  behavior depends on installation, runtime readiness, recovery, and
+  transition legality. The state-model rule in DECISION-TREE §1 mandates
+  an ASM-based slice. Preflight gates (aria2 readiness, queue lock,
+  disk capacity) require UIC. Verification of state transitions through
+  the 485-test TIC oracle requires TIC. The smallest sufficient slice
+  covering BISS + ASM + UIC + UCC + TIC is
+  BGS-State-Modeled-Governed-Verified.
 
 bgs_version_ref: bgs@58c1467
 
@@ -19,8 +23,6 @@ members_used:
 overlays_used: []
 
 member_version_refs:
-  # All members live in the BGSPrivate monorepo (single git repo).
-  # Every ref pins the same SHA of that repo.
   biss: biss@58c1467
   ucc: ucc@58c1467
   uic: uic@58c1467
@@ -28,29 +30,28 @@ member_version_refs:
   tic: tic@58c1467
 
 external_controls:
-  iam_and_authorization: not_applicable        # local CLI tool, no multi-user auth
-  sandboxing_or_runtime_isolation: delegated    # OS-level process isolation for aria2 daemon
-  secret_and_token_lifecycle: not_applicable    # no secrets managed by the engine
-  rate_limiting_and_budget_control: implemented # max_simultaneous_downloads policy in declaration
-  privacy_and_data_boundary_control: not_applicable  # no PII processed
+  iam_and_authorization: not_applicable
+  sandboxing_or_runtime_isolation: delegated
+  secret_and_token_lifecycle: not_applicable
+  rate_limiting_and_budget_control: implemented
+  privacy_and_data_boundary_control: not_applicable
 
 evidence_refs:
-  # Paths are resolved relative to this file (docs/governance/) by
-  # check-bgs-compliance.py — do not rewrite as project-relative.
+  # Paths resolved relative to this file's directory by check-bgs-compliance.py.
   - ./biss-classification.md
-  - ./asm-state-model.md                        # ASM formalized state model
-  - ./tic-oracle.md                             # TIC oracle with trace targets
-  - ../../src/aria_queue/contracts.py           # UCC declaration + UIC gates/preferences
-  - ../ARCHITECTURE.md                          # architectural overview
-  - ../STATES_AND_INTERACTIONS.md               # aria2 state model + RPC mapping (BISS + ASM evidence)
-  - ../ARIA2_RPC_WRAPPERS.md                    # auto-generated 36-wrapper inventory (BISS aria2 boundary)
+  - ./asm-state-model.md
+  - ./tic-oracle.md
+  - ../../src/aria_queue/contracts.py
+  - ../ARCHITECTURE.md
+  - ../STATES_AND_INTERACTIONS.md
+  - ../ARIA2_RPC_WRAPPERS.md
   - ../../tests/
 
 owner: bonomani
-date: 2026-04-05
+date: 2026-04-07
 
 limitations:
-  - BISS classification covers 18 boundaries and 10 interaction classes; needs expansion as new boundaries are added
-  - ASM state model formalized in docs/governance/asm-state-model.md
-  - TIC oracle covers all 485 tests with trace targets across ASM/UIC/UCC/BISS
+  - BISS classification covers 18 boundaries and 10 interaction classes
+  - ASM state model defines 4 axes and 5 coherence rules (CR-1..CR-5)
   - UIC has 2 preflight gates and 27 preferences
+  - TIC oracle covers all 485 tests with trace targets across ASM/UIC/UCC/BISS
