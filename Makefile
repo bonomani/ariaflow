@@ -21,13 +21,15 @@ docs: ## Regenerate auto-generated docs
 	python scripts/gen_rpc_docs.py
 	python scripts/gen_all_variables.py
 	python scripts/gen_openapi.py
+	python scripts/gen_spec.py
 
-check-drift: ## Check for BGS, declaration, API surface, coverage, and concept drift
+check-drift: ## Check for BGS, declaration, API surface, coverage, concept, and SPEC drift
 	python scripts/check_bgs_drift.py
 	python scripts/check_coverage.py
 	python scripts/check_concepts.py
 	python scripts/check_api_surface.py
 	python scripts/check_tic_coverage.py
+	python scripts/check_spec.py
 	python scripts/check_declaration_drift.py || true  # warn but don't fail CI on local declaration drift
 
 verify: check-drift test ## Full verification: check-drift + tests + naming
