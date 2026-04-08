@@ -15,6 +15,18 @@ def _core() -> Any:
     return core
 
 
+def _rpc_poll_failure_message(exc: BaseException) -> str:
+    text = str(exc).strip()
+    if text:
+        return text
+    name = exc.__class__.__name__.lower()
+    if "timeout" in name:
+        return "aria2 status RPC timed out"
+    if "connection" in name:
+        return "aria2 status RPC connection failed"
+    return "aria2 status RPC failed"
+
+
 def check_disk_space() -> tuple[bool, float]:
     """Check if disk usage is below the configured threshold.
 
@@ -273,6 +285,12 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             if info is None:
                 rpc_failures = item.get("rpc_failures", 0) + 1
                 item["rpc_failures"] = rpc_failures
+                item["rpc_failure_limit"] = _MAX_RPC_FAILURES
+                if isinstance(result, Exception):
+                    base_message = _rpc_poll_failure_message(result)
+                    item["rpc_error_message"] = (
+                        f"{base_message} ({rpc_failures}/{_MAX_RPC_FAILURES})"
+                    )
                 if rpc_failures >= _MAX_RPC_FAILURES:
                     item["status"] = "error"
                     item["error_code"] = "rpc_unreachable"
@@ -280,6 +298,8 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                         f"aria2 RPC unreachable after {rpc_failures} consecutive attempts"
                     )
                     item["error_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+                    item.pop("rpc_error_message", None)
+                    item.pop("rpc_failure_limit", None)
                     item.pop("live_status", None)
                     item.pop("gid", None)
                     core.record_action(
@@ -301,6 +321,8 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             remote_status = str(info.get("status") or "")
             item["gid"] = gid
             item.pop("rpc_failures", None)
+            item.pop("rpc_failure_limit", None)
+            item.pop("rpc_error_message", None)
             if remote_status:
                 item["live_status"] = remote_status
             _apply_transfer_fields(item, info)

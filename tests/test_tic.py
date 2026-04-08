@@ -572,6 +572,46 @@ class TicAriaFlowTests(IsolatedTestCase):
         self.assertEqual(items[0]["error_code"], "rpc_unreachable")
         self.assertIn("5", items[0]["error_message"])
 
+    def test_poll_exposes_transient_rpc_timeout_before_terminal_failure(self) -> None:
+        add_queue_item("https://example.com/model.gguf")
+        items = load_queue()
+        items[0]["status"] = "active"
+        items[0]["gid"] = "gid-1"
+        save_queue(items)
+
+        with (
+            patch("aria_queue.core.aria2_ensure_daemon"),
+            patch("aria_queue.core.deduplicate_active_transfers"),
+            patch("aria_queue.core.reconcile_live_queue"),
+            patch(
+                "aria_queue.core.probe_bandwidth",
+                return_value={
+                    "source": "default",
+                    "reason": "probe_unavailable",
+                    "cap_mbps": 2,
+                    "cap_bytes_per_sec": 250000,
+                },
+            ),
+            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
+            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
+            patch("aria_queue.core.aria2_tell_active", return_value=[]),
+            patch(
+                "aria_queue.core.aria2_tell_status",
+                side_effect=TimeoutError(),
+            ),
+            patch(
+                "aria_queue.core.time.sleep",
+                side_effect=[StopIteration("stop")],
+            ),
+        ):
+            with self.assertRaises(StopIteration):
+                process_queue()
+        items = load_queue()
+        self.assertEqual(items[0]["status"], "active")
+        self.assertEqual(items[0]["rpc_failures"], 1)
+        self.assertEqual(items[0]["rpc_failure_limit"], 5)
+        self.assertIn("timed out", items[0]["rpc_error_message"])
+
     def test_process_queue_marks_completed_tracked_download_done(self) -> None:
         add_queue_item("https://example.com/model.gguf")
         complete = {
