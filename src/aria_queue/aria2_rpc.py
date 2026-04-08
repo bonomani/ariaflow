@@ -372,7 +372,6 @@ def aria2_add_download(
 ) -> str:
     from .contracts import pref_value as _pref_value
 
-    core = _core()
     max_tries = str(int(_pref_value("aria2_max_tries", 5) or 5))
     retry_wait = str(int(_pref_value("aria2_retry_wait", 10) or 10))
     options: dict[str, str] = {

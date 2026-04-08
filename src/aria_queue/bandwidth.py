@@ -57,7 +57,6 @@ def _coerce_float(value: object) -> float | None:
 def bandwidth_config() -> dict[str, Any]:
     from .contracts import pref_value
 
-    core = _core()
     down_free_pct = max(
         0, min(100, int(pref_value("bandwidth_down_free_percent", 20) or 20))
     )

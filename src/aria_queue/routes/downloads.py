@@ -9,8 +9,6 @@ from ..api import (
     auto_cleanup_queue,
     get_item_files as api_get_item_files,
     load_archive,
-    load_queue,
-    load_state,
     pause_queue_item,
     remove_queue_item,
     resume_queue_item,
@@ -331,7 +329,7 @@ def post_item_action(h: object, payload: object, path: str) -> None:
         return
     try:
         result = handler(item_id)
-    except Exception as exc:
+    except Exception:
         h._send_json(_error_payload("internal_error", "internal error"), status=500)
         return
     if not result.get("ok", True):

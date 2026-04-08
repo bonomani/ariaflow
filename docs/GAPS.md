@@ -57,3 +57,4 @@ Current status:
 | BG-8 | Merge `/api/health` into `/api/status` (drop `_heroTimer` polling) | Done (`/api/status` carries a `health` object) |
 | BG-9 | Scheduler backoff when aria2 unreachable | Done (exponential 2s→60s in `process_queue`) |
 | BG-10 | Under-specified response schemas in openapi.yaml (9 endpoints) | Done (typed nested schemas + reusable UccEnvelope component + 5 TIC pinning tests) |
+| BG-11 | Residual under-specified fields after BG-10 (14 fields, 5 endpoints) | Done (8 backend-side via Aria2Health/AriaflowHealth/ActiveTransfer/extended QueueItem; 6 dropped from frontend schemas after frontend agent verified they were never read) |

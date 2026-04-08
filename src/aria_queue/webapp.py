@@ -18,17 +18,18 @@ from .api import (
     aria2_current_bandwidth,
     aria2_status,
     aria2_tell_active,
-    auto_preflight_on_run,
-    is_macos,
+    auto_preflight_on_run,  # noqa: F401 — re-exported for test patch compatibility
+    is_macos,  # noqa: F401 — re-exported for test patch compatibility
     load_queue,
     load_state,
-    preflight,
-    start_background_process,
+    preflight,  # noqa: F401 — re-exported for test patch compatibility
+    start_background_process,  # noqa: F401 — re-exported for test patch compatibility
     summarize_queue,
 )
 from .core import cleanup_queue_state
 
-import subprocess  # noqa: F811 — kept for test patch compatibility
+import subprocess  # noqa: F401 — re-exported for test patch compatibility
+
 
 STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
 _STATUS_CACHE_LOCK = threading.Lock()

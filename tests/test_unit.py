@@ -89,7 +89,7 @@ class TestStoragePaths(IsolatedTestCase):
 
 class TestEnsureStorage(IsolatedTestCase):
     def test_creates_directory(self) -> None:
-        from aria_queue.core import ensure_storage, config_dir
+        from aria_queue.core import ensure_storage
 
         subdir = Path(self._tmp.name) / "sub" / "dir"
         os.environ["ARIA_QUEUE_DIR"] = str(subdir)
@@ -234,7 +234,6 @@ class TestAutoCleanupQueue(IsolatedTestCase):
             auto_cleanup_queue,
             save_queue,
             load_queue,
-            load_archive,
             ensure_storage,
         )
 
@@ -657,7 +656,6 @@ class TestAutoRetry(IsolatedTestCase):
         self._setup_error_item()
         from aria_queue.core import (
             load_queue,
-            save_queue,
             load_state,
             save_state,
             ensure_storage,
@@ -827,7 +825,6 @@ class TestAria2MaxTriesPassthrough(IsolatedTestCase):
 class TestOptionTiers(IsolatedTestCase):
     def test_returns_three_tiers(self) -> None:
         from aria_queue.aria2_rpc import _MANAGED_ARIA2_OPTIONS, _SAFE_ARIA2_OPTIONS
-        from aria_queue.queue_ops import allowed_actions  # just to verify import works
 
         self.assertIn("max-overall-download-limit", _MANAGED_ARIA2_OPTIONS)
         self.assertIn("max-overall-upload-limit", _MANAGED_ARIA2_OPTIONS)

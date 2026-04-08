@@ -32,7 +32,7 @@ def get_aria2_option(h: object, parsed: object) -> None:
 
         result = aria2_get_option(gid)
         h._send_json(result)
-    except Exception as exc:
+    except Exception:
         h._send_json(
             _error_payload("rpc_error", "internal error"),
             status=500,

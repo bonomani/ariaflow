@@ -21,7 +21,6 @@ Enforces:
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import subprocess
@@ -68,7 +67,7 @@ class TestModuleNaming(unittest.TestCase):
                 if not re.match(r"^[a-z][a-z0-9_]*$", name):
                     violations.append(f"{os.path.join(root, f)}: {name}")
         self.assertEqual(
-            violations, [], f"Module names not snake_case:\n" + "\n".join(violations)
+            violations, [], "Module names not snake_case:\n" + "\n".join(violations)
         )
 
 
@@ -134,7 +133,7 @@ class TestApiResponseKeys(unittest.TestCase):
                 self.assertEqual(
                     violations,
                     [],
-                    f"camelCase keys in queue item:\n" + "\n".join(violations),
+                    "camelCase keys in queue item:\n" + "\n".join(violations),
                 )
             finally:
                 os.environ.pop("ARIA_QUEUE_DIR", None)
@@ -157,7 +156,7 @@ class TestApiResponseKeys(unittest.TestCase):
                 self.assertEqual(
                     violations,
                     [],
-                    f"camelCase keys in state:\n" + "\n".join(violations),
+                    "camelCase keys in state:\n" + "\n".join(violations),
                 )
             finally:
                 os.environ.pop("ARIA_QUEUE_DIR", None)
@@ -183,7 +182,7 @@ class TestTestNaming(unittest.TestCase):
         self.assertEqual(
             violations,
             [],
-            f"Test names not snake_case:\n" + "\n".join(violations),
+            "Test names not snake_case:\n" + "\n".join(violations),
         )
 
 
@@ -215,7 +214,7 @@ class TestNoAbbreviations(unittest.TestCase):
                         if self._ABBREVIATIONS.search(f"_{node.name}_"):
                             violations.append(f"{f}:{node.lineno}: {node.name}")
         self.assertEqual(
-            violations, [], f"Abbreviations in public names:\n" + "\n".join(violations)
+            violations, [], "Abbreviations in public names:\n" + "\n".join(violations)
         )
 
 

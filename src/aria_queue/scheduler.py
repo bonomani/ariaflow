@@ -20,7 +20,6 @@ def check_disk_space() -> tuple[bool, float]:
 
     Returns (ok, percent_used). ok is False if over limit.
     """
-    core = _core()
     from .contracts import pref_value
 
     raw = pref_value("max_disk_usage_percent", 90)

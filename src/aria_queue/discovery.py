@@ -8,12 +8,10 @@ from __future__ import annotations
 
 import fnmatch
 import json
-import platform
 import re
 import subprocess
 import threading
 import time
-from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 

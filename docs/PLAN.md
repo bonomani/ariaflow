@@ -1,51 +1,6 @@
 # Plan
 
-## Open items
-
-### [P3] BG-11: Aspirational fields the frontend wants that don't exist in backend code
-
-**What:** BG-11 listed 14 missing fields. The 8 fields that actually exist in code are now declared in openapi.yaml and pinned by TIC tests. The remaining 6 are **aspirational** — the frontend wants them but the backend code doesn't return them. They are feature requests, not documentation drift.
-
-**Real fields shipped (not in this item — already done):**
-- `/api/status items[].created_at`, `output`, `priority` — added to QueueItem component
-- `/api/status ariaflow.{reachable,version,schema_version,pid}` — new AriaflowHealth component
-- `/api/status aria2.{reachable,version,error}` — new Aria2Health component
-- `/api/status active.{gid,url,status,percent,…}` — new ActiveTransfer component
-- `/api/downloads/archive items[]` — now `$ref`s QueueItem
-
-**Aspirational fields requiring backend code changes (this plan item):**
-- `/api/declaration: policy`, `ucc` (top-level buckets) — `DEFAULT_DECLARATION` only has `meta`, `uic`, `targets`. Adding empty buckets is a 2-line `contracts.py` change but it should be a deliberate design decision, not a doc fix.
-- `/api/sessions items[].ended_at` — `_log_session_history` writes `closed_at`. Either rename `closed_at`→`ended_at` or have the frontend rename its expectation.
-- `/api/peers items[].ip` — `_resolve_dns_sd` writes `host`. Same rename question.
-- `/api/status enabled` — does not appear anywhere in `src/aria_queue/`. Probably from `aria2_status()`; the frontend may want a derived `enabled` flag combining `reachable` + something else. Needs frontend conversation.
-- `/api/downloads/archive: ended_at`, `next_cursor` — the archive endpoint uses limit-based slicing, not cursor pagination. Adding `next_cursor` is a real feature.
-
-**Where:** Each fix touches a different file (`contracts.py`, `state.py`, `discovery.py`, `routes/downloads.py`). They are unrelated changes that should not be bundled.
-
-**Decision needed:** For each of the 6 fields, decide one of:
-- **Rename in backend** to match the frontend's expectation (cheap, breaking for any other consumer)
-- **Rename frontend expectation** in `../ariaflow-web/docs/schemas/*.json` (frontend agent's responsibility)
-- **Implement the feature** (e.g. real cursor pagination)
-- **Decline** with a note in `BACKEND_GAPS_REQUESTED_BY_FRONTEND.md`'s explicit non-requests table
-
-This is not a single commit — it's 6 small decisions. Frontend agent should weigh in.
-
-### [P3] Pre-existing lint and format debt blocking a strict `make ci`
-
-**What:** `make lint` reports **27 ruff errors** (mostly unused imports — e.g. `tests/test_unit.py:723` imports `allowed_actions` "just to verify import works"). `ruff format --check` reports **35 files** that would be reformatted. Both predate this session.
-
-**Why:** A `make ci` target that runs `verify + lint + format --check` was proposed but skipped because both pre-existing failures would make it red on first invocation. Once cleared, `make ci` becomes a 1-line addition.
-
-**Where:**
-- `make lint` output enumerates the 27 errors. Most are `F401` unused imports — `ruff check --fix src/ tests/` will auto-resolve 24 of them. The remaining 3 need hand inspection.
-- `ruff format src/ tests/` (without `--check`) will rewrite the 35 files in place. Verify the resulting diff doesn't introduce semantic changes (it shouldn't — ruff format is whitespace/style only).
-
-**Scope:**
-- Lint pass: ~5 min for the auto-fixable 24, plus inspection for the 3 holdouts.
-- Format pass: 1 command, 35-file diff. Single commit.
-- `make ci` addition: 4 lines.
-
-**Decision needed before starting:** confirm the bulk format diff is acceptable as a single commit (35 files touched, whitespace-only). If yes, do format → lint → add `make ci` as three commits in sequence.
+No open items.
 
 ---
 

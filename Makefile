@@ -1,4 +1,4 @@
-.PHONY: test lint check docs install clean help check-drift verify
+.PHONY: test lint check docs install clean help check-drift verify ci
 
 help: ## Show this help
 	@grep -E '^[a-z_-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  %-15s %s\n", $$1, $$2}'
@@ -33,6 +33,10 @@ check-drift: ## Check for BGS, declaration, API surface, coverage, and concept d
 verify: check-drift test ## Full verification: check-drift + tests + naming
 	python scripts/gen_all_variables.py --check
 	@echo "All verification checks passed."
+
+ci: verify lint ## Pre-push gate: verify + lint + format check
+	ruff format --check src/ tests/
+	@echo "All CI checks passed."
 
 install: ## Install in development mode
 	pip install -e .

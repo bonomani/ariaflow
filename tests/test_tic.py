@@ -1093,7 +1093,6 @@ class TicAsmCoherenceTests(IsolatedTestCase):
         # ASM CR-3: when run leaves the running state via the crash handler,
         # the source-of-truth (aria2) must stop transferring before
         # running=False is written to ariaflow's mirror.
-        import threading
         import time as _time
         from aria_queue import scheduler
 
