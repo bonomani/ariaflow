@@ -533,7 +533,7 @@ class TicAriaFlowTests(IsolatedTestCase):
         self.assertIn("gid-drop", result["paused"])
         rpc.assert_any_call("aria2.remove", ["gid-drop"], port=6800, timeout=5)
 
-    def test_poll_marks_item_error_after_consecutive_rpc_failures(self) -> None:
+    def test_poll_requeues_item_after_consecutive_rpc_failures(self) -> None:
         add_queue_item("https://example.com/model.gguf")
         items = load_queue()
         items[0]["status"] = "active"
@@ -557,6 +557,10 @@ class TicAriaFlowTests(IsolatedTestCase):
             patch("aria_queue.core.aria2_set_max_overall_download_limit"),
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch(
+                "aria_queue.core.aria2_add_download",
+                side_effect=RuntimeError("aria2 still unavailable"),
+            ),
+            patch(
                 "aria_queue.core.aria2_tell_status",
                 side_effect=RuntimeError("connection refused"),
             ),
@@ -568,9 +572,10 @@ class TicAriaFlowTests(IsolatedTestCase):
             with self.assertRaises(StopIteration):
                 process_queue()
         items = load_queue()
-        self.assertEqual(items[0]["status"], "error")
-        self.assertEqual(items[0]["error_code"], "rpc_unreachable")
-        self.assertIn("5", items[0]["error_message"])
+        self.assertEqual(items[0]["status"], "queued")
+        self.assertEqual(items[0]["desired_state"], "running")
+        self.assertIsNone(items[0].get("gid"))
+        self.assertNotIn("error_code", items[0])
 
     def test_poll_exposes_transient_rpc_timeout_before_terminal_failure(self) -> None:
         add_queue_item("https://example.com/model.gguf")
@@ -711,6 +716,53 @@ class TicAriaFlowTests(IsolatedTestCase):
         # Item should still be paused in the queue
         items = load_queue()
         self.assertEqual(items[0]["status"], "paused")
+
+    def test_process_queue_reinjects_paused_item_from_memory(self) -> None:
+        add_queue_item("https://example.com/linux.torrent")
+        items = load_queue()
+        items[0]["status"] = "paused"
+        items[0]["desired_state"] = "paused"
+        items[0]["selected_files"] = [1, 3]
+        items[0]["gid"] = None
+        save_queue(items)
+        state = load_state()
+        state["running"] = True
+        state["paused"] = False
+        save_state(state)
+
+        with (
+            patch("aria_queue.core.aria2_ensure_daemon"),
+            patch("aria_queue.core.deduplicate_active_transfers"),
+            patch("aria_queue.core.reconcile_live_queue"),
+            patch(
+                "aria_queue.core.probe_bandwidth",
+                return_value={
+                    "source": "default",
+                    "reason": "probe_unavailable",
+                    "cap_mbps": 2,
+                    "cap_bytes_per_sec": 250000,
+                },
+            ),
+            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
+            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
+            patch("aria_queue.core.aria2_tell_active", return_value=[]),
+            patch("aria_queue.core.aria2_multicall", return_value=[]),
+            patch("aria_queue.core.aria2_add_download", return_value="gid-recovered") as add_download,
+            patch(
+                "aria_queue.core.time.sleep",
+                side_effect=[StopIteration("stop")],
+            ),
+        ):
+            with self.assertRaises(StopIteration):
+                process_queue()
+        submitted_item = add_download.call_args.args[0]
+        self.assertEqual(submitted_item["desired_state"], "paused")
+        self.assertEqual(submitted_item["selected_files"], [1, 3])
+        items = load_queue()
+        self.assertEqual(items[0]["status"], "paused")
+        self.assertEqual(items[0]["desired_state"], "paused")
+        self.assertEqual(items[0]["gid"], "gid-recovered")
+        self.assertEqual(items[0]["live_status"], "paused")
 
     def test_ucc_returns_structured_result(self) -> None:
         add_queue_item("https://example.com/model.gguf")
@@ -973,6 +1025,30 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
         options = call_args[1][1]
         self.assertNotIn("pause-metadata", options)
 
+    def test_add_download_pauses_when_desired_state_is_paused(self) -> None:
+        from aria_queue.core import aria2_add_download
+
+        item = {"url": "https://example.com/file.zip", "mode": "http", "desired_state": "paused"}
+        with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
+            aria2_add_download(item, cap_bytes_per_sec=250000)
+        call_args = rpc.call_args[0]
+        options = call_args[1][1]
+        self.assertEqual(options["pause"], "true")
+
+    def test_add_download_applies_saved_selected_files(self) -> None:
+        from aria_queue.core import aria2_add_download
+
+        item = {
+            "url": "https://example.com/file.torrent",
+            "mode": "torrent",
+            "selected_files": [1, 4],
+        }
+        with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
+            aria2_add_download(item, cap_bytes_per_sec=250000)
+        call_args = rpc.call_args[0]
+        options = call_args[1][1]
+        self.assertEqual(options["select-file"], "1,4")
+
     def test_get_item_files_returns_file_list(self) -> None:
         from aria_queue.core import get_item_files
 
@@ -1021,6 +1097,9 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
             timeout=5,
         )
         rpc.assert_any_call("aria2.unpause", ["gid-1"], port=6800, timeout=5)
+        items = load_queue()
+        self.assertEqual(items[0]["selected_files"], [1, 3])
+        self.assertEqual(items[0]["desired_state"], "running")
 
     def test_change_aria2_options_safe_subset(self) -> None:
         from aria_queue.core import aria2_change_options

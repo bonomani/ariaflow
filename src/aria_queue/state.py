@@ -350,23 +350,23 @@ def archive_item(item: dict[str, Any]) -> None:
 
 def auto_cleanup_queue(
     max_done_age_days: int = 7,
+    max_done_age_hours: int | None = None,
     max_done_count: int = 100,
+    archive_noncomplete: bool = True,
 ) -> dict[str, Any]:
     now = time.time()
-    cutoff_ts = now - (max_done_age_days * 86400)
+    if max_done_age_hours is None:
+        max_done_age_hours = int(max_done_age_days * 24)
+    cutoff_ts = now - (max_done_age_hours * 3600)
     with storage_locked():
         items = _core().load_queue()
         keep: list[dict[str, Any]] = []
         archived_count = 0
         for item in items:
-            if item.get("status") in (
-                "complete",
-                "complete",
-                "error",
-                "failed",
-                "stopped",
-                "removed",
-            ):
+            status = str(item.get("status") or "")
+            is_complete = status == "complete"
+            is_other_terminal = status in {"error", "failed", "stopped", "removed"}
+            if is_complete or (archive_noncomplete and is_other_terminal):
                 created = (
                     item.get("completed_at")
                     or item.get("error_at")
@@ -389,7 +389,7 @@ def auto_cleanup_queue(
             keep.append(item)
         # Also enforce max_done_count
         done_items = [i for i in keep if i.get("status") in ("complete",)]
-        if len(done_items) > max_done_count:
+        if max_done_count > 0 and len(done_items) > max_done_count:
             excess = len(done_items) - max_done_count
             done_to_archive = done_items[:excess]
             for item in done_to_archive:
@@ -407,7 +407,9 @@ def auto_cleanup_queue(
                 after={"total": len(keep), "archived": archived_count},
                 detail={
                     "max_done_age_days": max_done_age_days,
+                    "max_done_age_hours": max_done_age_hours,
                     "max_done_count": max_done_count,
+                    "archive_noncomplete": archive_noncomplete,
                 },
             )
     return {"archived": archived_count, "remaining": len(keep)}

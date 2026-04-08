@@ -27,6 +27,20 @@ def _rpc_poll_failure_message(exc: BaseException) -> str:
     return "aria2 status RPC failed"
 
 
+def _desired_state(item: dict[str, Any]) -> str:
+    desired = str(item.get("desired_state") or "").strip().lower()
+    if desired in {"running", "paused"}:
+        return desired
+    status = str(item.get("status") or "").strip().lower()
+    if status == "paused":
+        return "paused"
+    return "running"
+
+
+def _reinject_status(item: dict[str, Any]) -> str:
+    return "paused" if _desired_state(item) == "paused" else "queued"
+
+
 def check_disk_space() -> tuple[bool, float]:
     """Check if disk usage is below the configured threshold.
 
@@ -292,21 +306,24 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                         f"{base_message} ({rpc_failures}/{_MAX_RPC_FAILURES})"
                     )
                 if rpc_failures >= _MAX_RPC_FAILURES:
-                    item["status"] = "error"
-                    item["error_code"] = "rpc_unreachable"
-                    item["error_message"] = (
-                        f"aria2 RPC unreachable after {rpc_failures} consecutive attempts"
-                    )
-                    item["error_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+                    desired_state = _desired_state(item)
+                    reinject_status = _reinject_status(item)
+                    item["desired_state"] = desired_state
+                    item["status"] = reinject_status
+                    item["reinject_required"] = True
                     item.pop("rpc_error_message", None)
                     item.pop("rpc_failure_limit", None)
+                    item.pop("rpc_failures", None)
+                    item.pop("error_code", None)
+                    item.pop("error_message", None)
+                    item.pop("error_at", None)
                     item.pop("live_status", None)
                     item.pop("gid", None)
                     core.record_action(
-                        action="error",
+                        action="recover",
                         target="queue_item",
-                        outcome="failed",
-                        reason="rpc_unreachable",
+                        outcome="changed",
+                        reason="reinject_after_rpc_loss",
                         before={"item": before_item},
                         after={"item": dict(item)},
                         detail={
@@ -314,6 +331,8 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                             "gid": gid,
                             "url": item.get("url"),
                             "rpc_failures": rpc_failures,
+                            "desired_state": desired_state,
+                            "reinject_status": reinject_status,
                         },
                     )
                 continue
@@ -542,63 +561,107 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 )
 
         current_running_infos = list(running_infos)
-        if not is_paused:
-            disk_ok, disk_percent = check_disk_space()
-            if not disk_ok:
+        disk_ok, disk_percent = check_disk_space()
+        if not disk_ok and not is_paused:
+            core.record_action(
+                action="error",
+                target="queue",
+                outcome="blocked",
+                reason="disk_full",
+                detail={"disk_usage_percent": disk_percent},
+            )
+        submit_candidates = [
+            item
+            for item in items
+            if not item.get("gid")
+            and (
+                (item.get("status") == "queued" and not is_paused)
+                or (
+                    item.get("status") == "paused"
+                    and _desired_state(item) == "paused"
+                )
+            )
+        ]
+        if submit_candidates:
+            try:
+                core.aria2_ensure_daemon(port=port)
+            except Exception as exc:
                 core.record_action(
                     action="error",
                     target="queue",
-                    outcome="blocked",
-                    reason="disk_full",
-                    detail={"disk_usage_percent": disk_percent},
+                    outcome="failed",
+                    reason="ensure_daemon_failed",
+                    detail={"error": str(exc)},
                 )
-            for item in sorted(
-                items, key=lambda i: int(i.get("priority", 0)), reverse=True
-            ):
-                if not disk_ok:
-                    break
-                if item.get("status") != "queued":
-                    continue
-                if item.get("gid"):
-                    continue
-                before_item = dict(item)
-                try:
-                    gid = core.aria2_add_download(
-                        item, cap_bytes_per_sec=cap_bytes_per_sec, port=port
-                    )
-                except Exception as exc:
-                    core.record_action(
-                        action="error",
-                        target="queue_item",
-                        outcome="failed",
-                        reason="add_download_failed",
-                        detail={"item_id": item.get("id"), "error": str(exc)},
-                    )
-                    continue
+                submit_candidates = []
+        for item in sorted(
+            submit_candidates, key=lambda i: int(i.get("priority", 0)), reverse=True
+        ):
+            desired_state = _desired_state(item)
+            should_submit_paused = (
+                item.get("status") == "paused" and desired_state == "paused"
+            )
+            if not should_submit_paused and not disk_ok:
+                break
+            before_item = dict(item)
+            try:
+                gid = core.aria2_add_download(
+                    item, cap_bytes_per_sec=cap_bytes_per_sec, port=port
+                )
+            except Exception as exc:
+                core.record_action(
+                    action="error",
+                    target="queue_item",
+                    outcome="failed",
+                    reason="add_download_failed",
+                    detail={"item_id": item.get("id"), "error": str(exc)},
+                )
+                continue
+            item["gid"] = gid
+            item["desired_state"] = desired_state
+            item.pop("reinject_required", None)
+            if should_submit_paused:
+                item["status"] = "paused"
+                item["live_status"] = "paused"
+                action = "recover"
+                reason = "download_reinjected_paused"
+            else:
                 item["status"] = "active"
                 item.pop("live_status", None)
-                item["gid"] = gid
-                core.record_action(
-                    action="run",
-                    target="queue_item",
-                    outcome="changed",
-                    reason="download_started",
-                    before={"item": before_item},
-                    after={"item": dict(item), "gid": gid, "cap_mbps": cap_mbps},
-                    detail={
-                        "item_id": item.get("id"),
-                        "gid": gid,
-                        "url": item.get("url"),
-                        "cap_mbps": cap_mbps,
-                    },
-                )
+                action = "run"
+                reason = "download_started"
                 current_running_infos.append(_queued_info(item, gid, "waiting"))
-                core._aria2_apply_priority(gid, int(item.get("priority", 0)))
+            core.record_action(
+                action=action,
+                target="queue_item",
+                outcome="changed",
+                reason=reason,
+                before={"item": before_item},
+                after={"item": dict(item), "gid": gid, "cap_mbps": cap_mbps},
+                detail={
+                    "item_id": item.get("id"),
+                    "gid": gid,
+                    "url": item.get("url"),
+                    "cap_mbps": cap_mbps,
+                    "desired_state": desired_state,
+                },
+            )
+            core._aria2_apply_priority(gid, int(item.get("priority", 0)))
 
         # Phase 3: save state (locked)
         with core.storage_locked():
             core.save_queue(items)
             _finalize_primary_state(items, current_running_infos, poll_ok=poll_ok)
+
+        archive_completed_after_hours = int(
+            pref_value("archive_completed_after_hours", 168) or 0
+        )
+        if archive_completed_after_hours > 0:
+            core.auto_cleanup_queue(
+                max_done_age_hours=archive_completed_after_hours,
+                max_done_count=0,
+                archive_noncomplete=False,
+            )
 
         # BG-9: exponential backoff when RPC is failing
         if poll_ok:

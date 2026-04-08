@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import subprocess
 import time
 import urllib.request
@@ -383,6 +384,14 @@ def aria2_add_download(
     }
     mode = str(item.get("mode") or "http")
     url = str(item.get("url") or "")
+    output = str(item.get("output") or "").strip()
+    if output and Path(output).name == output:
+        options["out"] = output
+    selected_files = item.get("selected_files") or []
+    if isinstance(selected_files, list) and selected_files:
+        options["select-file"] = ",".join(str(index) for index in selected_files)
+    if str(item.get("desired_state") or "").strip().lower() == "paused":
+        options["pause"] = "true"
 
     if mode == "torrent_data":
         data_b64 = item.get("torrent_data") or ""

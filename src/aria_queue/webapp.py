@@ -15,9 +15,11 @@ from . import __version__
 from . import routes
 from .api import (
     active_status,
+    aria2_multicall,
     aria2_current_bandwidth,
     aria2_status,
     aria2_tell_active,
+    aria2_tell_status,
     auto_preflight_on_run,  # noqa: F401 — re-exported for test patch compatibility
     is_macos,  # noqa: F401 — re-exported for test patch compatibility
     load_queue,
@@ -27,11 +29,12 @@ from .api import (
     summarize_queue,
 )
 from .core import cleanup_queue_state
+from .storage import config_dir
 
 import subprocess  # noqa: F401 — re-exported for test patch compatibility
 
 
-STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
+STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None, "scope": None}
 _STATUS_CACHE_LOCK = threading.Lock()
 STATUS_CACHE_TTL = 2.0
 API_SCHEMA_VERSION = "2"
@@ -63,6 +66,99 @@ _sse_clients: list[queue.Queue[str]] = []
 _sse_lock = threading.Lock()
 
 
+_TERMINAL_ITEM_STATUSES = {"complete", "error", "stopped", "cancelled"}
+
+
+def _presented_status_name(status: str | None) -> str:
+    value = str(status or "").strip().lower()
+    if value in {"active", "waiting", "paused", "complete", "error"}:
+        return value
+    if value == "removed":
+        return "stopped"
+    return value or "queued"
+
+
+def _overlay_aria2_transfer_fields(
+    item: dict[str, object], info: dict[str, object]
+) -> None:
+    aria2_to_item = {
+        "downloadSpeed": "download_speed",
+        "completedLength": "completed_length",
+        "totalLength": "total_length",
+        "files": "files",
+    }
+    for aria2_key, item_key in aria2_to_item.items():
+        if aria2_key in info:
+            item[item_key] = info.get(aria2_key)
+
+
+def _live_status_by_gid(
+    items: list[dict[str, object]], port: int = 6800, timeout: int = 3
+) -> dict[str, dict[str, object]]:
+    gids: list[str] = []
+    for item in items:
+        if item.get("status") in _TERMINAL_ITEM_STATUSES:
+            continue
+        gid = str(item.get("gid") or "")
+        if gid:
+            gids.append(gid)
+    if not gids:
+        return {}
+
+    results: dict[str, dict[str, object]] = {}
+    fields = [
+        "gid",
+        "status",
+        "errorCode",
+        "errorMessage",
+        "downloadSpeed",
+        "completedLength",
+        "totalLength",
+        "files",
+    ]
+    try:
+        calls = [
+            {"methodName": "aria2.tellStatus", "params": [gid, fields]} for gid in gids
+        ]
+        batch_results = aria2_multicall(calls, port=port, timeout=timeout)
+        for gid, result in zip(gids, batch_results):
+            if isinstance(result, list) and result and isinstance(result[0], dict):
+                results[gid] = result[0]
+    except Exception:
+        for gid in gids:
+            try:
+                results[gid] = aria2_tell_status(
+                    gid, fields=fields, port=port, timeout=timeout
+                )
+            except Exception:
+                continue
+    return results
+
+
+def _present_status_items(
+    items: list[dict[str, object]], port: int = 6800, timeout: int = 3
+) -> list[dict[str, object]]:
+    live_by_gid = _live_status_by_gid(items, port=port, timeout=timeout)
+    presented: list[dict[str, object]] = []
+    for raw in items:
+        item = dict(raw)
+        memory_status = str(raw.get("status") or "")
+        item["memory_status"] = memory_status
+        item["status_source"] = "memory"
+        gid = str(raw.get("gid") or "")
+        info = live_by_gid.get(gid)
+        if info:
+            live_status = _presented_status_name(str(info.get("status") or ""))
+            item["status"] = live_status
+            item["live_status"] = live_status
+            item["status_source"] = "aria2"
+            item["error_code"] = info.get("errorCode")
+            item["error_message"] = info.get("errorMessage")
+            _overlay_aria2_transfer_fields(item, info)
+        presented.append(item)
+    return presented
+
+
 def _sse_publish(event: str, data: dict[str, object]) -> None:
     msg = f"event: {event}\ndata: {json.dumps(data, sort_keys=True)}\n\n"
     with _sse_lock:
@@ -87,6 +183,10 @@ def _sse_unsubscribe(q: queue.Queue[str]) -> None:
     with _sse_lock:
         if q in _sse_clients:
             _sse_clients.remove(q)
+
+
+def _status_cache_scope() -> str:
+    return str(config_dir())
 
 
 class AriaFlowHandler(BaseHTTPRequestHandler):
@@ -129,12 +229,14 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
     }
 
     def _invalidate_status_cache(self, event: str = "state_changed") -> None:
+        scope = _status_cache_scope()
         with _STATUS_CACHE_LOCK:
             STATUS_CACHE["ts"] = 0.0
             STATUS_CACHE["payload"] = None
+            STATUS_CACHE["scope"] = scope
         try:
             state = load_state()
-            items = load_queue()
+            items = _present_status_items(load_queue())
             from .queue_ops import allowed_actions
 
             for item in items:
@@ -152,10 +254,17 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
     def _status_payload(self, force: bool = False) -> dict:
         now = time.time()
+        scope = _status_cache_scope()
         with _STATUS_CACHE_LOCK:
             cached = STATUS_CACHE.get("payload")
             ts = float(STATUS_CACHE.get("ts", 0.0))
-        if not force and cached is not None and now - ts < STATUS_CACHE_TTL:
+            cached_scope = STATUS_CACHE.get("scope")
+        if (
+            not force
+            and cached is not None
+            and cached_scope == scope
+            and now - ts < STATUS_CACHE_TTL
+        ):
             return cached  # type: ignore[return-value]
 
         try:
@@ -166,7 +275,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         from .queue_ops import allowed_actions
 
         state = load_state()
-        items = load_queue()
+        items = _present_status_items(load_queue())
         for item in items:
             item["allowed_actions"] = allowed_actions(item.get("status", ""))
         bandwidth = aria2_current_bandwidth(timeout=3)
@@ -202,6 +311,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         with _STATUS_CACHE_LOCK:
             STATUS_CACHE["ts"] = now
             STATUS_CACHE["payload"] = payload
+            STATUS_CACHE["scope"] = scope
         return payload
 
     def _send_json(

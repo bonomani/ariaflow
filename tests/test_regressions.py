@@ -136,6 +136,10 @@ class TestRegressions(IsolatedTestCase):
             patch("aria_queue.core.aria2_set_max_overall_download_limit"),
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch(
+                "aria_queue.core.aria2_add_download",
+                side_effect=RuntimeError("aria2 still unavailable"),
+            ),
+            patch(
                 "aria_queue.core.aria2_tell_status",
                 side_effect=RuntimeError("connection refused"),
             ),
@@ -149,8 +153,9 @@ class TestRegressions(IsolatedTestCase):
             except StopIteration:
                 pass
         items = load_queue()
-        self.assertEqual(items[0]["status"], "error")
-        self.assertEqual(items[0]["error_code"], "rpc_unreachable")
+        self.assertEqual(items[0]["status"], "queued")
+        self.assertEqual(items[0]["desired_state"], "running")
+        self.assertIsNone(items[0].get("gid"))
 
     # ── Bug #4: Dedup policy default mismatch ──
     # Fixed: code fallback changed from "pause" to "remove"

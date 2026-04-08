@@ -92,6 +92,12 @@ DEFAULT_DECLARATION = {
                 "rationale": "auto-retry failed downloads up to N times (0 = manual retry only)",
             },
             {
+                "name": "archive_completed_after_hours",
+                "value": 168,
+                "options": [0, 1, 6, 12, 24, 72, 168],
+                "rationale": "move completed downloads from queue to archive after N hours (0 = keep completed items in queue)",
+            },
+            {
                 "name": "retry_backoff_seconds",
                 "value": 30,
                 "options": [10, 30, 60, 120, 300],

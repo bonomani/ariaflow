@@ -201,6 +201,23 @@ class WebSmokeTests(unittest.TestCase):
                         "error": None,
                     },
                 ),
+                patch(
+                    "aria_queue.webapp.aria2_multicall",
+                    return_value=[
+                        [
+                            {
+                                "gid": "gid-1",
+                                "status": "paused",
+                                "errorCode": None,
+                                "errorMessage": None,
+                                "downloadSpeed": "0",
+                                "completedLength": "0",
+                                "totalLength": "100",
+                                "files": [],
+                            }
+                        ]
+                    ],
+                ),
                 patch("aria_queue.webapp.active_status", return_value=None),
                 patch("aria_queue.webapp.aria2_tell_active", return_value=[]),
             ):
@@ -215,11 +232,90 @@ class WebSmokeTests(unittest.TestCase):
                     paused = next(
                         item for item in status["items"] if item["status"] == "paused"
                     )
+                    self.assertEqual(paused["memory_status"], "paused")
+                    self.assertEqual(paused["status_source"], "aria2")
                     self.assertEqual(paused["live_status"], "paused")
                     self.assertNotIn("active", status)
                     self.assertNotIn("actives", status)
                     self.assertNotIn("bandwidth_global", status)
                     self.assertNotIn("aria2_global_options", status)
+                finally:
+                    server.shutdown()
+                    server.server_close()
+
+    def test_status_payload_prefers_live_aria2_status_over_stored_queue_status(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["ARIA_QUEUE_DIR"] = tmp
+            save_queue(
+                [
+                    {
+                        "id": "item-1",
+                        "gid": "gid-1",
+                        "url": "https://example.com/file.gguf",
+                        "status": "active",
+                        "created_at": "2026-03-27T10:00:00+0100",
+                    },
+                ]
+            )
+            save_state(
+                {
+                    "running": True,
+                    "paused": False,
+                    "active_gid": "gid-1",
+                    "active_url": "https://example.com/file.gguf",
+                    "session_id": "session-1",
+                }
+            )
+            with (
+                patch(
+                    "aria_queue.webapp.aria2_current_bandwidth",
+                    return_value={"limit": "0"},
+                ),
+                patch(
+                    "aria_queue.webapp.aria2_status",
+                    return_value={
+                        "reachable": True,
+                        "version": "1.37.0",
+                        "error": None,
+                    },
+                ),
+                patch(
+                    "aria_queue.webapp.aria2_multicall",
+                    return_value=[
+                        [
+                            {
+                                "gid": "gid-1",
+                                "status": "paused",
+                                "errorCode": None,
+                                "errorMessage": None,
+                                "downloadSpeed": "0",
+                                "completedLength": "12",
+                                "totalLength": "100",
+                                "files": [],
+                            }
+                        ]
+                    ],
+                ),
+                patch("aria_queue.webapp.active_status", return_value=None),
+                patch("aria_queue.webapp.aria2_tell_active", return_value=[]),
+            ):
+                server = serve(host="127.0.0.1", port=0)
+                port = server.server_address[1]
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                time.sleep(0.2)
+                try:
+                    status = request_json(f"http://127.0.0.1:{port}/api/status")
+                    item = status["items"][0]
+                    self.assertEqual(item["status"], "paused")
+                    self.assertEqual(item["memory_status"], "active")
+                    self.assertEqual(item["status_source"], "aria2")
+                    self.assertEqual(item["allowed_actions"], ["resume", "remove"])
+                    self.assertEqual(item["completed_length"], "12")
+                    self.assertEqual(status["summary"]["paused"], 1)
+                    self.assertEqual(status["summary"]["active"], 0)
                 finally:
                     server.shutdown()
                     server.server_close()

@@ -81,11 +81,13 @@ class QueueItem:
     output: str | None = None
     post_action_rule: str = "pending"
     status: str = "queued"
+    desired_state: str = "running"
     priority: int = 0
     mode: str = "http"
     mirrors: list[str] | None = None
     torrent_data: str | None = None
     metalink_data: str | None = None
+    selected_files: list[int] | None = None
     created_at: str = ""
     gid: str | None = None
     session_id: str | None = None
@@ -237,6 +239,7 @@ def add_queue_item(
                 output=existing.get("output"),
                 post_action_rule=existing.get("post_action_rule", post_action_rule),
                 status=existing.get("status", "queued"),
+                desired_state=existing.get("desired_state", "running"),
                 created_at=existing.get("created_at", ""),
                 gid=existing.get("gid"),
                 session_id=existing.get("session_id") or state.get("session_id"),
@@ -278,6 +281,7 @@ def add_queue_item(
             output=resolved_output,
             post_action_rule=resolved_post_action_rule,
             status=resolved_status,
+            desired_state="running",
             priority=priority,
             mode=mode,
             mirrors=mirrors,
@@ -378,6 +382,8 @@ def select_item_files(
         items, item, idx = _find_queue_item_by_id(item_id)
         if item is not None:
             item["status"] = "active"
+            item["desired_state"] = "running"
+            item["selected_files"] = list(indices)
             item.pop("live_status", None)
             core.save_queue(items)
             core.record_action(
@@ -424,6 +430,7 @@ def pause_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
                 "message": f"item {item_id} not found",
             }
         item["status"] = "paused"
+        item["desired_state"] = "paused"
         item["live_status"] = "paused"
         item["paused_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         core.save_queue(items)
@@ -474,9 +481,11 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
             }
         if gid and rpc_ok:
             item["status"] = "active"
+            item["desired_state"] = "running"
             item.pop("live_status", None)
         else:
             item["status"] = "queued"
+            item["desired_state"] = "running"
             if not rpc_ok:
                 item["gid"] = None
             item.pop("live_status", None)
@@ -510,6 +519,7 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
                     if it.get("id") == item_id:
                         it["gid"] = new_gid
                         it["status"] = "active"
+                        it["desired_state"] = "running"
                         it.pop("paused_at", None)
                         break
                 core.save_queue(live_items)
@@ -620,6 +630,7 @@ def retry_queue_item(item_id: str) -> dict[str, Any]:
         before = dict(item)
         now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         item["status"] = "queued"
+        item["desired_state"] = "running"
         for key in (
             "gid",
             "error_code",
