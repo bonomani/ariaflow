@@ -10,6 +10,13 @@
 - Tests must cover the new code paths, not just pass existing ones.
 - Register new tests in `docs/governance/tic-oracle.md` with Intent / Oracle / Trace Target.
 
+## BGS governance updates
+When your change affects governed artifacts, update them in the same commit:
+- **New tests** → register in `docs/governance/tic-oracle.md`, update test count in BGS.md + bgs-decision.yaml
+- **New boundary/interaction** → add to `docs/governance/biss-classification.md`, update boundary count in BGS.md + bgs-decision.yaml
+- **State model change** → update `docs/governance/asm-state-model.md`
+- **New preference/gate** → update `src/ariaflow_server/contracts.py` (source of truth for UIC)
+
 ## Cross-repo boundary — ariaflow-web (frontend)
 - The frontend repo is at /home/bc/repos/github/bonomani/ariaflow-web
 - The frontend is a separate project. All communication is through the API.

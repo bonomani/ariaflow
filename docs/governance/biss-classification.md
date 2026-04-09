@@ -16,6 +16,7 @@
 | Declaration file | system-to-storage | internal | contract persistence | `declaration.json` — UIC gates, preferences, policies |
 | File lock | system-to-storage | internal | concurrency control | `.storage.lock` — fcntl + RLock mutual exclusion |
 | Config directory | system-to-filesystem | internal | configuration | `~/.config/ariaflow-server/` (override via `ARIAFLOW_DIR`) |
+| Config migration | system-to-filesystem | internal | migration | Auto-renames `~/.config/aria-queue/` → `~/.config/ariaflow-server/` on first start if old dir exists |
 | Bonjour/mDNS | system-to-network | outbound | discovery | `_ariaflow-server._tcp` service advertisement; torrent discovery via `GET /api/torrents` |
 | Peer polling | system-to-peer | outbound | peer auto-download | `discovery.py` browses `_ariaflow-server._tcp`, polls peer `GET /api/torrents`, auto-fetches new torrents (gated by `auto_discover_peers`) |
 | Internal tracker | system-to-network | outbound | distribution | Private BitTorrent tracker announce URL for torrent distribution |

@@ -9,10 +9,10 @@ decision_reason: >
   ASM-based state model with preflight governance.
 applies_to_scope: "engine execution path: session → run → queue → job lifecycle, distribution pipeline, service discovery, installation lifecycle"
 decision_record_path: "./bgs-decision.yaml"
-last_reviewed: 2026-04-07
+last_reviewed: 2026-04-09
 
 members_used:
-  - BISS — boundary classification (19 boundaries, 10 interaction classes)
+  - BISS — boundary classification (20 boundaries, 10 interaction classes)
   - ASM — state model (4 axes: session, run, job, daemon; 5 coherence rules)
   - UIC — preflight gates (aria2_available, queue_readable) + 27 preferences
   - UCC — structured execution results (UCCResult dataclass)

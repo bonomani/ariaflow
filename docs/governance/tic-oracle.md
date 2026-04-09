@@ -37,6 +37,9 @@ Core scheduler, state machine, and UCC contract tests.
 | 20 | `test_reconcile_live_queue_collapses_duplicate_rows_for_same_live_download` | Duplicate queue rows for same URL collapsed to one | len(saved) == 1, gid == live gid, completedLength preserved | Job: dedup |
 | 21 | `test_deduplicate_active_transfers_removes_less_advanced_duplicates_by_default` | Dedup keeps most-advanced transfer, removes others | kept contains "gid-keep", paused contains "gid-drop", action == "remove" | UIC: duplicate policy |
 | 22 | `test_poll_marks_item_error_after_consecutive_rpc_failures` | After 5 consecutive RPC failures, item marked error | result[0].status == "error", error_code == "rpc_unreachable" | ASM: Job active→error |
+| 22a | `test_poll_exposes_transient_rpc_timeout_before_terminal_failure` | Transient RPC timeout exposed before terminal failure | poll result shows transient timeout state | ASM: Job active (transient error) |
+| 22b | `test_poll_requeues_item_after_consecutive_rpc_failures` | Item requeued after consecutive RPC failures | item re-enters queue for retry | ASM: Job error→queued (auto-retry) |
+| 22c | `test_process_queue_reinjects_paused_item_from_memory` | Paused item in memory reinjected into queue on process_queue | item restored from memory, status preserved | ASM: Job recovery |
 | 23 | `test_process_queue_marks_completed_tracked_download_done` | Completed download transitions to "done" with post_action | result[0].status == "done", gid == "gid-1", post_action present | ASM: Job downloading→complete→done, Run running→idle |
 | 24 | `test_process_queue_does_not_auto_resume_paused_items` | Paused items stay paused, user must explicitly resume | add_download not called, result[0].status == "paused" | ASM: Job paused stays paused |
 | 25 | `test_ucc_returns_structured_result` | run_ucc produces UCC-compliant structured output | result contains "result", "meta", result.observation, result.outcome | UCC: contract shape |
@@ -76,6 +79,8 @@ Core scheduler, state machine, and UCC contract tests.
 | 49 | `test_change_aria2_options_safe_subset` | Safe option accepted and applied via changeGlobalOption | result.ok, rpc called | UIC: policy enforcement |
 | 50 | `test_change_aria2_options_rejects_unsafe` | Unsafe option (dir) rejected | result.ok == False, error == "rejected_options" | UIC: policy enforcement |
 | 51 | `test_change_aria2_options_rejects_empty` | Empty options rejected | result.ok == False, error == "empty_options" | UIC: policy enforcement |
+| 51a | `test_add_download_applies_saved_selected_files` | Saved file selection applied on add_download | selected files passed to aria2 options | UCC: file selection |
+| 51b | `test_add_download_pauses_when_desired_state_is_paused` | Download paused immediately when desired_state is paused | item.status == "paused" after add | ASM: Job →paused (desired state) |
 
 ### `tests/test_tic.py` — TicOpenAPITests (1 test)
 
@@ -491,11 +496,20 @@ Storage path resolution for all persistent files.
 |---|---|---|---|---|
 | 231 | `test_calls_change_option` | aria2_set_max_download_limit calls aria2_change_option with gid | mock_co called once, args[0] == "gid1" | BISS: aria2 boundary |
 
-### `tests/test_unit.py` — TestPauseActiveTransfer (1 test)
+### `tests/test_unit.py` — TestPauseActiveTransfer (3 tests)
 
 | # | Test | Intent | Oracle | Trace Target |
 |---|---|---|---|---|
 | 232 | `test_no_active_returns_not_paused` | pause_active_transfer with no active returns not paused | paused == False, reason == "no_active_transfer" | ASM: Run axis |
+| 232a | `test_pause_failure_reports_reason` | Pause failure includes aria2 error reason | paused == False, reason contains error detail | ASM: Job active→error (pause failure) |
+| 232b | `test_pause_failure_uses_default_message_when_exception_empty` | Pause failure uses default message when exception is empty | reason == default message | UCC: error semantics |
+
+### `tests/test_unit.py` — TestResumeActiveTransfer (2 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 232c | `test_resume_failure_reports_reason` | Resume failure includes aria2 error reason | resumed == False, reason contains error detail | ASM: Job paused→error (resume failure) |
+| 232d | `test_resume_failure_uses_default_message_when_exception_empty` | Resume failure uses default message when exception is empty | reason == default message | UCC: error semantics |
 
 ### `tests/test_unit.py` — TestStopBackgroundProcess (1 test)
 
@@ -939,6 +953,7 @@ All tests verify correct RPC method name, parameter passing, and return value ex
 | 426 | `test_api_aria2_options_rejects_unsafe` | Unsafe aria2 option rejected via real HTTP | code 400, error == "rejected_options" | UIC: policy enforcement |
 | 427 | `test_api_openapi_and_docs` | OpenAPI YAML + Swagger UI + CORS via real HTTP | all served correctly | UCC: API contract |
 | 428 | `test_api_tests_endpoint` | /api/tests returns test results (mocked subprocess) | ok, total == 1, passed == 1 | UCC: API contract |
+| 428a | `test_status_payload_prefers_live_aria2_status_over_stored_queue_status` | Status payload uses live aria2 status, not stale queue state | status reflects live aria2 data, not stored queue data | UCC: observation consistency |
 
 ---
 
@@ -1155,4 +1170,4 @@ Pin the explicit ASM coherence-rule guards added to ariaflow.
 | BISS: WSL detection | 3 |
 | BISS: WSL2/NAT detection | 4 |
 | BISS: WSL interop | 1 |
-| **Total** | **486** |
+| **Total** | **496** |
