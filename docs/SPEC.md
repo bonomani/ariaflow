@@ -148,8 +148,8 @@ CR-3 is enforced at two points: structurally by `process_queue()` (the sole entr
 | Declaration file | system-to-storage | internal | contract persistence | `declaration.json` — UIC gates, preferences, policies |
 | File lock | system-to-storage | internal | concurrency control | `.storage.lock` — fcntl + RLock mutual exclusion |
 | Config directory | system-to-filesystem | internal | configuration | `~/.config/ariaflow-server/` (override via `ARIAFLOW_DIR`) |
-| Bonjour/mDNS | system-to-network | outbound | discovery | `_ariaflow._tcp` service advertisement; torrent discovery via `GET /api/torrents` |
-| Peer polling | system-to-peer | outbound | peer auto-download | `discovery.py` browses `_ariaflow._tcp`, polls peer `GET /api/torrents`, auto-fetches new torrents (gated by `auto_discover_peers`) |
+| Bonjour/mDNS | system-to-network | outbound | discovery | `_ariaflow-server._tcp` service advertisement; torrent discovery via `GET /api/torrents` |
+| Peer polling | system-to-peer | outbound | peer auto-download | `discovery.py` browses `_ariaflow-server._tcp`, polls peer `GET /api/torrents`, auto-fetches new torrents (gated by `auto_discover_peers`) |
 | Internal tracker | system-to-network | outbound | distribution | Private BitTorrent tracker announce URL for torrent distribution |
 | Torrent file serving | system-to-user | outbound | distribution | `GET /api/torrents/{infohash}.torrent` serves created `.torrent` files |
 | BitTorrent swarm | system-to-network | bidirectional | distribution | aria2 seeds private torrents to peers on internal tracker |

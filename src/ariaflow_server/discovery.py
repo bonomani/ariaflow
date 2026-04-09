@@ -1,6 +1,6 @@
 """Peer discovery via Bonjour/mDNS.
 
-Browses ``_ariaflow._tcp`` on the local network, resolves peers,
+Browses ``_ariaflow-server._tcp`` on the local network, resolves peers,
 polls their ``GET /api/torrents``, and auto-downloads new torrents.
 """
 
@@ -43,8 +43,8 @@ def _parse_dns_sd_browse_line(line: str) -> tuple[str, str, bool] | None:
     Returns (instance_name, event, is_add) or None.
     Example lines:
         Timestamp  A/R  Flags  if  Domain  Service Type  Instance Name
-        12:00:00.000  Add        3  4  local.  _ariaflow._tcp.  bc's Mac mini AriaFlow
-        12:00:01.000  Rmv        0  4  local.  _ariaflow._tcp.  bc's Mac mini AriaFlow
+        12:00:00.000  Add        3  4  local.  _ariaflow-server._tcp.  bc's Mac mini AriaFlow
+        12:00:01.000  Rmv        0  4  local.  _ariaflow-server._tcp.  bc's Mac mini AriaFlow
     """
     parts = line.split()
     if len(parts) < 7:
@@ -54,8 +54,8 @@ def _parse_dns_sd_browse_line(line: str) -> tuple[str, str, bool] | None:
         return None
     # Instance name is everything after the service type
     try:
-        svc_idx = line.index("_ariaflow._tcp.")
-        instance = line[svc_idx + len("_ariaflow._tcp.") :].strip()
+        svc_idx = line.index("_ariaflow-server._tcp.")
+        instance = line[svc_idx + len("_ariaflow-server._tcp.") :].strip()
     except ValueError:
         return None
     if not instance:
@@ -67,7 +67,7 @@ def _parse_avahi_browse_line(line: str) -> tuple[str, dict[str, Any]] | None:
     """Parse avahi-browse -r -p output (parseable mode).
 
     Returns (instance_name, peer_info) or None.
-    Format: +;eth0;IPv4;instance;_ariaflow._tcp;local;host.local;192.168.1.10;8080;"path=/api" "tls=0"
+    Format: +;eth0;IPv4;instance;_ariaflow-server._tcp;local;host.local;192.168.1.10;8080;"path=/api" "tls=0"
     The '=' line has resolved info, '+' is add, '-' is remove.
     """
     if not line or line.startswith("Failed"):
@@ -132,7 +132,7 @@ def _resolve_dns_sd(instance: str) -> dict[str, Any] | None:
         return None
     try:
         proc = subprocess.Popen(
-            [binary, "-L", instance, "_ariaflow._tcp", "local"],
+            [binary, "-L", instance, "_ariaflow-server._tcp", "local"],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
@@ -192,7 +192,7 @@ def _browse_dns_sd() -> None:
         return
     try:
         _browse_proc = subprocess.Popen(
-            [binary, "-B", "_ariaflow._tcp", "local"],
+            [binary, "-B", "_ariaflow-server._tcp", "local"],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
@@ -241,7 +241,7 @@ def _browse_avahi() -> None:
     binary = "avahi-browse"
     try:
         _browse_proc = subprocess.Popen(
-            [binary, "-r", "-p", "_ariaflow._tcp"],
+            [binary, "-r", "-p", "_ariaflow-server._tcp"],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,

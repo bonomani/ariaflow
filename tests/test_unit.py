@@ -416,7 +416,7 @@ class TestBonjourCommandConstruction(unittest.TestCase):
 
         cmd = build_dns_sd_cmd(port=8000, path="/api")
         self.assertEqual(cmd[2], "myhost")
-        self.assertEqual(cmd[3], "_ariaflow._tcp")
+        self.assertEqual(cmd[3], "_ariaflow-server._tcp")
         self.assertEqual(cmd[4], "local")
         self.assertEqual(cmd[5], "8000")
         self.assertIn("path=/api", cmd)
@@ -429,7 +429,7 @@ class TestBonjourCommandConstruction(unittest.TestCase):
 
         cmd = build_avahi_cmd(port=8000, path="/api")
         self.assertEqual(cmd[1], "myhost")
-        self.assertEqual(cmd[2], "_ariaflow._tcp")
+        self.assertEqual(cmd[2], "_ariaflow-server._tcp")
         self.assertEqual(cmd[3], "8000")
         self.assertIn("path=/api", cmd)
         self.assertIn("tls=0", cmd)
@@ -442,8 +442,8 @@ class TestBonjourCommandConstruction(unittest.TestCase):
         kwargs = dict(port=8000, path="/api")
         dns_cmd = build_dns_sd_cmd(**kwargs)
         avahi_cmd = build_avahi_cmd(**kwargs)
-        self.assertEqual(dns_cmd[3], "_ariaflow._tcp")
-        self.assertEqual(avahi_cmd[2], "_ariaflow._tcp")
+        self.assertEqual(dns_cmd[3], "_ariaflow-server._tcp")
+        self.assertEqual(avahi_cmd[2], "_ariaflow-server._tcp")
 
     @patch("ariaflow_server.bonjour._short_hostname", return_value="myhost")
     def test_dns_sd_and_avahi_same_txt_records(self, _h: MagicMock) -> None:
@@ -489,7 +489,7 @@ class TestBonjourCommandConstruction(unittest.TestCase):
 
         with patch("ariaflow_server.bonjour._short_hostname", return_value="host"):
             cmd = build_dns_sd_cmd(port=8000, path="/api")
-        svc_type = cmd[3]  # _ariaflow._tcp
+        svc_type = cmd[3]  # _ariaflow-server._tcp
         name_part = svc_type.split(".")[0].lstrip("_")  # ariaflow-server
         self.assertLessEqual(
             len(name_part), 15, f"Service type '{name_part}' exceeds 15 chars"
@@ -1269,7 +1269,7 @@ class TestDiscoveryParsers(unittest.TestCase):
     def test_parse_dns_sd_browse_add(self) -> None:
         from ariaflow_server.discovery import _parse_dns_sd_browse_line
 
-        line = "12:00:00.000  Add        3  4  local.  _ariaflow._tcp.  bc's Mac mini AriaFlow"
+        line = "12:00:00.000  Add        3  4  local.  _ariaflow-server._tcp.  bc's Mac mini AriaFlow"
         result = _parse_dns_sd_browse_line(line)
         self.assertIsNotNone(result)
         instance, event, is_add = result  # type: ignore[misc]
@@ -1279,7 +1279,7 @@ class TestDiscoveryParsers(unittest.TestCase):
     def test_parse_dns_sd_browse_remove(self) -> None:
         from ariaflow_server.discovery import _parse_dns_sd_browse_line
 
-        line = "12:00:01.000  Rmv        0  4  local.  _ariaflow._tcp.  bc's Mac mini AriaFlow"
+        line = "12:00:01.000  Rmv        0  4  local.  _ariaflow-server._tcp.  bc's Mac mini AriaFlow"
         result = _parse_dns_sd_browse_line(line)
         self.assertIsNotNone(result)
         instance, event, is_add = result  # type: ignore[misc]
@@ -1289,12 +1289,12 @@ class TestDiscoveryParsers(unittest.TestCase):
     def test_parse_dns_sd_browse_ignores_header(self) -> None:
         from ariaflow_server.discovery import _parse_dns_sd_browse_line
 
-        self.assertIsNone(_parse_dns_sd_browse_line("Browsing for _ariaflow._tcp"))
+        self.assertIsNone(_parse_dns_sd_browse_line("Browsing for _ariaflow-server._tcp"))
 
     def test_parse_avahi_browse_resolved(self) -> None:
         from ariaflow_server.discovery import _parse_avahi_browse_line
 
-        line = '=;eth0;IPv4;bc AriaFlow;_ariaflow._tcp;local;bc-mini.local;192.168.1.10;8080;"path=/api" "tls=0"'
+        line = '=;eth0;IPv4;bc AriaFlow;_ariaflow-server._tcp;local;bc-mini.local;192.168.1.10;8080;"path=/api" "tls=0"'
         result = _parse_avahi_browse_line(line)
         self.assertIsNotNone(result)
         instance, info = result  # type: ignore[misc]
@@ -1307,7 +1307,7 @@ class TestDiscoveryParsers(unittest.TestCase):
     def test_parse_avahi_browse_removed(self) -> None:
         from ariaflow_server.discovery import _parse_avahi_browse_line
 
-        line = "-;eth0;IPv4;bc AriaFlow;_ariaflow._tcp;local"
+        line = "-;eth0;IPv4;bc AriaFlow;_ariaflow-server._tcp;local"
         result = _parse_avahi_browse_line(line)
         self.assertIsNotNone(result)
         instance, info = result  # type: ignore[misc]
