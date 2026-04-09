@@ -123,7 +123,6 @@ def _api_discovery() -> dict[str, object]:
                     "path": "/api/scheduler/resume",
                     "description": "Resume all paused transfers",
                 },
-                {"path": "/api/sessions/new", "description": "Create new session"},
                 {"path": "/api/declaration", "description": "Save UIC declaration"},
                 {
                     "path": "/api/bandwidth/probe",

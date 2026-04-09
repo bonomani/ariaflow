@@ -222,7 +222,6 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         "/api/scheduler/preflight": routes.post_preflight,
         "/api/scheduler/ucc": routes.post_ucc,
         "/api/declaration": routes.post_declaration,
-        "/api/sessions/new": routes.post_session,
         "/api/aria2/change_global_option": routes.post_aria2_change_global_option,
         "/api/aria2/change_option": routes.post_aria2_change_option,
         "/api/aria2/set_limits": routes.post_aria2_set_limits,

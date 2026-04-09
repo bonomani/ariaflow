@@ -64,13 +64,6 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertIn("ariaflow", lifecycle)
                 self.assertIn("meta", lifecycle["ariaflow"])
                 self.assertIn("session_id", lifecycle)
-                session = request_json(
-                    f"{base}/api/sessions/new",
-                    method="POST",
-                    payload={"action": "new"},
-                )
-                self.assertTrue(session["ok"])
-                self.assertIn("session", session)
                 with (
                     patch("aria_queue.webapp.is_macos", return_value=True),
                     patch(

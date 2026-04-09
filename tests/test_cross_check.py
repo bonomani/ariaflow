@@ -510,8 +510,10 @@ class TestSessionReflectedInStatus(CrossCheckBase):
             },
         )
 
-        _, new = _req(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
-        new_id = new["session"]["session_id"]
+        from aria_queue.state import start_new_state_session
+
+        new = start_new_state_session(reason="test")
+        new_id = new["session_id"]
 
         _, status = _req(f"{self.base}/api/status")
         self.assertEqual(status["state"]["session_id"], new_id)
@@ -616,21 +618,6 @@ class TestMutationsLoggedInActionLog(CrossCheckBase):
         _, log = _req(f"{self.base}/api/log?limit=5")
         actions = [e.get("action") for e in log["items"]]
         self.assertIn("retry", actions)
-
-    def test_session_logged(self) -> None:
-        _req(
-            f"{self.base}/api/downloads/add",
-            "POST",
-            {
-                "items": [
-                    {"url": f"https://example.com/xc-log-sess-{time.time()}.bin"}
-                ],
-            },
-        )
-        _req(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
-        _, log = _req(f"{self.base}/api/log?limit=10")
-        actions = [e.get("action") for e in log["items"]]
-        self.assertIn("session", actions)
 
     def test_probe_logged(self) -> None:
         probe = {
@@ -809,7 +796,9 @@ class TestMultiStepChains(CrossCheckBase):
         )
         item_id = added["added"][0]["id"]
 
-        _req(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
+        from aria_queue.state import start_new_state_session
+
+        start_new_state_session(reason="test")
 
         _, status = _req(f"{self.base}/api/status")
         item = next(i for i in status["items"] if i["id"] == item_id)
@@ -846,7 +835,9 @@ class TestMutationsIncrementRevision(CrossCheckBase):
             },
         )
         rev_before = self._get_rev()
-        _req(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
+        from aria_queue.state import start_new_state_session
+
+        start_new_state_session(reason="test")
         rev_after = self._get_rev()
         self.assertGreater(rev_after, rev_before)
 

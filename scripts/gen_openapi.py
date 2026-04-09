@@ -127,7 +127,6 @@ _SUMMARIES: dict[str, str] = {
     "post_preflight": "Run preflight checks",
     "post_ucc": "Execute UCC cycle",
     "post_declaration": "Save UIC declaration",
-    "post_session": "Create new session",
     "post_aria2_change_global_option": "Change aria2 global options (3-tier safety)",
     "post_aria2_change_option": "Change aria2 per-GID options",
     "post_aria2_set_limits": "Set managed bandwidth and seed limits",

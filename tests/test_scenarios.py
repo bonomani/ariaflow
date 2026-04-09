@@ -228,55 +228,7 @@ class TestScenarioErrorRetry(ScenarioBase):
 
 
 # ═══════════════════════════════════════════════════════
-# Scenario 4: Session management
-# ═══════════════════════════════════════════════════════
-
-
-class TestScenarioSessionManagement(ScenarioBase):
-    """User manages sessions across multiple work periods."""
-
-    def test_session_lifecycle(self) -> None:
-        base = self.base
-
-        # Add item → creates session
-        _, added, _ = _req(
-            f"{base}/api/downloads/add",
-            "POST",
-            {
-                "items": [{"url": "https://example.com/session-work.bin"}],
-            },
-        )
-        _, status, _ = _req(f"{base}/api/status")
-        session_1 = status["state"]["session_id"]
-        self.assertIsNotNone(session_1)
-
-        # Create new session
-        _, new_sess, _ = _req(f"{base}/api/sessions/new", "POST", {"action": "new"})
-        session_2 = new_sess["session"]["session_id"]
-        self.assertNotEqual(session_1, session_2)
-
-        # Status reflects new session
-        _, status, _ = _req(f"{base}/api/status")
-        self.assertEqual(status["state"]["session_id"], session_2)
-
-        # Add another item → same session
-        _, added2, _ = _req(
-            f"{base}/api/downloads/add",
-            "POST",
-            {
-                "items": [{"url": "https://example.com/session-work-2.bin"}],
-            },
-        )
-        self.assertEqual(added2["added"][0]["session_id"], session_2)
-
-        # Log should show session actions
-        _, log, _ = _req(f"{base}/api/log?limit=20")
-        session_actions = [e for e in log["items"] if e.get("action") == "session"]
-        self.assertGreater(len(session_actions), 0)
-
-
-# ═══════════════════════════════════════════════════════
-# Scenario 5: Bandwidth probe and configuration
+# Scenario 4: Bandwidth probe and configuration
 # ═══════════════════════════════════════════════════════
 
 

@@ -771,46 +771,7 @@ class TestDeclaration(APIServerPerTestCase):
 
 
 # ──────────────────────────────────────────────────────
-# 8. Session Management
-# ──────────────────────────────────────────────────────
-
-
-class TestSession(APIServerPerTestCase):
-    def test_new_session(self) -> None:
-        # Create initial session via add
-        _request(
-            f"{self.base}/api/downloads/add",
-            "POST",
-            {
-                "items": [{"url": "https://example.com/x.bin"}],
-            },
-        )
-        _, status_before = _request(f"{self.base}/api/status")
-        old_session = status_before["state"]["session_id"]
-
-        code, body = _request(
-            f"{self.base}/api/sessions/new", "POST", {"action": "new"}
-        )
-        self.assertEqual(code, 200)
-        self.assertTrue(body["ok"])
-        new_session = body["session"]["session_id"]
-        self.assertNotEqual(old_session, new_session)
-
-    def test_new_session_closes_previous(self) -> None:
-        _request(
-            f"{self.base}/api/downloads/add",
-            "POST",
-            {"items": [{"url": "https://example.com/y.bin"}]},
-        )
-        _request(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
-        # Check the log for close action
-        _, log = _request(f"{self.base}/api/log?limit=10")
-        actions = [entry.get("action") for entry in log["items"]]
-        self.assertIn("session", actions)
-
-
-# ──────────────────────────────────────────────────────
-# 9. Action Log
+# 8. Action Log
 # ──────────────────────────────────────────────────────
 
 
@@ -1368,20 +1329,7 @@ class TestPostEndpoints(APIServerTestCase):
         self.assertEqual(code, 200)
         self.assertIn("resumed", body)
 
-    # 8. POST /api/session
-    def test_post_api_session(self) -> None:
-        # Ensure a session exists first
-        _req(
-            f"{self.base}/api/downloads/add",
-            "POST",
-            {"items": [{"url": "https://example.com/sess.bin"}]},
-        )
-        code, body, _ = _req(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
-        self.assertEqual(code, 200)
-        self.assertTrue(body["ok"])
-        self.assertIn("session", body)
-
-    # 9. POST /api/declaration
+    # 8. POST /api/declaration
     def test_post_api_declaration(self) -> None:
         _, decl, _ = _req(f"{self.base}/api/declaration")
         code, body, _ = _req(f"{self.base}/api/declaration", "POST", decl)

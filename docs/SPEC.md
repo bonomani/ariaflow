@@ -254,7 +254,6 @@ Every `record_action(action=...)` value is listed here with its target and BGS t
 | `/api/scheduler/preflight` | `routes.post_preflight` | — |
 | `/api/scheduler/resume` | `routes.post_resume` | — |
 | `/api/scheduler/ucc` | `routes.post_ucc` | — |
-| `/api/sessions/new` | `routes.post_session` | — |
 
 Schemas marked **✓ typed** appear in `src/aria_queue/openapi_schemas.py::RESPONSE_SCHEMAS` and are emitted into `src/aria_queue/openapi.yaml` by `scripts/gen_openapi.py`. Tests in `TestOpenapiSchemas` (test_unit.py) pin every typed schema against the live response shape.
 

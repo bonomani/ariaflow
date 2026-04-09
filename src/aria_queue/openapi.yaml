@@ -1051,24 +1051,6 @@ paths:
                         started_at:
                           nullable: true
                           type: string
-  /api/sessions/new:
-    post:
-      tags: [Sessions]
-      summary: Create new session
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-        "400":
-          description: Bad request
   /api/sessions/stats:
     get:
       tags: [Sessions]
