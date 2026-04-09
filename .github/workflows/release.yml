@@ -150,13 +150,22 @@ jobs:
         run: |
           python3 scripts/homebrew_formula.py --tag "${{ steps.release_meta.outputs.tag }}" --output tap/Formula/ariaflow-server.rb
 
+      - name: Update meta-formula version
+        run: |
+          TAG="${{ steps.release_meta.outputs.tag }}"
+          VERSION="${TAG#v}"
+          SHA256=$(python3 -c "from pathlib import Path; import re; t=Path('tap/Formula/ariaflow-server.rb').read_text(); print(re.search(r'sha256 \"([^\"]+)\"', t).group(1))")
+          sed -i "s|url \"https://github.com/bonomani/ariaflow-server/archive/refs/tags/.*\"|url \"https://github.com/bonomani/ariaflow-server/archive/refs/tags/${TAG}.tar.gz\"|" tap/Formula/ariaflow.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" tap/Formula/ariaflow.rb
+          sed -i "s|version \".*\"|version \"${VERSION}\"|" tap/Formula/ariaflow.rb
+
       - name: Commit tap update
         id: push_tap_update
         working-directory: tap
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/ariaflow-server.rb
+          git add Formula/ariaflow-server.rb Formula/ariaflow.rb
           if git diff --cached --quiet; then
             echo "Formula already up to date"
             echo "pushed=false" >> "$GITHUB_OUTPUT"
