@@ -409,6 +409,35 @@ class TestAdvertiseHttpService(unittest.TestCase):
             pass  # should not crash
 
 
+class TestBonjourDetectBackend(unittest.TestCase):
+    @patch("ariaflow_server.bonjour.platform.system", return_value="Linux")
+    @patch("ariaflow_server.bonjour._avahi_publish_path", return_value=None)
+    @patch("ariaflow_server.bonjour._dns_sd_path", return_value="/mnt/c/Windows/System32/dns-sd.exe")
+    def test_wsl_uses_dns_sd_interop(self, _sd: MagicMock, _av: MagicMock, _sys: MagicMock) -> None:
+        from ariaflow_server.bonjour import _detect_backend
+
+        with patch("ariaflow_server.platform.detect.is_wsl", return_value=True):
+            self.assertEqual(_detect_backend(), "dns-sd")
+
+    @patch("ariaflow_server.bonjour.platform.system", return_value="Linux")
+    @patch("ariaflow_server.bonjour._avahi_publish_path", return_value="/usr/bin/avahi-publish-service")
+    @patch("ariaflow_server.bonjour._dns_sd_path", return_value=None)
+    def test_linux_without_wsl_uses_avahi(self, _sd: MagicMock, _av: MagicMock, _sys: MagicMock) -> None:
+        from ariaflow_server.bonjour import _detect_backend
+
+        with patch("ariaflow_server.platform.detect.is_wsl", return_value=False):
+            self.assertEqual(_detect_backend(), "avahi")
+
+    @patch("ariaflow_server.bonjour.platform.system", return_value="Linux")
+    @patch("ariaflow_server.bonjour._avahi_publish_path", return_value=None)
+    @patch("ariaflow_server.bonjour._dns_sd_path", return_value=None)
+    def test_wsl_without_bonjour_returns_none(self, _sd: MagicMock, _av: MagicMock, _sys: MagicMock) -> None:
+        from ariaflow_server.bonjour import _detect_backend
+
+        with patch("ariaflow_server.platform.detect.is_wsl", return_value=True):
+            self.assertIsNone(_detect_backend())
+
+
 class TestBonjourCommandConstruction(unittest.TestCase):
     @patch("ariaflow_server.bonjour._short_hostname", return_value="myhost")
     def test_dns_sd_cmd_structure(self, _h: MagicMock) -> None:

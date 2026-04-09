@@ -174,6 +174,48 @@ class TestWSLDetection(unittest.TestCase):
         with patch("ariaflow_server.platform.detect.is_linux", return_value=False):
             self.assertFalse(detect.is_wsl())
 
+    def test_is_wsl2_true(self) -> None:
+        from ariaflow_server.platform import detect
+
+        with (
+            patch("ariaflow_server.platform.detect.is_wsl", return_value=True),
+            patch(
+                "ariaflow_server.platform.detect.Path.read_text",
+                return_value="Linux version 6.6.87-microsoft-standard-WSL2",
+            ),
+        ):
+            self.assertTrue(detect.is_wsl2())
+
+    def test_is_wsl2_false_on_wsl1(self) -> None:
+        from ariaflow_server.platform import detect
+
+        with (
+            patch("ariaflow_server.platform.detect.is_wsl", return_value=True),
+            patch(
+                "ariaflow_server.platform.detect.Path.read_text",
+                return_value="Linux version 4.4.0-microsoft-standard",
+            ),
+        ):
+            self.assertFalse(detect.is_wsl2())
+
+    def test_is_wsl2_false_on_non_wsl(self) -> None:
+        from ariaflow_server.platform import detect
+
+        with patch("ariaflow_server.platform.detect.is_wsl", return_value=False):
+            self.assertFalse(detect.is_wsl2())
+
+    def test_is_nated_true_on_wsl2(self) -> None:
+        from ariaflow_server.platform import detect
+
+        with patch("ariaflow_server.platform.detect.is_wsl2", return_value=True):
+            self.assertTrue(detect.is_nated())
+
+    def test_is_nated_false_on_non_wsl2(self) -> None:
+        from ariaflow_server.platform import detect
+
+        with patch("ariaflow_server.platform.detect.is_wsl2", return_value=False):
+            self.assertFalse(detect.is_nated())
+
     def test_default_downloads_dir_non_wsl(self) -> None:
         from ariaflow_server.platform.detect import default_downloads_dir
 
