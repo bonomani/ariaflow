@@ -42,53 +42,11 @@ Completed files sit in aria2's download directory with no API to serve them. **R
 
 ## Internal gaps
 
-### G-1 Config migration has no logging — low
-
-`storage.py:config_dir()` auto-renames `~/.config/aria-queue/` → `~/.config/ariaflow-server/` but logs nothing. If rename fails (permissions, disk), user gets a silent fallback to the wrong dir. **Fix:** log the migration or raise on failure.
-
-### G-2 No test for config dir migration — low
-
-The old→new dir rename in `storage.py` has no dedicated test. Currently relies on all tests using `ARIAFLOW_DIR` env var which bypasses the migration path entirely.
-
 ### G-3 `is_nated()` only covers WSL2 — low
 
 Docker, VMs, and other NAT environments return `False`. Acceptable for now but limits usefulness of the function. Could check for `172.x/10.x` private IPs with no route to LAN peers.
 
-### G-4 No runtime warning when Bonjour unavailable — low
-
-Peer discovery is silently disabled. A log message or `/api/status` field indicating "discovery: unavailable" would help debugging.
-
-### G-5 Write boundary hook uses hardcoded path — medium
-
-`.claude/settings.json` PreToolUse hook hardcodes `/home/bc/repos/github/bonomani/ariaflow-server`. Breaks if repo cloned elsewhere. **Fix:** use `git rev-parse --show-toplevel`.
-
-### G-6 No TIC registration hook — medium
-
-Commit hook checks "src/ changed → tests/ must change" but not "tests/ changed → tic-oracle.md must change". `scripts/check_tic_coverage.py` catches this in CI but not at commit time.
-
-### G-7 TIC oracle numbering uses sub-IDs — low
-
-Entries like `22a`, `232b`, `428a` create ambiguity. Should be renumbered sequentially on next major TIC update.
-
-### G-8 BGS version refs may be stale — medium
-
-`bgs@58c1467` and all member refs pinned to a specific SHA. If BGS upstream has evolved, these should be updated and re-validated with `check-bgs-compliance.py`.
-
-### G-9 README missing Windows/WSL setup — medium
-
-No documentation for: Bonjour requirement on Windows (iTunes/SDK), WSL2 mirrored networking for LAN discovery, `ARIAFLOW_DIR` env var.
-
-### G-10 No CHANGELOG or migration guide — low
-
-Users upgrading from pre-rename versions (`aria-queue` config dir, `ARIA_QUEUE_DIR` env var, `ariaflow` API keys) have no migration guide. The auto-migration handles config dir, but API key changes are breaking.
-
-### G-11 Release workflow Python version mismatch — low
-
-CI tests with Python 3.12, Homebrew formula installs system Python (3.14 on macOS). No test coverage on 3.14.
-
-### G-12 PLAN.md Declined section references old service type — trivial
-
-"Single `_ariaflow-server._tcp` service" in the Declined section — this is now the current name, not a declined alternative. Text is confusing.
+*(G-1, G-2, G-4 through G-12 resolved — see git log)*
 
 ## Cross-project gaps
 
