@@ -158,9 +158,28 @@ drift will fail the test, not warn.
 
 **No backend action required.** BG-11 is **RESOLVED** as of 2026-04-08.
 
+### BG-15: Backend discovery uses stale mDNS service type
+
+`discovery.py` browses for `_ariaflow._tcp` but `bonjour.py` registers as
+`_ariaflow-server._tcp` (changed in commit `bf09621`). The service types
+diverged during the naming alignment. Peer discovery between backends is
+broken.
+
+**Desired:**
+- `discovery.py` should browse `_ariaflow-server._tcp` (to find peer backends).
+- Optionally also browse `_ariaflow-dashboard._tcp` (to discover dashboards).
+
+**Impact on ariaflow-dashboard:** The `/api/peers` endpoint returns no
+peers because the backend never discovers anything. The dashboard's peer
+tab is empty even when multiple backends are running.
+
+**Blocks frontend gap:** (none — pure backend infrastructure).
+
+**Priority:** high.
+
 ---
 
-_No other open gaps._
+_No other open gaps (except BG-15 above)._
 
 ---
 
