@@ -21,6 +21,7 @@
 | Internal tracker | system-to-network | outbound | distribution | Private BitTorrent tracker announce URL for torrent distribution |
 | Torrent file serving | system-to-user | outbound | distribution | `GET /api/torrents/{infohash}.torrent` serves created `.torrent` files |
 | BitTorrent swarm | system-to-network | bidirectional | distribution | aria2 seeds private torrents to peers on internal tracker |
+| WSL interop | system-to-host | outbound | discovery | On WSL, `dns-sd.exe` called via Windows interop for Bonjour when `avahi` is unavailable |
 | Homebrew | system-to-package-manager | external | installation | `brew install/upgrade` lifecycle |
 
 ## Interaction Classes

@@ -12,11 +12,11 @@ decision_record_path: "./bgs-decision.yaml"
 last_reviewed: 2026-04-07
 
 members_used:
-  - BISS — boundary classification (18 boundaries, 10 interaction classes)
+  - BISS — boundary classification (19 boundaries, 10 interaction classes)
   - ASM — state model (4 axes: session, run, job, daemon; 5 coherence rules)
   - UIC — preflight gates (aria2_available, queue_readable) + 27 preferences
   - UCC — structured execution results (UCCResult dataclass)
-  - TIC — test oracle (492 tests, trace targets across ASM/UIC/UCC/BISS)
+  - TIC — test oracle (523 tests, trace targets across ASM/UIC/UCC/BISS)
 
 overlays_used: []
 

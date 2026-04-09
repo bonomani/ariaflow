@@ -7,7 +7,7 @@ decision_reason: >
   transition legality. The state-model rule in DECISION-TREE §1 mandates
   an ASM-based slice. Preflight gates (aria2 readiness, queue lock,
   disk capacity) require UIC. Verification of state transitions through
-  the 485-test TIC oracle requires TIC. The smallest sufficient slice
+  the 523-test TIC oracle requires TIC. The smallest sufficient slice
   covering BISS + ASM + UIC + UCC + TIC is
   BGS-State-Modeled-Governed-Verified.
 
@@ -51,7 +51,7 @@ owner: bonomani
 date: 2026-04-07
 
 limitations:
-  - BISS classification covers 18 boundaries and 10 interaction classes
+  - BISS classification covers 19 boundaries and 10 interaction classes
   - ASM state model defines 4 axes and 5 coherence rules (CR-1..CR-5)
   - UIC has 2 preflight gates and 27 preferences
-  - TIC oracle covers all 492 tests with trace targets across ASM/UIC/UCC/BISS
+  - TIC oracle covers all 523 tests with trace targets across ASM/UIC/UCC/BISS

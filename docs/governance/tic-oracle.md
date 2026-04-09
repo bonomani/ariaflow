@@ -5,7 +5,7 @@ TIC ref: tic@7cfba80
 Generated: 2026-04-05
 Test runner: `python -m unittest discover -s tests -v`
 
-## Test Inventory — All 492 Tests (484 in collection-mode form; 8 are parametrized)
+## Test Inventory — All 523 Tests
 
 ---
 
@@ -1051,6 +1051,72 @@ Pin the explicit ASM coherence-rule guards added to ariaflow.
 
 ---
 
+### `tests/test_unit.py` — TestBonjourDetectBackend (3 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 460 | `test_wsl_uses_dns_sd_interop` | WSL uses dns-sd.exe via Windows interop | _detect_backend() == "dns-sd" | BISS: Bonjour/mDNS boundary, WSL interop |
+| 461 | `test_linux_without_wsl_uses_avahi` | Regular Linux uses avahi backend | _detect_backend() == "avahi" | BISS: Bonjour/mDNS boundary |
+| 462 | `test_wsl_without_bonjour_returns_none` | WSL without dns-sd.exe returns None | _detect_backend() is None | BISS: Bonjour/mDNS boundary |
+
+---
+
+### `tests/test_platform.py` — TestPlatformDetect (3 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 463 | `test_is_macos_on_darwin` | Detect macOS on Darwin platform | is_macos() True, is_windows() False, is_linux() False | BISS: platform detection |
+| 464 | `test_is_windows_on_win32` | Detect Windows on win32 platform | is_windows() True, is_macos() False, is_linux() False | BISS: platform detection |
+| 465 | `test_is_linux_on_linux` | Detect Linux on linux platform | is_linux() True, is_macos() False, is_windows() False | BISS: platform detection |
+
+### `tests/test_platform.py` — TestPortalocker (2 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 466 | `test_storage_locked_acquires_and_releases` | File lock acquired and released cleanly | no exception raised | BISS: concurrency control |
+| 467 | `test_storage_locked_releases_on_error` | File lock released even when body raises | ValueError propagated, lock released | BISS: concurrency control |
+
+### `tests/test_platform.py` — TestWindowsModule (4 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 468 | `test_import_on_any_platform` | Windows module importable on any platform | all callables present | BISS: platform portability |
+| 469 | `test_install_dry_run` | Windows task scheduler install dry-run produces schtasks commands | commands list contains "schtasks" | UCC: lifecycle |
+| 470 | `test_uninstall_dry_run` | Windows task scheduler uninstall dry-run produces schtasks commands | commands list contains "schtasks" | UCC: lifecycle |
+| 471 | `test_status_when_schtasks_missing` | Status reports not loaded when schtasks missing | status["loaded"] == False | UCC: observation |
+
+### `tests/test_platform.py` — TestLinuxModule (4 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 472 | `test_import_on_any_platform` | Linux module importable on any platform | all callables present | BISS: platform portability |
+| 473 | `test_install_dry_run` | Linux systemd install dry-run produces systemctl commands | commands list contains "systemctl" | UCC: lifecycle |
+| 474 | `test_uninstall_dry_run` | Linux systemd uninstall dry-run produces systemctl commands | commands list contains "systemctl" | UCC: lifecycle |
+| 475 | `test_status_when_systemctl_missing` | Status reports not loaded when systemctl missing | status["loaded"] == False | UCC: observation |
+
+### `tests/test_platform.py` — TestLinuxModule (1 test)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 476 | `test_unit_file_content` | Systemd unit file has required sections and exec path | [Unit], [Service], [Install] present, ExecStart contains aria2c | UCC: lifecycle |
+
+### `tests/test_platform.py` — TestWSLDetection (10 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 477 | `test_is_wsl_true` | Detect WSL from /proc/version containing "microsoft" | is_wsl() == True | BISS: WSL detection |
+| 478 | `test_is_wsl_false_on_regular_linux` | Non-WSL Linux returns False | is_wsl() == False | BISS: WSL detection |
+| 479 | `test_is_wsl_false_on_macos` | macOS returns False for WSL | is_wsl() == False | BISS: WSL detection |
+| 480 | `test_is_wsl2_true` | Detect WSL2 from /proc/version containing "WSL2" | is_wsl2() == True | BISS: WSL2/NAT detection |
+| 481 | `test_is_wsl2_false_on_wsl1` | WSL1 returns False for is_wsl2 | is_wsl2() == False | BISS: WSL2/NAT detection |
+| 482 | `test_is_wsl2_false_on_non_wsl` | Non-WSL returns False for is_wsl2 | is_wsl2() == False | BISS: WSL2/NAT detection |
+| 483 | `test_is_nated_true_on_wsl2` | WSL2 is detected as NATed | is_nated() == True | BISS: WSL2/NAT detection |
+| 484 | `test_is_nated_false_on_non_wsl2` | Non-WSL2 is not NATed | is_nated() == False | BISS: WSL2/NAT detection |
+| 485 | `test_default_downloads_dir_non_wsl` | Default downloads dir is ~/Downloads on non-WSL | result == Path.home() / "Downloads" | BISS: platform detection |
+| 486 | `test_default_downloads_dir_wsl` | Default downloads dir on WSL is Windows Downloads | result contains "/mnt/c/Users" | BISS: platform detection |
+
+---
+
 ## Coverage Summary
 
 | Trace Target | Tests |
@@ -1082,4 +1148,11 @@ Pin the explicit ASM coherence-rule guards added to ariaflow.
 | UCC: contract shape | 4 |
 | BISS: aria2 boundary | 53 |
 | BISS: naming discipline | 11 |
-| **Total** | **455** |
+| BISS: Bonjour/mDNS boundary | 12 |
+| BISS: platform detection | 5 |
+| BISS: platform portability | 2 |
+| BISS: concurrency control | 2 |
+| BISS: WSL detection | 3 |
+| BISS: WSL2/NAT detection | 4 |
+| BISS: WSL interop | 1 |
+| **Total** | **486** |
