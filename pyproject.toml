@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ariaflow-server"
-version = "0.1.174"
+version = "0.1.175"
 description = "Sequential aria2 download scheduler with adaptive bandwidth control"
 requires-python = ">=3.10"
 dependencies = ["portalocker>=2.0"]
