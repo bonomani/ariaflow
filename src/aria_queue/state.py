@@ -348,6 +348,38 @@ def archive_item(item: dict[str, Any]) -> None:
         save_archive(archived)
 
 
+def count_archivable(
+    items: list[dict[str, Any]],
+    max_done_age_hours: int = 168,
+) -> int:
+    """Count queue items that would be archived by auto_cleanup_queue()."""
+    from datetime import datetime, timezone
+
+    now = time.time()
+    cutoff_ts = now - (max_done_age_hours * 3600)
+    _TERMINAL = {"complete", "error", "failed", "stopped", "removed"}
+    count = 0
+    for item in items:
+        if str(item.get("status") or "") not in _TERMINAL:
+            continue
+        created = (
+            item.get("completed_at")
+            or item.get("error_at")
+            or item.get("created_at")
+            or ""
+        )
+        try:
+            dt = datetime.fromisoformat(created)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            item_ts = dt.timestamp()
+        except (ValueError, TypeError):
+            item_ts = now
+        if item_ts < cutoff_ts:
+            count += 1
+    return count
+
+
 def auto_cleanup_queue(
     max_done_age_days: int = 7,
     max_done_age_hours: int | None = None,

@@ -15,6 +15,7 @@ from . import __version__
 from . import routes
 from .api import (
     active_status,
+    count_archivable,
     aria2_multicall,
     aria2_current_bandwidth,
     aria2_status,
@@ -277,10 +278,12 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         for item in items:
             item["allowed_actions"] = allowed_actions(item.get("status", ""))
         bandwidth = aria2_current_bandwidth(timeout=3)
+        summary = summarize_queue(items)
+        summary["archivable_count"] = count_archivable(items)
         payload = {
             "items": items,
             "state": state,
-            "summary": summarize_queue(items),
+            "summary": summary,
             "aria2": aria2_status(timeout=3),
             "bandwidth": bandwidth,
             "_rev": state.get("_rev", 0),

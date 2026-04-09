@@ -4,6 +4,7 @@ from .contracts import load_declaration, preflight, run_ucc, save_declaration
 from .core import (
     add_queue_item,
     auto_cleanup_queue,
+    count_archivable,
     bandwidth_config,
     bandwidth_status,
     aria2_change_options,
@@ -50,6 +51,7 @@ from .platform.detect import is_macos
 __all__ = [
     "add_queue_item",
     "auto_cleanup_queue",
+    "count_archivable",
     "bandwidth_config",
     "bandwidth_status",
     "aria2_change_options",
