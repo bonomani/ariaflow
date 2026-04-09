@@ -9,6 +9,7 @@ build/
 *.log
 .vscode/
 .claude/
+!.claude/settings.json
 docs/ALL_VARIABLES.md
 .codexrules
 src/ariaflow_server.egg-info/

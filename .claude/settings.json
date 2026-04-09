@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "REPO=\"/home/bc/repos/github/bonomani/ariaflow-server\"; jq -r '.tool_input.file_path' | { read -r f; case \"$f\" in \"$REPO\"/*|\"$REPO\") ;; *) echo '{\"decision\":\"block\",\"reason\":\"Write blocked: file is outside the ariaflow-server repo\"}'; exit 0;; esac; }",
+            "timeout": 5,
+            "statusMessage": "Checking write boundary..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit:*)",
+            "command": "jq -r '.tool_input.command' | { read -r cmd; src_changed=$(git diff --cached --name-only -- 'src/' 2>/dev/null | grep -c '\\.py$' || true); test_changed=$(git diff --cached --name-only -- 'tests/' 2>/dev/null | grep -c '\\.py$' || true); if [ \"$src_changed\" -gt 0 ] && [ \"$test_changed\" -eq 0 ]; then echo '{\"decision\":\"block\",\"reason\":\"Source files in src/ changed but no test files in tests/ changed. Add tests before committing.\"}'; fi; }",
+            "timeout": 5,
+            "statusMessage": "Checking for test changes..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; case \"$f\" in *.py) ruff check \"$f\" 2>&1 || true;; esac; }",
+            "timeout": 15,
+            "statusMessage": "Running ruff check..."
+          }
+        ]
+      }
+    ]
+  }
+}
