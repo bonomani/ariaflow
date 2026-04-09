@@ -1,24 +1,5 @@
 # Plan
 
-### [Medium] G-5: Fix hardcoded repo path in write boundary hook
-
-**What:** Replace hardcoded `/home/bc/repos/github/bonomani/ariaflow-server` with `git rev-parse --show-toplevel`
-**Where:** `.claude/settings.json` — PreToolUse Write|Edit hook
-**Why:** Hook breaks if repo cloned to a different path. Any collaborator gets a non-functional hook.
-**Scope:** 1 line changed in settings.json
-**Depends on:** Nothing
-
----
-
-### [Medium] G-6: Add TIC registration check to commit hook
-
-**What:** Extend the PreToolUse git-commit hook: if `tests/*.py` changed, require `docs/governance/tic-oracle.md` to also be staged
-**Where:** `.claude/settings.json` — PreToolUse Bash hook
-**Why:** 10 tests went unregistered today. The existing `check_tic_coverage.py` catches this in CI but not at commit time.
-**Scope:** ~5 lines added to hook command
-**Depends on:** G-5 (should fix hook portability first)
-
----
 
 ### [Medium] G-8: Update BGS version refs
 
@@ -43,25 +24,6 @@
 **Depends on:** Nothing
 
 ---
-
-### [Low] G-1: Add logging to config dir migration
-
-**What:** Log when `~/.config/aria-queue/` is auto-renamed to `~/.config/ariaflow-server/`. Warn on failure instead of silent fallback.
-**Where:** `src/ariaflow_server/storage.py:config_dir()` (~line 22)
-**Why:** Silent migration failure leaves user on wrong config dir with no indication.
-**Scope:** ~5 lines (import logging, add 2 log calls)
-**Depends on:** Nothing
-
----
-
-### [Low] G-2: Add test for config dir migration
-
-**What:** Test that `config_dir()` renames old dir to new when old exists and new doesn't. Test that it doesn't rename when new already exists.
-**Where:** `tests/test_platform.py` or `tests/test_unit.py`
-**Why:** Migration path has zero test coverage — all tests bypass it via `ARIAFLOW_DIR`.
-**Scope:** 1 new test class, ~20 lines
-**Depends on:** Nothing
-**TIC:** Register in tic-oracle.md
 
 ---
 
@@ -110,12 +72,6 @@
 
 ---
 
-### [Trivial] G-12: Fix PLAN.md Declined wording
-
-**What:** Update "Single `_ariaflow-server._tcp` service" text to clarify this is the current service type, not a declined one
-**Where:** `docs/PLAN.md` Declined section
-**Why:** Confusing wording after the rename
-**Scope:** 1 line
 
 ---
 
@@ -200,5 +156,5 @@ After all items done:
 _Items evaluated and rejected. Kept to prevent re-proposing._
 
 - **Remove `stopped` status** — `stopped` (system decided) vs `cancelled` (user decided) is a useful distinction. Merging them loses information.
-- **Per-torrent Bonjour advertisement** — Replaced by API-based discovery (`GET /api/torrents`). Single `_ariaflow-server._tcp` service is simpler and Apple-compliant.
+- **Per-torrent Bonjour advertisement** — Replaced by API-based discovery (`GET /api/torrents`). Single service advertisement is simpler and Apple-compliant.
 - **Scheduler start/stop API** — Scheduler now auto-starts with `ariaflow serve`. Users can only pause/resume. Simpler state model.

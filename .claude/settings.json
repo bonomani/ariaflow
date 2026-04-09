@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "REPO=\"/home/bc/repos/github/bonomani/ariaflow-server\"; jq -r '.tool_input.file_path' | { read -r f; case \"$f\" in \"$REPO\"/*|\"$REPO\") ;; *) echo '{\"decision\":\"block\",\"reason\":\"Write blocked: file is outside the ariaflow-server repo\"}'; exit 0;; esac; }",
+            "command": "REPO=$(git rev-parse --show-toplevel 2>/dev/null); jq -r '.tool_input.file_path' | { read -r f; case \"$f\" in \"$REPO\"/*|\"$REPO\") ;; *) printf '{\"decision\":\"block\",\"reason\":\"Write blocked: file is outside repo\"}'; exit 0;; esac; }",
             "timeout": 5,
             "statusMessage": "Checking write boundary..."
           }
@@ -18,9 +18,9 @@
           {
             "type": "command",
             "if": "Bash(git commit:*)",
-            "command": "jq -r '.tool_input.command' | { read -r cmd; src_changed=$(git diff --cached --name-only -- 'src/' 2>/dev/null | grep -c '\\.py$' || true); test_changed=$(git diff --cached --name-only -- 'tests/' 2>/dev/null | grep -c '\\.py$' || true); if [ \"$src_changed\" -gt 0 ] && [ \"$test_changed\" -eq 0 ]; then echo '{\"decision\":\"block\",\"reason\":\"Source files in src/ changed but no test files in tests/ changed. Add tests before committing.\"}'; fi; }",
+            "command": "src_changed=$(git diff --cached --name-only -- 'src/' 2>/dev/null | grep -c '\\.py$' || true); test_changed=$(git diff --cached --name-only -- 'tests/' 2>/dev/null | grep -c '\\.py$' || true); tic_changed=$(git diff --cached --name-only -- 'docs/governance/tic-oracle.md' 2>/dev/null | grep -c '.' || true); if [ \"$src_changed\" -gt 0 ] && [ \"$test_changed\" -eq 0 ]; then printf '{\"decision\":\"block\",\"reason\":\"src/ changed but no tests/ changed. Add tests.\"}'; elif [ \"$test_changed\" -gt 0 ] && [ \"$tic_changed\" -eq 0 ]; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"WARNING: tests changed but tic-oracle.md not updated.\"}}'; fi",
             "timeout": 5,
-            "statusMessage": "Checking for test changes..."
+            "statusMessage": "Checking tests and TIC..."
           }
         ]
       }

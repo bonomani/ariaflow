@@ -87,6 +87,66 @@ class TestStoragePaths(IsolatedTestCase):
         self.assertEqual(storage_lock_path(), config_dir() / ".storage.lock")
 
 
+class TestConfigDirMigration(unittest.TestCase):
+    def test_migrates_old_dir_to_new(self) -> None:
+        import tempfile
+        from importlib import reload
+        import ariaflow_server.storage as storage_mod
+
+        with tempfile.TemporaryDirectory() as base:
+            old = Path(base) / ".config" / "aria-queue"
+            new = Path(base) / ".config" / "ariaflow-server"
+            old.mkdir(parents=True)
+            (old / "queue.json").write_text("[]")
+            os.environ.pop("ARIAFLOW_DIR", None)
+            os.environ.pop("ARIA_QUEUE_DIR", None)
+            with patch("ariaflow_server.storage.Path.home", return_value=Path(base)):
+                reload(storage_mod)
+                result = storage_mod.config_dir()
+            self.assertEqual(result, new)
+            self.assertTrue(new.exists())
+            self.assertFalse(old.exists())
+            self.assertTrue((new / "queue.json").exists())
+
+    def test_no_migration_when_new_exists(self) -> None:
+        import tempfile
+        from importlib import reload
+        import ariaflow_server.storage as storage_mod
+
+        with tempfile.TemporaryDirectory() as base:
+            old = Path(base) / ".config" / "aria-queue"
+            new = Path(base) / ".config" / "ariaflow-server"
+            old.mkdir(parents=True)
+            new.mkdir(parents=True)
+            (old / "old.json").write_text("[]")
+            (new / "new.json").write_text("[]")
+            os.environ.pop("ARIAFLOW_DIR", None)
+            os.environ.pop("ARIA_QUEUE_DIR", None)
+            with patch("ariaflow_server.storage.Path.home", return_value=Path(base)):
+                reload(storage_mod)
+                result = storage_mod.config_dir()
+            self.assertEqual(result, new)
+            self.assertTrue(old.exists(), "old dir should not be removed when new exists")
+
+    def test_migration_failure_returns_old_dir(self) -> None:
+        import tempfile
+        from importlib import reload
+        import ariaflow_server.storage as storage_mod
+
+        with tempfile.TemporaryDirectory() as base:
+            old = Path(base) / ".config" / "aria-queue"
+            old.mkdir(parents=True)
+            os.environ.pop("ARIAFLOW_DIR", None)
+            os.environ.pop("ARIA_QUEUE_DIR", None)
+            with (
+                patch("ariaflow_server.storage.Path.home", return_value=Path(base)),
+                patch.object(Path, "rename", side_effect=OSError("permission denied")),
+            ):
+                reload(storage_mod)
+                result = storage_mod.config_dir()
+            self.assertEqual(result, old)
+
+
 class TestEnsureStorage(IsolatedTestCase):
     def test_creates_directory(self) -> None:
         from ariaflow_server.core import ensure_storage

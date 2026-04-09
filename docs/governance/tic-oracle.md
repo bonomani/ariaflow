@@ -496,6 +496,14 @@ Storage path resolution for all persistent files.
 |---|---|---|---|---|
 | 231 | `test_calls_change_option` | aria2_set_max_download_limit calls aria2_change_option with gid | mock_co called once, args[0] == "gid1" | BISS: aria2 boundary |
 
+### `tests/test_unit.py` — TestConfigDirMigration (3 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 487 | `test_migrates_old_dir_to_new` | Old config dir auto-renamed to new on first access | new dir exists, old gone, files preserved | BISS: config migration |
+| 488 | `test_no_migration_when_new_exists` | No migration when new dir already exists | both dirs preserved, new dir returned | BISS: config migration |
+| 489 | `test_migration_failure_returns_old_dir` | Migration failure falls back to old dir with warning | old dir returned, no crash | BISS: config migration |
+
 ### `tests/test_unit.py` — TestPauseActiveTransfer (3 tests)
 
 | # | Test | Intent | Oracle | Trace Target |
@@ -1170,4 +1178,5 @@ Pin the explicit ASM coherence-rule guards added to ariaflow.
 | BISS: WSL detection | 3 |
 | BISS: WSL2/NAT detection | 4 |
 | BISS: WSL interop | 1 |
-| **Total** | **496** |
+| BISS: config migration | 3 |
+| **Total** | **499** |

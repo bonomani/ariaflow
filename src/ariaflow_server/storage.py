@@ -22,7 +22,14 @@ def config_dir() -> Path:
     new = Path.home() / ".config" / "ariaflow-server"
     old = Path.home() / ".config" / "aria-queue"
     if not new.exists() and old.exists():
-        old.rename(new)
+        try:
+            old.rename(new)
+        except OSError as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to migrate config dir %s → %s: %s", old, new, exc
+            )
+            return old
     return new
 
 
