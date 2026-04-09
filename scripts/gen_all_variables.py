@@ -14,7 +14,7 @@ import re
 import sys
 
 
-SRC = os.path.join(os.path.dirname(__file__), "..", "src", "aria_queue")
+SRC = os.path.join(os.path.dirname(__file__), "..", "src", "ariaflow_server")
 
 
 def collect() -> dict:

@@ -13,11 +13,11 @@ import sys
 from pathlib import Path
 
 _PROJECT = Path(__file__).resolve().parents[1]
-_SRC = _PROJECT / "src" / "aria_queue"
+_SRC = _PROJECT / "src" / "ariaflow_server"
 
 sys.path.insert(0, str(_PROJECT / "src"))
 try:
-    from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
+    from ariaflow_server.openapi_schemas import RESPONSE_SCHEMAS
 except Exception:
     RESPONSE_SCHEMAS = {}
 
@@ -272,7 +272,7 @@ def _load_header() -> str:
     header = text[:idx]
     # Replace info.version with current __version__
     try:
-        from aria_queue import __version__ as _v
+        from ariaflow_server import __version__ as _v
         header = re.sub(
             r"^(\s*version:\s*)\S+",
             r"\g<1>" + _v,

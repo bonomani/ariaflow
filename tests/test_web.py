@@ -12,8 +12,8 @@ from unittest.mock import patch
 
 import conftest  # noqa: F401 — ensures sys.path is set up
 
-from aria_queue.core import save_queue, save_state
-from aria_queue.webapp import serve
+from ariaflow_server.core import save_queue, save_state
+from ariaflow_server.webapp import serve
 
 
 def request_json(url: str, method: str = "GET", payload: dict | None = None) -> dict:
@@ -31,7 +31,7 @@ def request_json(url: str, method: str = "GET", payload: dict | None = None) -> 
 class WebSmokeTests(unittest.TestCase):
     def test_local_web_server_smoke(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            os.environ["ARIA_QUEUE_DIR"] = tmp
+            os.environ["ARIAFLOW_DIR"] = tmp
             server = serve(host="127.0.0.1", port=0)
             port = server.server_address[1]
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -61,21 +61,21 @@ class WebSmokeTests(unittest.TestCase):
                 options = request_json(f"{base}/api/declaration")
                 self.assertIn("uic", options)
                 lifecycle = request_json(f"{base}/api/lifecycle")
-                self.assertIn("ariaflow", lifecycle)
-                self.assertIn("meta", lifecycle["ariaflow"])
+                self.assertIn("ariaflow-server", lifecycle)
+                self.assertIn("meta", lifecycle["ariaflow-server"])
                 self.assertIn("session_id", lifecycle)
                 with (
-                    patch("aria_queue.routes.lifecycle.is_macos", return_value=True),
+                    patch("ariaflow_server.routes.lifecycle.is_macos", return_value=True),
                     patch(
-                        "aria_queue.routes.lifecycle.homebrew_install_ariaflow_server",
+                        "ariaflow_server.routes.lifecycle.homebrew_install_ariaflow_server",
                         return_value=[
-                            "brew tap bonomani/ariaflow",
-                            "brew install ariaflow",
+                            "brew tap bonomani/ariaflow-server",
+                            "brew install ariaflow-server",
                         ],
                     ),
                     patch(
-                        "aria_queue.routes.lifecycle.homebrew_uninstall_ariaflow_server",
-                        return_value=["brew uninstall ariaflow"],
+                        "ariaflow_server.routes.lifecycle.homebrew_uninstall_ariaflow_server",
+                        return_value=["brew uninstall ariaflow-server"],
                     ),
                 ):
                     lifecycle_action = request_json(
@@ -135,7 +135,7 @@ class WebSmokeTests(unittest.TestCase):
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            os.environ["ARIA_QUEUE_DIR"] = tmp
+            os.environ["ARIAFLOW_DIR"] = tmp
             save_queue(
                 [
                     {
@@ -175,11 +175,11 @@ class WebSmokeTests(unittest.TestCase):
             )
             with (
                 patch(
-                    "aria_queue.webapp.aria2_current_bandwidth",
+                    "ariaflow_server.webapp.aria2_current_bandwidth",
                     return_value={"limit": "0"},
                 ),
                 patch(
-                    "aria_queue.webapp.aria2_status",
+                    "ariaflow_server.webapp.aria2_status",
                     return_value={
                         "reachable": True,
                         "version": "1.37.0",
@@ -187,7 +187,7 @@ class WebSmokeTests(unittest.TestCase):
                     },
                 ),
                 patch(
-                    "aria_queue.webapp.aria2_multicall",
+                    "ariaflow_server.webapp.aria2_multicall",
                     return_value=[
                         [
                             {
@@ -203,8 +203,8 @@ class WebSmokeTests(unittest.TestCase):
                         ]
                     ],
                 ),
-                patch("aria_queue.webapp.active_status", return_value=None),
-                patch("aria_queue.webapp.aria2_tell_active", return_value=[]),
+                patch("ariaflow_server.webapp.active_status", return_value=None),
+                patch("ariaflow_server.webapp.aria2_tell_active", return_value=[]),
             ):
                 server = serve(host="127.0.0.1", port=0)
                 port = server.server_address[1]
@@ -232,7 +232,7 @@ class WebSmokeTests(unittest.TestCase):
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            os.environ["ARIA_QUEUE_DIR"] = tmp
+            os.environ["ARIAFLOW_DIR"] = tmp
             save_queue(
                 [
                     {
@@ -255,11 +255,11 @@ class WebSmokeTests(unittest.TestCase):
             )
             with (
                 patch(
-                    "aria_queue.webapp.aria2_current_bandwidth",
+                    "ariaflow_server.webapp.aria2_current_bandwidth",
                     return_value={"limit": "0"},
                 ),
                 patch(
-                    "aria_queue.webapp.aria2_status",
+                    "ariaflow_server.webapp.aria2_status",
                     return_value={
                         "reachable": True,
                         "version": "1.37.0",
@@ -267,7 +267,7 @@ class WebSmokeTests(unittest.TestCase):
                     },
                 ),
                 patch(
-                    "aria_queue.webapp.aria2_multicall",
+                    "ariaflow_server.webapp.aria2_multicall",
                     return_value=[
                         [
                             {
@@ -283,8 +283,8 @@ class WebSmokeTests(unittest.TestCase):
                         ]
                     ],
                 ),
-                patch("aria_queue.webapp.active_status", return_value=None),
-                patch("aria_queue.webapp.aria2_tell_active", return_value=[]),
+                patch("ariaflow_server.webapp.active_status", return_value=None),
+                patch("ariaflow_server.webapp.aria2_tell_active", return_value=[]),
             ):
                 server = serve(host="127.0.0.1", port=0)
                 port = server.server_address[1]
@@ -308,7 +308,7 @@ class WebSmokeTests(unittest.TestCase):
     def test_api_per_item_lifecycle(self) -> None:
         """Integration test: add → pause → resume → retry → remove via HTTP."""
         with tempfile.TemporaryDirectory() as tmp:
-            os.environ["ARIA_QUEUE_DIR"] = tmp
+            os.environ["ARIAFLOW_DIR"] = tmp
             server = serve(host="127.0.0.1", port=0)
             port = server.server_address[1]
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -355,7 +355,7 @@ class WebSmokeTests(unittest.TestCase):
 
                 # Resume, then manually set to error for retry test
                 request_json(f"{base}/api/downloads/{item_id}/resume", method="POST")
-                from aria_queue.core import load_queue, save_queue
+                from ariaflow_server.core import load_queue, save_queue
 
                 items = load_queue()
                 items[0]["status"] = "error"
@@ -408,7 +408,7 @@ class WebSmokeTests(unittest.TestCase):
 
     def test_api_aria2_options_rejects_unsafe(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            os.environ["ARIA_QUEUE_DIR"] = tmp
+            os.environ["ARIAFLOW_DIR"] = tmp
             server = serve(host="127.0.0.1", port=0)
             port = server.server_address[1]
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -433,7 +433,7 @@ class WebSmokeTests(unittest.TestCase):
 
     def test_api_openapi_and_docs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            os.environ["ARIA_QUEUE_DIR"] = tmp
+            os.environ["ARIAFLOW_DIR"] = tmp
             server = serve(host="127.0.0.1", port=0)
             port = server.server_address[1]
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -472,7 +472,7 @@ class WebSmokeTests(unittest.TestCase):
     def test_api_tests_endpoint(self) -> None:
         """Test the /api/tests endpoint by mocking subprocess to avoid recursion."""
         with tempfile.TemporaryDirectory() as tmp:
-            os.environ["ARIA_QUEUE_DIR"] = tmp
+            os.environ["ARIAFLOW_DIR"] = tmp
             server = serve(host="127.0.0.1", port=0)
             port = server.server_address[1]
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -484,7 +484,7 @@ class WebSmokeTests(unittest.TestCase):
                     "R", (), {"returncode": 0, "stderr": fake_output, "stdout": ""}
                 )()
                 with patch(
-                    "aria_queue.webapp.subprocess.run", return_value=fake_result
+                    "ariaflow_server.webapp.subprocess.run", return_value=fake_result
                 ):
                     result = request_json(f"http://127.0.0.1:{port}/api/tests")
                 self.assertTrue(result["ok"])

@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 _PROJECT = Path(__file__).resolve().parents[1]
-_SRC = _PROJECT / "src" / "aria_queue"
+_SRC = _PROJECT / "src" / "ariaflow_server"
 _GOV = _PROJECT / "docs" / "governance"
 
 
@@ -117,7 +117,7 @@ def _default_preferences() -> set[str]:
 
 
 def _pref_reference_corpus() -> str:
-    """Concatenate all .py files in src/aria_queue/."""
+    """Concatenate all .py files in src/ariaflow_server/."""
     parts = []
     for py in _SRC.rglob("*.py"):
         parts.append(py.read_text(encoding="utf-8"))

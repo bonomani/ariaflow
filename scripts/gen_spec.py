@@ -6,12 +6,12 @@ Re-run after any change. The only hand-maintained input is
 ``docs/GOAL.md``; everything else is derived from:
 
 - ``pyproject.toml``                              (identity)
-- ``src/aria_queue/__init__.py``                  (live version)
-- ``src/aria_queue/webapp.py``                    (HTTP dispatch tables)
-- ``src/aria_queue/openapi_schemas.py``           (response shapes)
-- ``src/aria_queue/contracts.py``                 (UIC declaration)
-- ``src/aria_queue/queue_ops.py``                 (QueueItem dataclass)
-- ``src/aria_queue/aria2_rpc.py``                 (aria2 wrappers)
+- ``src/ariaflow_server/__init__.py``                  (live version)
+- ``src/ariaflow_server/webapp.py``                    (HTTP dispatch tables)
+- ``src/ariaflow_server/openapi_schemas.py``           (response shapes)
+- ``src/ariaflow_server/contracts.py``                 (UIC declaration)
+- ``src/ariaflow_server/queue_ops.py``                 (QueueItem dataclass)
+- ``src/ariaflow_server/aria2_rpc.py``                 (aria2 wrappers)
 - ``docs/governance/biss-classification.md``      (boundaries / actions)
 - ``docs/governance/asm-state-model.md``          (state model)
 - ``docs/governance/BGS.md``                      (BGS claim)
@@ -110,12 +110,12 @@ def section_identity() -> str:
             if line and not line.startswith("#"):
                 dep_list.append(line)
 
-    from aria_queue import __version__
+    from ariaflow_server import __version__
 
     lines = ["## 2. Identity", ""]
-    lines.append(f"- **Name:** `{name.group(1) if name else 'aria-queue'}`")
+    lines.append(f"- **Name:** `{name.group(1) if name else 'ariaflow-server'}`")
     lines.append(
-        f"- **Version:** `{__version__}` (live from `src/aria_queue/__init__.py`)"
+        f"- **Version:** `{__version__}` (live from `src/ariaflow_server/__init__.py`)"
     )
     lines.append(f"- **Python:** `{py_req.group(1) if py_req else '?'}`")
     if dep_list:
@@ -182,7 +182,7 @@ def section_biss() -> str:
 
 def _parse_dispatch_table(name: str) -> list[tuple[str, str]]:
     """Return [(path, handler), ...] for a dispatch dict by name."""
-    text = _read(_PROJECT / "src" / "aria_queue" / "webapp.py")
+    text = _read(_PROJECT / "src" / "ariaflow_server" / "webapp.py")
     pattern = rf"{name}\s*=\s*\{{(.*?)\n    \}}"
     m = re.search(pattern, text, re.DOTALL)
     if not m:
@@ -192,7 +192,7 @@ def _parse_dispatch_table(name: str) -> list[tuple[str, str]]:
 
 
 def section_http_api() -> str:
-    from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
+    from ariaflow_server.openapi_schemas import RESPONSE_SCHEMAS
 
     gets = _parse_dispatch_table("_GET_ROUTES")
     posts = _parse_dispatch_table("_POST_ROUTES")
@@ -216,8 +216,8 @@ def section_http_api() -> str:
     _emit("GET", gets)
     _emit("POST", posts)
     out.append(
-        "Schemas marked **✓ typed** appear in `src/aria_queue/openapi_schemas.py::RESPONSE_SCHEMAS` "
-        "and are emitted into `src/aria_queue/openapi.yaml` by `scripts/gen_openapi.py`. "
+        "Schemas marked **✓ typed** appear in `src/ariaflow_server/openapi_schemas.py::RESPONSE_SCHEMAS` "
+        "and are emitted into `src/ariaflow_server/openapi.yaml` by `scripts/gen_openapi.py`. "
         "Tests in `TestOpenapiSchemas` (test_unit.py) pin every typed schema against the live response shape."
     )
     out.append("")
@@ -231,7 +231,7 @@ def _ast_aria2_functions() -> tuple[list[str], list[str]]:
     literal starting with ``"aria2."`` or ``"system."`` (the RPC method
     name passed to ``aria_rpc``). Everything else is a helper.
     """
-    text = _read(_PROJECT / "src" / "aria_queue" / "aria2_rpc.py")
+    text = _read(_PROJECT / "src" / "ariaflow_server" / "aria2_rpc.py")
     tree = ast.parse(text)
     wrappers: list[str] = []
     helpers: list[str] = []
@@ -252,7 +252,7 @@ def section_aria2() -> str:
     wrappers, helpers = _ast_aria2_functions()
     out = ["## 7. aria2 RPC integration", ""]
     out.append(
-        f"`src/aria_queue/aria2_rpc.py` exposes **{len(wrappers)} 1:1 RPC wrappers** "
+        f"`src/ariaflow_server/aria2_rpc.py` exposes **{len(wrappers)} 1:1 RPC wrappers** "
         f"(each wraps one `aria2.*` or `system.*` JSON-RPC method) plus "
         f"**{len(helpers)} orchestration helpers**."
     )
@@ -271,7 +271,7 @@ def section_aria2() -> str:
 
 
 def section_uic() -> str:
-    from aria_queue.contracts import DEFAULT_DECLARATION
+    from ariaflow_server.contracts import DEFAULT_DECLARATION
 
     gates = DEFAULT_DECLARATION.get("uic", {}).get("gates", [])
     prefs = DEFAULT_DECLARATION.get("uic", {}).get("preferences", [])
@@ -304,7 +304,7 @@ def section_uic() -> str:
 
 def section_queue_item() -> str:
     from dataclasses import fields
-    from aria_queue.queue_ops import QueueItem
+    from ariaflow_server.queue_ops import QueueItem
 
     out = ["## 9. Queue item shape", ""]
     out.append(
@@ -450,11 +450,11 @@ def section_regenerate() -> str:
         "\n"
         "- `docs/GOAL.md`\n"
         "- `pyproject.toml`\n"
-        "- `src/aria_queue/webapp.py` (dispatch tables)\n"
-        "- `src/aria_queue/openapi_schemas.py`\n"
-        "- `src/aria_queue/contracts.py`\n"
-        "- `src/aria_queue/queue_ops.py`\n"
-        "- `src/aria_queue/aria2_rpc.py`\n"
+        "- `src/ariaflow_server/webapp.py` (dispatch tables)\n"
+        "- `src/ariaflow_server/openapi_schemas.py`\n"
+        "- `src/ariaflow_server/contracts.py`\n"
+        "- `src/ariaflow_server/queue_ops.py`\n"
+        "- `src/ariaflow_server/aria2_rpc.py`\n"
         "- any file under `docs/governance/`\n"
     )
 

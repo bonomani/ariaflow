@@ -41,7 +41,7 @@ evidence_refs:
   - ./biss-classification.md
   - ./asm-state-model.md
   - ./tic-oracle.md
-  - ../../src/aria_queue/contracts.py
+  - ../../src/ariaflow_server/contracts.py
   - ../ARCHITECTURE.md
   - ../STATES_AND_INTERACTIONS.md
   - ../ARIA2_RPC_WRAPPERS.md

@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPO = "bonomani/ariaflow-server"
 PYPROJECT = ROOT / "pyproject.toml"
-PACKAGE_INIT = ROOT / "src" / "aria_queue" / "__init__.py"
+PACKAGE_INIT = ROOT / "src" / "ariaflow_server" / "__init__.py"
 VERSION_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)(?:a(\d+))?")
 
 
@@ -28,7 +28,7 @@ def read_package_version() -> str:
     text = PACKAGE_INIT.read_text(encoding="utf-8")
     match = re.search(r'^__version__ = "([^"]+)"$', text, re.MULTILINE)
     if not match:
-        raise SystemExit("Could not find package version in src/aria_queue/__init__.py")
+        raise SystemExit("Could not find package version in src/ariaflow_server/__init__.py")
     return match.group(1)
 
 
@@ -103,7 +103,7 @@ def dispatch_release(version: str) -> None:
 
 def run_py_compile() -> None:
     files = (
-        sorted(glob.glob(str(ROOT / "src" / "aria_queue" / "*.py")))
+        sorted(glob.glob(str(ROOT / "src" / "ariaflow_server" / "*.py")))
         + sorted(glob.glob(str(ROOT / "tests" / "*.py")))
         + sorted(glob.glob(str(ROOT / "tests" / "**" / "*.py"), recursive=True))
         + [str(ROOT / "scripts" / "publish.py"), str(ROOT / "scripts" / "homebrew_formula.py")]

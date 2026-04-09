@@ -16,7 +16,7 @@ from .storage import (
 
 
 def _core() -> Any:
-    """Lazy import to allow patching through aria_queue.core."""
+    """Lazy import to allow patching through ariaflow_server.core."""
     from . import core
 
     return core
@@ -723,7 +723,7 @@ def post_action(item: dict[str, Any]) -> dict[str, Any]:
                 torrent_info = create_private_torrent(
                     file_path,
                     tracker_url,
-                    comment=f"ariaflow distribute: {item.get('url', '')}",
+                    comment=f"ariaflow-server distribute: {item.get('url', '')}",
                 )
                 seed_ratio = str(_pv("distribute_seed_ratio", 0) or 0)
                 seed_gid = core.aria2_add_torrent(

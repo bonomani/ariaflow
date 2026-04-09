@@ -15,10 +15,10 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from aria_queue import core
+from ariaflow_server import core
 
 
-_MODULE = "aria_queue.core.aria_rpc"
+_MODULE = "ariaflow_server.core.aria_rpc"
 
 
 def _mock_rpc(return_value: object = "OK") -> MagicMock:

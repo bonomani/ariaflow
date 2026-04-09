@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from conftest import APIServerTestCase, request_json as _req
 
-from aria_queue.core import load_queue, save_queue
+from ariaflow_server.core import load_queue, save_queue
 
 
 ScenarioBase = APIServerTestCase
@@ -42,7 +42,7 @@ class TestScenarioNormalDownload(ScenarioBase):
         # 2. Run preflight
         with (
             patch(
-                "aria_queue.webapp.preflight",
+                "ariaflow_server.webapp.preflight",
                 return_value={
                     "contract": "UCC",
                     "version": "2.0",
@@ -66,8 +66,8 @@ class TestScenarioNormalDownload(ScenarioBase):
                     "exit_code": 0,
                 },
             ),
-            patch("aria_queue.webapp.aria2_status", return_value={"reachable": True}),
-            patch("aria_queue.webapp.aria2_current_bandwidth", return_value={}),
+            patch("ariaflow_server.webapp.aria2_status", return_value={"reachable": True}),
+            patch("ariaflow_server.webapp.aria2_current_bandwidth", return_value={}),
         ):
             _, preflight, _ = _req(f"{base}/api/scheduler/preflight", "POST")
         self.assertEqual(preflight["status"], "pass")
@@ -272,8 +272,8 @@ class TestScenarioBandwidth(ScenarioBase):
             "responsiveness_rpm": 1200.0,
         }
         with (
-            patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
+            patch("ariaflow_server.core.probe_bandwidth", return_value=probe_result),
+            patch("ariaflow_server.core.aria2_set_max_overall_download_limit"),
         ):
             _, probed, _ = _req(f"{base}/api/bandwidth/probe", "POST")
 
@@ -345,12 +345,12 @@ class TestScenarioTorrentFileSelection(ScenarioBase):
                 "selected": "true",
             },
         ]
-        with patch("aria_queue.core.aria_rpc", return_value={"result": files}):
+        with patch("ariaflow_server.core.aria_rpc", return_value={"result": files}):
             _, file_list, _ = _req(f"{base}/api/downloads/{item_id}/files")
         self.assertEqual(len(file_list["files"]), 3)
 
         # Select only the ISO
-        with patch("aria_queue.core.aria_rpc") as rpc:
+        with patch("ariaflow_server.core.aria_rpc") as rpc:
             _, selected, _ = _req(
                 f"{base}/api/downloads/{item_id}/files",
                 "POST",
@@ -397,8 +397,8 @@ class TestScenarioAria2Options(ScenarioBase):
 
         # Apply safe options
         with (
-            patch("aria_queue.core.aria_rpc"),
-            patch("aria_queue.core.aria2_current_global_options", return_value={}),
+            patch("ariaflow_server.core.aria_rpc"),
+            patch("ariaflow_server.core.aria2_current_global_options", return_value={}),
         ):
             _, result, _ = _req(
                 f"{base}/api/aria2/change_global_option",
@@ -497,7 +497,7 @@ class TestScenarioFrontendConsistency(ScenarioBase):
         _, body, hdrs = _req(f"{base}/api/status")
         self.assertEqual(body["_schema"], "2")
         self.assertEqual(hdrs.get("X-Schema-Version"), "2")
-        self.assertEqual(body["ariaflow"]["schema_version"], "2")
+        self.assertEqual(body["ariaflow-server"]["schema_version"], "2")
 
 
 # ═══════════════════════════════════════════════════════
@@ -565,16 +565,16 @@ class TestScenarioLifecycle(ScenarioBase):
 
         # Check lifecycle status
         _, lifecycle, _ = _req(f"{base}/api/lifecycle")
-        self.assertIn("ariaflow", lifecycle)
+        self.assertIn("ariaflow-server", lifecycle)
         self.assertIn("aria2", lifecycle)
         self.assertIn("networkquality", lifecycle)
 
         # Install (mocked)
         with (
-            patch("aria_queue.routes.lifecycle.is_macos", return_value=True),
+            patch("ariaflow_server.routes.lifecycle.is_macos", return_value=True),
             patch(
-                "aria_queue.routes.lifecycle.homebrew_install_ariaflow_server",
-                return_value=["brew install ariaflow"],
+                "ariaflow_server.routes.lifecycle.homebrew_install_ariaflow_server",
+                return_value=["brew install ariaflow-server"],
             ),
         ):
             _, result, _ = _req(
@@ -589,10 +589,10 @@ class TestScenarioLifecycle(ScenarioBase):
 
         # Uninstall (mocked)
         with (
-            patch("aria_queue.routes.lifecycle.is_macos", return_value=True),
+            patch("ariaflow_server.routes.lifecycle.is_macos", return_value=True),
             patch(
-                "aria_queue.routes.lifecycle.homebrew_uninstall_ariaflow_server",
-                return_value=["brew uninstall ariaflow"],
+                "ariaflow_server.routes.lifecycle.homebrew_uninstall_ariaflow_server",
+                return_value=["brew uninstall ariaflow-server"],
             ),
         ):
             _, result, _ = _req(

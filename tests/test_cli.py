@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from conftest import IsolatedTestCase
 
-from aria_queue.cli import build_parser, main
+from ariaflow_server.cli import build_parser, main
 
 
 class TestCliParser(unittest.TestCase):
@@ -157,10 +157,10 @@ class TestCliExecution(IsolatedTestCase):
         with (
             patch("sys.argv", ["ariaflow-server", "preflight"]),
             patch(
-                "aria_queue.contracts.aria_rpc",
+                "ariaflow_server.contracts.aria_rpc",
                 return_value={"result": {"version": "1.37.0"}},
             ),
-            patch("aria_queue.contracts.aria2_ensure_daemon"),
+            patch("ariaflow_server.contracts.aria2_ensure_daemon"),
         ):
             stdout = StringIO()
             with patch("sys.stdout", stdout):
@@ -173,10 +173,10 @@ class TestCliExecution(IsolatedTestCase):
         with (
             patch("sys.argv", ["ariaflow-server", "preflight", "--json"]),
             patch(
-                "aria_queue.contracts.aria_rpc",
+                "ariaflow_server.contracts.aria_rpc",
                 return_value={"result": {"version": "1.37.0"}},
             ),
-            patch("aria_queue.contracts.aria2_ensure_daemon"),
+            patch("ariaflow_server.contracts.aria2_ensure_daemon"),
         ):
             stdout = StringIO()
             with patch("sys.stdout", stdout):
@@ -189,7 +189,7 @@ class TestCliExecution(IsolatedTestCase):
         with (
             patch("sys.argv", ["ariaflow-server", "ucc", "--json"]),
             patch(
-                "aria_queue.contracts.preflight",
+                "ariaflow_server.contracts.preflight",
                 return_value={
                     "contract": "UCC",
                     "version": "2.0",
@@ -202,8 +202,8 @@ class TestCliExecution(IsolatedTestCase):
                     "exit_code": 0,
                 },
             ),
-            patch("aria_queue.core.process_queue", return_value=[]),
-            patch("aria_queue.core.get_active_progress", return_value=None),
+            patch("ariaflow_server.core.process_queue", return_value=[]),
+            patch("ariaflow_server.core.get_active_progress", return_value=None),
         ):
             stdout = StringIO()
             with patch("sys.stdout", stdout):
@@ -220,7 +220,7 @@ class TestCliExecution(IsolatedTestCase):
                 code = main()
         self.assertEqual(code, 0)
         data = json.loads(stdout.getvalue())
-        self.assertIn("ariaflow", data)
+        self.assertIn("ariaflow-server", data)
 
     def test_uninstall_dry_run(self) -> None:
         with patch("sys.argv", ["ariaflow-server", "uninstall", "--dry-run"]):
@@ -229,7 +229,7 @@ class TestCliExecution(IsolatedTestCase):
                 code = main()
         self.assertEqual(code, 0)
         data = json.loads(stdout.getvalue())
-        self.assertIn("ariaflow", data)
+        self.assertIn("ariaflow-server", data)
 
     def test_lifecycle(self) -> None:
         with patch("sys.argv", ["ariaflow-server", "lifecycle"]):
@@ -238,7 +238,7 @@ class TestCliExecution(IsolatedTestCase):
                 code = main()
         self.assertEqual(code, 0)
         data = json.loads(stdout.getvalue())
-        self.assertIn("ariaflow", data)
+        self.assertIn("ariaflow-server", data)
         self.assertIn("aria2", data)
 
 

@@ -408,7 +408,7 @@ Probe result stored in state.json as last_bandwidth_probe:
 
 ### 3.7 State File Summary
 
-All files under `~/.config/aria-queue/` (override: `ARIA_QUEUE_DIR`), accessed under fcntl file lock.
+All files under `~/.config/ariaflow-server/` (override: `ARIAFLOW_DIR`), accessed under fcntl file lock.
 
 | File | Content |
 |---|---|

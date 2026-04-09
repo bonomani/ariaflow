@@ -15,7 +15,7 @@ from .bandwidth import _coerce_float
 
 
 def _core() -> Any:
-    """Lazy import to allow patching through aria_queue.core."""
+    """Lazy import to allow patching through ariaflow_server.core."""
     from . import core
 
     return core

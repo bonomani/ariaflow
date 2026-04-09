@@ -41,7 +41,7 @@ ariaflow-server status             # show queue state
 | `ariaflow-server uninstall` | Remove macOS components | `--dry-run`, `--with-aria2` |
 | `ariaflow-server lifecycle` | Show install and service status | |
 
-Also: `python -m aria_queue <command>`
+Also: `python -m ariaflow_server <command>`
 
 ## REST API
 
@@ -101,7 +101,7 @@ Base URL: `http://127.0.0.1:8000`
 
 ## Storage
 
-Default state files under `~/.config/aria-queue/` (override: `ARIA_QUEUE_DIR`):
+Default state files under `~/.config/ariaflow-server/` (override: `ARIAFLOW_DIR`):
 
 | File | Purpose |
 |---|---|

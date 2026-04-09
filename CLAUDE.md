@@ -1,7 +1,7 @@
-# Directives Claude Code - ariaflow (backend)
+# Directives Claude Code - ariaflow-server (backend)
 
 ## General rule — external repos and directories
-- On ANY repo or directory other than this one (ariaflow), you MAY ONLY run read-only commands: `cat`, `head`, `grep`, `find`, `ls`, `git log`, `git show`, `git diff` (without write flags).
+- On ANY repo or directory other than this one (ariaflow-server), you MAY ONLY run read-only commands: `cat`, `head`, `grep`, `find`, `ls`, `git log`, `git show`, `git diff` (without write flags).
 - NEVER run mutating commands outside this repo: `git add`, `git commit`, `git push`, `git pull`, `git checkout`, `git reset`, `rm`, `mv`, `cp`, `sed`, `pip install`, or any command that modifies files, state, or history.
 
 ## Cross-repo boundary — ariaflow-web (frontend)

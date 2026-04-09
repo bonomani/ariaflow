@@ -11,8 +11,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from conftest import IsolatedTestCase
 
-from aria_queue.contracts import preflight, run_ucc
-from aria_queue.core import (
+from ariaflow_server.contracts import preflight, run_ucc
+from ariaflow_server.core import (
     _apply_bandwidth_probe,
     _should_probe_bandwidth,
     add_queue_item,
@@ -28,7 +28,7 @@ from aria_queue.core import (
     save_state,
     start_new_state_session,
 )
-from aria_queue.install import (
+from ariaflow_server.install import (
     install_all,
     networkquality_status,
     status_all,
@@ -49,7 +49,7 @@ class TicAriaFlowTests(IsolatedTestCase):
         self.assertTrue(item.id)
         self.assertEqual(item.status, "queued")
         self.assertTrue(item.session_id)
-        from aria_queue.core import load_state
+        from ariaflow_server.core import load_state
 
         state = load_state()
         self.assertTrue(state.get("session_started_at"))
@@ -86,10 +86,10 @@ class TicAriaFlowTests(IsolatedTestCase):
     def test_preflight_emits_gate_results(self) -> None:
         with (
             patch(
-                "aria_queue.contracts.aria_rpc",
+                "ariaflow_server.contracts.aria_rpc",
                 return_value={"result": {"version": "1.37.0"}},
             ),
-            patch("aria_queue.contracts.aria2_ensure_daemon") as ensure,
+            patch("ariaflow_server.contracts.aria2_ensure_daemon") as ensure,
         ):
             result = preflight()
         self.assertIn("gates", result)
@@ -101,13 +101,13 @@ class TicAriaFlowTests(IsolatedTestCase):
     def test_preflight_bootstraps_aria2_when_rpc_is_initially_unavailable(self) -> None:
         with (
             patch(
-                "aria_queue.contracts.aria_rpc",
+                "ariaflow_server.contracts.aria_rpc",
                 side_effect=[
                     RuntimeError("offline"),
                     {"result": {"version": "1.37.0"}},
                 ],
             ),
-            patch("aria_queue.contracts.aria2_ensure_daemon") as ensure,
+            patch("ariaflow_server.contracts.aria2_ensure_daemon") as ensure,
         ):
             result = preflight()
         gate = next(
@@ -117,7 +117,7 @@ class TicAriaFlowTests(IsolatedTestCase):
         ensure.assert_called_once_with(port=6800)
 
     def test_auto_preflight_default_is_disabled(self) -> None:
-        from aria_queue.contracts import load_declaration
+        from ariaflow_server.contracts import load_declaration
 
         declaration = load_declaration()
         prefs = declaration.get("uic", {}).get("preferences", [])
@@ -127,7 +127,7 @@ class TicAriaFlowTests(IsolatedTestCase):
         self.assertFalse(auto.get("value", True))
 
     def test_concurrency_default_is_sequential(self) -> None:
-        from aria_queue.contracts import load_declaration
+        from ariaflow_server.contracts import load_declaration
 
         declaration = load_declaration()
         prefs = declaration.get("uic", {}).get("preferences", [])
@@ -142,7 +142,7 @@ class TicAriaFlowTests(IsolatedTestCase):
         self.assertEqual(limit.get("value", 0), 1)
 
     def test_duplicate_active_transfer_default_is_remove(self) -> None:
-        from aria_queue.contracts import load_declaration
+        from ariaflow_server.contracts import load_declaration
 
         declaration = load_declaration()
         prefs = declaration.get("uic", {}).get("preferences", [])
@@ -157,7 +157,7 @@ class TicAriaFlowTests(IsolatedTestCase):
         self.assertEqual(dedup.get("value"), "remove")
 
     def test_probe_fallback_reports_reason(self) -> None:
-        with patch("aria_queue.core._find_networkquality", return_value=None):
+        with patch("ariaflow_server.core._find_networkquality", return_value=None):
             result = probe_bandwidth()
         self.assertEqual(result["source"], "default")
         self.assertEqual(result["reason"], "probe_unavailable")
@@ -174,11 +174,11 @@ class TicAriaFlowTests(IsolatedTestCase):
         )
         with (
             patch(
-                "aria_queue.core._find_networkquality",
+                "ariaflow_server.core._find_networkquality",
                 return_value="/usr/bin/networkQuality",
             ),
             patch(
-                "aria_queue.core.subprocess.run",
+                "ariaflow_server.core.subprocess.run",
                 return_value=subprocess.CompletedProcess(
                     args=[], returncode=0, stdout=output
                 ),
@@ -209,10 +209,10 @@ class TicAriaFlowTests(IsolatedTestCase):
         )
         with (
             patch(
-                "aria_queue.core._find_networkquality",
+                "ariaflow_server.core._find_networkquality",
                 return_value="/usr/bin/networkQuality",
             ),
-            patch("aria_queue.core.subprocess.run", side_effect=timeout),
+            patch("ariaflow_server.core.subprocess.run", side_effect=timeout),
         ):
             result = probe_bandwidth()
         self.assertEqual(result["source"], "default")
@@ -240,13 +240,13 @@ class TicAriaFlowTests(IsolatedTestCase):
             "last_bandwidth_probe_at": 100.0,
         }
         with (
-            patch("aria_queue.core.time.time", return_value=120.0),
-            patch("aria_queue.core.probe_bandwidth") as probe_bandwidth_mock,
-            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
+            patch("ariaflow_server.core.time.time", return_value=120.0),
+            patch("ariaflow_server.core.probe_bandwidth") as probe_bandwidth_mock,
+            patch("ariaflow_server.core.aria2_current_bandwidth", return_value={}),
             patch(
-                "aria_queue.core.aria2_set_max_overall_download_limit"
+                "ariaflow_server.core.aria2_set_max_overall_download_limit"
             ) as set_bandwidth_mock,
-            patch("aria_queue.core.record_action") as record_action_mock,
+            patch("ariaflow_server.core.record_action") as record_action_mock,
         ):
             probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(state=state)
         self.assertFalse(probe_bandwidth_mock.called)
@@ -265,15 +265,15 @@ class TicAriaFlowTests(IsolatedTestCase):
             "cap_bytes_per_sec": 4_000_000,
         }
         with (
-            patch("aria_queue.core.time.time", return_value=400.0),
+            patch("ariaflow_server.core.time.time", return_value=400.0),
             patch(
-                "aria_queue.core.probe_bandwidth", return_value=fresh_probe
+                "ariaflow_server.core.probe_bandwidth", return_value=fresh_probe
             ) as probe_bandwidth_mock,
-            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
+            patch("ariaflow_server.core.aria2_current_bandwidth", return_value={}),
             patch(
-                "aria_queue.core.aria2_set_max_overall_download_limit"
+                "ariaflow_server.core.aria2_set_max_overall_download_limit"
             ) as set_bandwidth_mock,
-            patch("aria_queue.core.record_action") as record_action_mock,
+            patch("ariaflow_server.core.record_action") as record_action_mock,
         ):
             probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(state=state)
         probe_bandwidth_mock.assert_called_once()
@@ -287,14 +287,14 @@ class TicAriaFlowTests(IsolatedTestCase):
     def test_discover_active_transfer_prefers_state_gid(self) -> None:
         with (
             patch(
-                "aria_queue.core.load_state",
+                "ariaflow_server.core.load_state",
                 return_value={
                     "active_gid": "gid-1",
                     "active_url": "https://example.com/a.gguf",
                 },
             ),
             patch(
-                "aria_queue.core.aria2_tell_status",
+                "ariaflow_server.core.aria2_tell_status",
                 return_value={
                     "status": "active",
                     "completedLength": "10",
@@ -311,11 +311,11 @@ class TicAriaFlowTests(IsolatedTestCase):
     def test_discover_active_transfer_recovers_url_from_queue(self) -> None:
         with (
             patch(
-                "aria_queue.core.load_state",
+                "ariaflow_server.core.load_state",
                 return_value={"active_gid": "gid-1", "active_url": None},
             ),
             patch(
-                "aria_queue.core.load_queue",
+                "ariaflow_server.core.load_queue",
                 return_value=[
                     {
                         "id": "item-1",
@@ -326,7 +326,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 ],
             ),
             patch(
-                "aria_queue.core.aria2_tell_status",
+                "ariaflow_server.core.aria2_tell_status",
                 return_value={
                     "status": "active",
                     "completedLength": "10",
@@ -360,11 +360,11 @@ class TicAriaFlowTests(IsolatedTestCase):
             }
         ]
         with (
-            patch("aria_queue.core.load_state", return_value={"session_id": "batch-1"}),
-            patch("aria_queue.core.aria2_tell_active", return_value=live),
-            patch("aria_queue.core.load_queue", return_value=[queue_item]),
-            patch("aria_queue.core.save_queue") as save_queue,
-            patch("aria_queue.core.record_action"),
+            patch("ariaflow_server.core.load_state", return_value={"session_id": "batch-1"}),
+            patch("ariaflow_server.core.aria2_tell_active", return_value=live),
+            patch("ariaflow_server.core.load_queue", return_value=[queue_item]),
+            patch("ariaflow_server.core.save_queue") as save_queue,
+            patch("ariaflow_server.core.record_action"),
         ):
             result = reconcile_live_queue()
         self.assertTrue(result["changed"])
@@ -373,9 +373,9 @@ class TicAriaFlowTests(IsolatedTestCase):
 
     def test_reconcile_live_queue_adopts_unmatched_active_job(self) -> None:
         with (
-            patch("aria_queue.core.load_state", return_value={"session_id": "batch-1"}),
+            patch("ariaflow_server.core.load_state", return_value={"session_id": "batch-1"}),
             patch(
-                "aria_queue.core.aria2_tell_active",
+                "ariaflow_server.core.aria2_tell_active",
                 return_value=[
                     {
                         "gid": "gid-9",
@@ -387,9 +387,9 @@ class TicAriaFlowTests(IsolatedTestCase):
                     }
                 ],
             ),
-            patch("aria_queue.core.load_queue", return_value=[]),
-            patch("aria_queue.core.save_queue") as save_queue,
-            patch("aria_queue.core.record_action") as record_action,
+            patch("ariaflow_server.core.load_queue", return_value=[]),
+            patch("ariaflow_server.core.save_queue") as save_queue,
+            patch("ariaflow_server.core.record_action") as record_action,
         ):
             result = reconcile_live_queue()
         self.assertTrue(result["changed"])
@@ -399,9 +399,9 @@ class TicAriaFlowTests(IsolatedTestCase):
 
     def test_reconcile_live_queue_updates_old_session_item_in_place(self) -> None:
         with (
-            patch("aria_queue.core.load_state", return_value={"session_id": "batch-2"}),
+            patch("ariaflow_server.core.load_state", return_value={"session_id": "batch-2"}),
             patch(
-                "aria_queue.core.aria2_tell_active",
+                "ariaflow_server.core.aria2_tell_active",
                 return_value=[
                     {
                         "gid": "gid-9",
@@ -414,7 +414,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 ],
             ),
             patch(
-                "aria_queue.core.load_queue",
+                "ariaflow_server.core.load_queue",
                 return_value=[
                     {
                         "id": "item-1",
@@ -425,8 +425,8 @@ class TicAriaFlowTests(IsolatedTestCase):
                     }
                 ],
             ),
-            patch("aria_queue.core.save_queue") as save_queue,
-            patch("aria_queue.core.record_action") as record_action,
+            patch("ariaflow_server.core.save_queue") as save_queue,
+            patch("ariaflow_server.core.record_action") as record_action,
         ):
             result = reconcile_live_queue()
         self.assertTrue(result["changed"])
@@ -482,11 +482,11 @@ class TicAriaFlowTests(IsolatedTestCase):
             saved_items[:] = items
 
         with (
-            patch("aria_queue.core.load_state", return_value={"session_id": "batch-3"}),
-            patch("aria_queue.core.aria2_tell_active", return_value=live),
-            patch("aria_queue.core.load_queue", return_value=queue_items),
-            patch("aria_queue.core.save_queue", side_effect=capture_save),
-            patch("aria_queue.core.record_action") as record_action,
+            patch("ariaflow_server.core.load_state", return_value={"session_id": "batch-3"}),
+            patch("ariaflow_server.core.aria2_tell_active", return_value=live),
+            patch("ariaflow_server.core.load_queue", return_value=queue_items),
+            patch("ariaflow_server.core.save_queue", side_effect=capture_save),
+            patch("ariaflow_server.core.record_action") as record_action,
         ):
             result = reconcile_live_queue()
         self.assertTrue(result["changed"])
@@ -523,8 +523,8 @@ class TicAriaFlowTests(IsolatedTestCase):
             },
         ]
         with (
-            patch("aria_queue.core.aria2_tell_active", return_value=active),
-            patch("aria_queue.core.aria_rpc") as rpc,
+            patch("ariaflow_server.core.aria2_tell_active", return_value=active),
+            patch("ariaflow_server.core.aria_rpc") as rpc,
         ):
             result = deduplicate_active_transfers()
         self.assertTrue(result["changed"])
@@ -541,11 +541,11 @@ class TicAriaFlowTests(IsolatedTestCase):
         save_queue(items)
 
         with (
-            patch("aria_queue.core.aria2_ensure_daemon"),
-            patch("aria_queue.core.deduplicate_active_transfers"),
-            patch("aria_queue.core.reconcile_live_queue"),
+            patch("ariaflow_server.core.aria2_ensure_daemon"),
+            patch("ariaflow_server.core.deduplicate_active_transfers"),
+            patch("ariaflow_server.core.reconcile_live_queue"),
             patch(
-                "aria_queue.core.probe_bandwidth",
+                "ariaflow_server.core.probe_bandwidth",
                 return_value={
                     "source": "default",
                     "reason": "probe_unavailable",
@@ -553,19 +553,19 @@ class TicAriaFlowTests(IsolatedTestCase):
                     "cap_bytes_per_sec": 250000,
                 },
             ),
-            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
-            patch("aria_queue.core.aria2_tell_active", return_value=[]),
+            patch("ariaflow_server.core.aria2_current_bandwidth", return_value={}),
+            patch("ariaflow_server.core.aria2_set_max_overall_download_limit"),
+            patch("ariaflow_server.core.aria2_tell_active", return_value=[]),
             patch(
-                "aria_queue.core.aria2_add_download",
+                "ariaflow_server.core.aria2_add_download",
                 side_effect=RuntimeError("aria2 still unavailable"),
             ),
             patch(
-                "aria_queue.core.aria2_tell_status",
+                "ariaflow_server.core.aria2_tell_status",
                 side_effect=RuntimeError("connection refused"),
             ),
             patch(
-                "aria_queue.core.time.sleep",
+                "ariaflow_server.core.time.sleep",
                 side_effect=[None] * 10 + [StopIteration("stop")],
             ),
         ):
@@ -585,11 +585,11 @@ class TicAriaFlowTests(IsolatedTestCase):
         save_queue(items)
 
         with (
-            patch("aria_queue.core.aria2_ensure_daemon"),
-            patch("aria_queue.core.deduplicate_active_transfers"),
-            patch("aria_queue.core.reconcile_live_queue"),
+            patch("ariaflow_server.core.aria2_ensure_daemon"),
+            patch("ariaflow_server.core.deduplicate_active_transfers"),
+            patch("ariaflow_server.core.reconcile_live_queue"),
             patch(
-                "aria_queue.core.probe_bandwidth",
+                "ariaflow_server.core.probe_bandwidth",
                 return_value={
                     "source": "default",
                     "reason": "probe_unavailable",
@@ -597,15 +597,15 @@ class TicAriaFlowTests(IsolatedTestCase):
                     "cap_bytes_per_sec": 250000,
                 },
             ),
-            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
-            patch("aria_queue.core.aria2_tell_active", return_value=[]),
+            patch("ariaflow_server.core.aria2_current_bandwidth", return_value={}),
+            patch("ariaflow_server.core.aria2_set_max_overall_download_limit"),
+            patch("ariaflow_server.core.aria2_tell_active", return_value=[]),
             patch(
-                "aria_queue.core.aria2_tell_status",
+                "ariaflow_server.core.aria2_tell_status",
                 side_effect=TimeoutError(),
             ),
             patch(
-                "aria_queue.core.time.sleep",
+                "ariaflow_server.core.time.sleep",
                 side_effect=[StopIteration("stop")],
             ),
         ):
@@ -629,11 +629,11 @@ class TicAriaFlowTests(IsolatedTestCase):
             "files": [{"uris": [{"uri": "https://example.com/model.gguf"}]}],
         }
         with (
-            patch("aria_queue.core.aria2_ensure_daemon"),
-            patch("aria_queue.core.deduplicate_active_transfers"),
-            patch("aria_queue.core.reconcile_live_queue"),
+            patch("ariaflow_server.core.aria2_ensure_daemon"),
+            patch("ariaflow_server.core.deduplicate_active_transfers"),
+            patch("ariaflow_server.core.reconcile_live_queue"),
             patch(
-                "aria_queue.core.probe_bandwidth",
+                "ariaflow_server.core.probe_bandwidth",
                 return_value={
                     "source": "default",
                     "reason": "probe_unavailable",
@@ -641,15 +641,15 @@ class TicAriaFlowTests(IsolatedTestCase):
                     "cap_bytes_per_sec": 250000,
                 },
             ),
-            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
+            patch("ariaflow_server.core.aria2_current_bandwidth", return_value={}),
             patch(
-                "aria_queue.core.aria2_set_max_overall_download_limit"
+                "ariaflow_server.core.aria2_set_max_overall_download_limit"
             ) as aria2_set_max_overall_download_limit,
-            patch("aria_queue.core.aria2_tell_active", return_value=[]),
-            patch("aria_queue.core.aria2_add_download", return_value="gid-1"),
-            patch("aria_queue.core.aria2_tell_status", return_value=complete),
+            patch("ariaflow_server.core.aria2_tell_active", return_value=[]),
+            patch("ariaflow_server.core.aria2_add_download", return_value="gid-1"),
+            patch("ariaflow_server.core.aria2_tell_status", return_value=complete),
             patch(
-                "aria_queue.core.time.sleep", side_effect=[None, StopIteration("stop")]
+                "ariaflow_server.core.time.sleep", side_effect=[None, StopIteration("stop")]
             ),
         ):
             with self.assertRaises(StopIteration):
@@ -679,11 +679,11 @@ class TicAriaFlowTests(IsolatedTestCase):
             raise _StopLoop()
 
         with (
-            patch("aria_queue.core.aria2_ensure_daemon"),
-            patch("aria_queue.core.deduplicate_active_transfers"),
-            patch("aria_queue.core.reconcile_live_queue"),
+            patch("ariaflow_server.core.aria2_ensure_daemon"),
+            patch("ariaflow_server.core.deduplicate_active_transfers"),
+            patch("ariaflow_server.core.reconcile_live_queue"),
             patch(
-                "aria_queue.core.probe_bandwidth",
+                "ariaflow_server.core.probe_bandwidth",
                 return_value={
                     "source": "default",
                     "reason": "probe_unavailable",
@@ -691,11 +691,11 @@ class TicAriaFlowTests(IsolatedTestCase):
                     "cap_bytes_per_sec": 250000,
                 },
             ),
-            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
-            patch("aria_queue.core.aria2_tell_active", return_value=[]),
+            patch("ariaflow_server.core.aria2_current_bandwidth", return_value={}),
+            patch("ariaflow_server.core.aria2_set_max_overall_download_limit"),
+            patch("ariaflow_server.core.aria2_tell_active", return_value=[]),
             patch(
-                "aria_queue.core.aria2_tell_status",
+                "ariaflow_server.core.aria2_tell_status",
                 return_value={
                     "status": "paused",
                     "errorCode": "0",
@@ -706,8 +706,8 @@ class TicAriaFlowTests(IsolatedTestCase):
                     "files": [],
                 },
             ),
-            patch("aria_queue.core.aria2_add_download") as aria2_add_download,
-            patch("aria_queue.core.time.sleep", side_effect=stop_after_one_loop),
+            patch("ariaflow_server.core.aria2_add_download") as aria2_add_download,
+            patch("ariaflow_server.core.time.sleep", side_effect=stop_after_one_loop),
         ):
             with self.assertRaises(_StopLoop):
                 process_queue()
@@ -731,11 +731,11 @@ class TicAriaFlowTests(IsolatedTestCase):
         save_state(state)
 
         with (
-            patch("aria_queue.core.aria2_ensure_daemon"),
-            patch("aria_queue.core.deduplicate_active_transfers"),
-            patch("aria_queue.core.reconcile_live_queue"),
+            patch("ariaflow_server.core.aria2_ensure_daemon"),
+            patch("ariaflow_server.core.deduplicate_active_transfers"),
+            patch("ariaflow_server.core.reconcile_live_queue"),
             patch(
-                "aria_queue.core.probe_bandwidth",
+                "ariaflow_server.core.probe_bandwidth",
                 return_value={
                     "source": "default",
                     "reason": "probe_unavailable",
@@ -743,13 +743,13 @@ class TicAriaFlowTests(IsolatedTestCase):
                     "cap_bytes_per_sec": 250000,
                 },
             ),
-            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
-            patch("aria_queue.core.aria2_tell_active", return_value=[]),
-            patch("aria_queue.core.aria2_multicall", return_value=[]),
-            patch("aria_queue.core.aria2_add_download", return_value="gid-recovered") as add_download,
+            patch("ariaflow_server.core.aria2_current_bandwidth", return_value={}),
+            patch("ariaflow_server.core.aria2_set_max_overall_download_limit"),
+            patch("ariaflow_server.core.aria2_tell_active", return_value=[]),
+            patch("ariaflow_server.core.aria2_multicall", return_value=[]),
+            patch("ariaflow_server.core.aria2_add_download", return_value="gid-recovered") as add_download,
             patch(
-                "aria_queue.core.time.sleep",
+                "ariaflow_server.core.time.sleep",
                 side_effect=[StopIteration("stop")],
             ),
         ):
@@ -778,10 +778,10 @@ class TicAriaFlowTests(IsolatedTestCase):
             "exit_code": 0,
         }
         with (
-            patch("aria_queue.contracts.preflight", return_value=preflight_result),
-            patch("aria_queue.core.load_queue", return_value=[]),
-            patch("aria_queue.core.process_queue", return_value=[]),
-            patch("aria_queue.core.get_active_progress", return_value=None),
+            patch("ariaflow_server.contracts.preflight", return_value=preflight_result),
+            patch("ariaflow_server.core.load_queue", return_value=[]),
+            patch("ariaflow_server.core.process_queue", return_value=[]),
+            patch("ariaflow_server.core.get_active_progress", return_value=None),
         ):
             result = run_ucc()
         self.assertIn("result", result)
@@ -791,11 +791,11 @@ class TicAriaFlowTests(IsolatedTestCase):
 
     def test_install_dry_run_is_describable(self) -> None:
         plan = install_all(dry_run=True)
-        self.assertIn("ariaflow", plan)
-        self.assertEqual(plan["ariaflow"]["meta"]["contract"], "UCC")
-        self.assertEqual(plan["ariaflow"]["result"]["observation"], "ok")
+        self.assertIn("ariaflow-server", plan)
+        self.assertEqual(plan["ariaflow-server"]["meta"]["contract"], "UCC")
+        self.assertEqual(plan["ariaflow-server"]["result"]["observation"], "ok")
         self.assertIn(
-            plan["ariaflow"]["result"]["outcome"], ["changed", "unchanged"]
+            plan["ariaflow-server"]["result"]["outcome"], ["changed", "unchanged"]
         )
 
     def test_install_dry_run_with_aria2_is_describable(self) -> None:
@@ -806,29 +806,29 @@ class TicAriaFlowTests(IsolatedTestCase):
 
     def test_lifecycle_reports_status_shape(self) -> None:
         status = status_all()
-        self.assertIn("ariaflow", status)
+        self.assertIn("ariaflow-server", status)
         self.assertIn("aria2", status)
         self.assertIn("networkquality", status)
         aria2_svc_keys = [k for k in status if k.startswith("aria2-")]
         self.assertEqual(len(aria2_svc_keys), 1)
-        self.assertEqual(status["ariaflow"]["meta"]["contract"], "UCC")
+        self.assertEqual(status["ariaflow-server"]["meta"]["contract"], "UCC")
         self.assertIn(
-            status["ariaflow"]["result"]["outcome"], ["converged", "unchanged"]
+            status["ariaflow-server"]["result"]["outcome"], ["converged", "unchanged"]
         )
 
     def test_lifecycle_status_includes_versions(self) -> None:
         with (
-            patch("aria_queue.install.package_version", return_value="9.9.9"),
-            patch("aria_queue.install.is_macos", return_value=True),
-            patch("aria_queue.install.is_windows", return_value=False),
-            patch("aria_queue.install.is_linux", return_value=False),
-            patch("aria_queue.install.brew_is_installed", return_value=True),
+            patch("ariaflow_server.install.package_version", return_value="9.9.9"),
+            patch("ariaflow_server.install.is_macos", return_value=True),
+            patch("ariaflow_server.install.is_windows", return_value=False),
+            patch("ariaflow_server.install.is_linux", return_value=False),
+            patch("ariaflow_server.install.brew_is_installed", return_value=True),
             patch(
-                "aria_queue.install.brew_package_version",
+                "ariaflow_server.install.brew_package_version",
                 side_effect=["0.1.1", "0.8.2"],
             ),
             patch(
-                "aria_queue.install.networkquality_status",
+                "ariaflow_server.install.networkquality_status",
                 return_value={
                     "installed": True,
                     "usable": True,
@@ -838,7 +838,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 },
             ),
             patch(
-                "aria_queue.platform.launchd.launchd_aria2_status",
+                "ariaflow_server.platform.launchd.launchd_aria2_status",
                 return_value={
                     "loaded": True,
                     "plist_exists": True,
@@ -848,7 +848,7 @@ class TicAriaFlowTests(IsolatedTestCase):
             ),
         ):
             status = status_all()
-        self.assertIn("0.1.1", status["ariaflow"]["result"]["message"])
+        self.assertIn("0.1.1", status["ariaflow-server"]["result"]["message"])
         self.assertIn(
             "runtime download dependency", status["aria2"]["result"]["message"]
         )
@@ -865,10 +865,10 @@ class TicAriaFlowTests(IsolatedTestCase):
     def test_networkquality_status_reports_availability_without_probe(self) -> None:
         with (
             patch(
-                "aria_queue.install._find_networkquality",
+                "ariaflow_server.install._find_networkquality",
                 return_value="/usr/bin/networkQuality",
             ),
-            patch("aria_queue.install.subprocess.run") as run,
+            patch("ariaflow_server.install.subprocess.run") as run,
         ):
             status = networkquality_status()
         self.assertFalse(run.called)
@@ -881,10 +881,10 @@ class TicAriaFlowTests(IsolatedTestCase):
 
     def test_uninstall_dry_run_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True)
-        self.assertIn("ariaflow", plan)
-        self.assertEqual(plan["ariaflow"]["meta"]["contract"], "UCC")
+        self.assertIn("ariaflow-server", plan)
+        self.assertEqual(plan["ariaflow-server"]["meta"]["contract"], "UCC")
         self.assertIn(
-            plan["ariaflow"]["result"]["reason"], ["uninstall", "info"]
+            plan["ariaflow-server"]["result"]["reason"], ["uninstall", "info"]
         )
 
     def test_uninstall_dry_run_with_aria2_is_describable(self) -> None:
@@ -898,7 +898,7 @@ class TicPerItemTests(IsolatedTestCase):
     """Per-item action API tests."""
 
     def test_pause_queue_item_sets_paused(self) -> None:
-        from aria_queue.core import pause_queue_item
+        from ariaflow_server.core import pause_queue_item
 
         item = add_queue_item("https://example.com/file.gguf")
         result = pause_queue_item(item.id)
@@ -906,20 +906,20 @@ class TicPerItemTests(IsolatedTestCase):
         self.assertEqual(result["item"]["status"], "paused")
 
     def test_pause_queue_item_calls_aria2_if_gid(self) -> None:
-        from aria_queue.core import pause_queue_item
+        from ariaflow_server.core import pause_queue_item
 
         item = add_queue_item("https://example.com/file.gguf")
         items = load_queue()
         items[0]["status"] = "active"
         items[0]["gid"] = "gid-1"
         save_queue(items)
-        with patch("aria_queue.core.aria_rpc") as rpc:
+        with patch("ariaflow_server.core.aria_rpc") as rpc:
             result = pause_queue_item(item.id)
         rpc.assert_any_call("aria2.pause", ["gid-1"], port=6800, timeout=5)
         self.assertEqual(result["item"]["status"], "paused")
 
     def test_resume_queue_item_from_paused(self) -> None:
-        from aria_queue.core import pause_queue_item, resume_queue_item
+        from ariaflow_server.core import pause_queue_item, resume_queue_item
 
         item = add_queue_item("https://example.com/file.gguf")
         pause_queue_item(item.id)
@@ -928,19 +928,19 @@ class TicPerItemTests(IsolatedTestCase):
         self.assertEqual(result["item"]["status"], "queued")
 
     def test_resume_queue_item_with_gid_calls_unpause(self) -> None:
-        from aria_queue.core import resume_queue_item
+        from ariaflow_server.core import resume_queue_item
 
         item = add_queue_item("https://example.com/file.gguf")
         items = load_queue()
         items[0]["status"] = "paused"
         items[0]["gid"] = "gid-1"
         save_queue(items)
-        with patch("aria_queue.core.aria_rpc"):
+        with patch("ariaflow_server.core.aria_rpc"):
             result = resume_queue_item(item.id)
         self.assertEqual(result["item"]["status"], "active")
 
     def test_remove_queue_item_deletes_from_queue(self) -> None:
-        from aria_queue.core import remove_queue_item
+        from ariaflow_server.core import remove_queue_item
 
         item = add_queue_item("https://example.com/file.gguf")
         result = remove_queue_item(item.id)
@@ -949,20 +949,20 @@ class TicPerItemTests(IsolatedTestCase):
         self.assertEqual(len(load_queue()), 0)
 
     def test_remove_active_item_calls_aria2_remove(self) -> None:
-        from aria_queue.core import remove_queue_item
+        from ariaflow_server.core import remove_queue_item
 
         item = add_queue_item("https://example.com/file.gguf")
         items = load_queue()
         items[0]["status"] = "active"
         items[0]["gid"] = "gid-1"
         save_queue(items)
-        with patch("aria_queue.core.aria_rpc") as rpc:
+        with patch("ariaflow_server.core.aria_rpc") as rpc:
             remove_queue_item(item.id)
         rpc.assert_any_call("aria2.remove", ["gid-1"], port=6800, timeout=5)
         self.assertEqual(len(load_queue()), 0)
 
     def test_retry_queue_item_requeues_failed(self) -> None:
-        from aria_queue.core import retry_queue_item
+        from ariaflow_server.core import retry_queue_item
 
         item = add_queue_item("https://example.com/file.gguf")
         items = load_queue()
@@ -977,7 +977,7 @@ class TicPerItemTests(IsolatedTestCase):
         self.assertNotIn("gid", result["item"])
 
     def test_retry_rejects_non_error_item(self) -> None:
-        from aria_queue.core import retry_queue_item
+        from ariaflow_server.core import retry_queue_item
 
         item = add_queue_item("https://example.com/file.gguf")
         result = retry_queue_item(item.id)
@@ -985,7 +985,7 @@ class TicPerItemTests(IsolatedTestCase):
         self.assertEqual(result["error"], "invalid_state")
 
     def test_pause_rejects_already_paused(self) -> None:
-        from aria_queue.core import pause_queue_item
+        from ariaflow_server.core import pause_queue_item
 
         item = add_queue_item("https://example.com/file.gguf")
         pause_queue_item(item.id)
@@ -994,7 +994,7 @@ class TicPerItemTests(IsolatedTestCase):
         self.assertEqual(result["error"], "invalid_state")
 
     def test_not_found_item(self) -> None:
-        from aria_queue.core import pause_queue_item
+        from ariaflow_server.core import pause_queue_item
 
         result = pause_queue_item("nonexistent")
         self.assertFalse(result["ok"])
@@ -1005,7 +1005,7 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
     """Torrent file selection, metadata URL detection, and aria2 options proxy tests."""
 
     def test_metadata_url_detection(self) -> None:
-        from aria_queue.core import _is_metadata_url
+        from ariaflow_server.core import _is_metadata_url
 
         self.assertTrue(_is_metadata_url("https://example.com/file.torrent"))
         self.assertTrue(_is_metadata_url("https://example.com/file.metalink"))
@@ -1015,10 +1015,10 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
         self.assertFalse(_is_metadata_url("https://example.com/file.gguf"))
 
     def test_add_download_sets_pause_metadata_for_torrent(self) -> None:
-        from aria_queue.core import aria2_add_download
+        from ariaflow_server.core import aria2_add_download
 
         item = {"url": "https://example.com/file.torrent", "mode": "torrent"}
-        with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
+        with patch("ariaflow_server.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
             gid = aria2_add_download(item, cap_bytes_per_sec=250000)
         call_args = rpc.call_args[0]
         options = call_args[1][1]
@@ -1026,41 +1026,41 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
         self.assertEqual(gid, "gid-1")
 
     def test_add_download_no_pause_metadata_for_http(self) -> None:
-        from aria_queue.core import aria2_add_download
+        from ariaflow_server.core import aria2_add_download
 
         item = {"url": "https://example.com/file.zip", "mode": "http"}
-        with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
+        with patch("ariaflow_server.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
             aria2_add_download(item, cap_bytes_per_sec=250000)
         call_args = rpc.call_args[0]
         options = call_args[1][1]
         self.assertNotIn("pause-metadata", options)
 
     def test_add_download_pauses_when_desired_state_is_paused(self) -> None:
-        from aria_queue.core import aria2_add_download
+        from ariaflow_server.core import aria2_add_download
 
         item = {"url": "https://example.com/file.zip", "mode": "http", "desired_state": "paused"}
-        with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
+        with patch("ariaflow_server.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
             aria2_add_download(item, cap_bytes_per_sec=250000)
         call_args = rpc.call_args[0]
         options = call_args[1][1]
         self.assertEqual(options["pause"], "true")
 
     def test_add_download_applies_saved_selected_files(self) -> None:
-        from aria_queue.core import aria2_add_download
+        from ariaflow_server.core import aria2_add_download
 
         item = {
             "url": "https://example.com/file.torrent",
             "mode": "torrent",
             "selected_files": [1, 4],
         }
-        with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
+        with patch("ariaflow_server.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
             aria2_add_download(item, cap_bytes_per_sec=250000)
         call_args = rpc.call_args[0]
         options = call_args[1][1]
         self.assertEqual(options["select-file"], "1,4")
 
     def test_get_item_files_returns_file_list(self) -> None:
-        from aria_queue.core import get_item_files
+        from ariaflow_server.core import get_item_files
 
         item = add_queue_item("https://example.com/file.torrent")
         items = load_queue()
@@ -1074,14 +1074,14 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
                 "selected": "true",
             }
         ]
-        with patch("aria_queue.core.aria_rpc", return_value={"result": files}):
+        with patch("ariaflow_server.core.aria_rpc", return_value={"result": files}):
             result = get_item_files(item.id)
         self.assertTrue(result["ok"])
         self.assertEqual(len(result["files"]), 1)
         self.assertEqual(result["files"][0]["index"], "1")
 
     def test_get_item_files_no_gid(self) -> None:
-        from aria_queue.core import get_item_files
+        from ariaflow_server.core import get_item_files
 
         item = add_queue_item("https://example.com/file.torrent")
         result = get_item_files(item.id)
@@ -1089,14 +1089,14 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
         self.assertEqual(result["error"], "no_gid")
 
     def test_select_item_files_calls_change_option_and_unpause(self) -> None:
-        from aria_queue.core import select_item_files
+        from ariaflow_server.core import select_item_files
 
         item = add_queue_item("https://example.com/file.torrent")
         items = load_queue()
         items[0]["gid"] = "gid-1"
         items[0]["status"] = "paused"
         save_queue(items)
-        with patch("aria_queue.core.aria_rpc") as rpc:
+        with patch("ariaflow_server.core.aria_rpc") as rpc:
             result = select_item_files(item.id, [1, 3])
         self.assertTrue(result["ok"])
         self.assertEqual(result["selected"], [1, 3])
@@ -1112,11 +1112,11 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
         self.assertEqual(items[0]["desired_state"], "running")
 
     def test_change_aria2_options_safe_subset(self) -> None:
-        from aria_queue.core import aria2_change_options
+        from ariaflow_server.core import aria2_change_options
 
         with (
-            patch("aria_queue.core.aria_rpc") as rpc,
-            patch("aria_queue.core.aria2_current_global_options", return_value={}),
+            patch("ariaflow_server.core.aria_rpc") as rpc,
+            patch("ariaflow_server.core.aria2_current_global_options", return_value={}),
         ):
             result = aria2_change_options({"max-concurrent-downloads": "3"})
         self.assertTrue(result["ok"])
@@ -1128,7 +1128,7 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
         )
 
     def test_change_aria2_options_rejects_unsafe(self) -> None:
-        from aria_queue.core import aria2_change_options
+        from ariaflow_server.core import aria2_change_options
 
         result = aria2_change_options(
             {"dir": "/tmp/evil", "max-concurrent-downloads": "3"}
@@ -1138,7 +1138,7 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
         self.assertIn("dir", result["message"])
 
     def test_change_aria2_options_rejects_empty(self) -> None:
-        from aria_queue.core import aria2_change_options
+        from ariaflow_server.core import aria2_change_options
 
         result = aria2_change_options({})
         self.assertFalse(result["ok"])
@@ -1177,7 +1177,7 @@ class TicAsmCoherenceTests(IsolatedTestCase):
     def test_cr4_close_session_refuses_with_active_jobs(self) -> None:
         # ASM CR-4: a session may not transition to closed while jobs are
         # in the active or waiting tier. close_state_session must raise.
-        from aria_queue.core import (
+        from ariaflow_server.core import (
             close_state_session,
             ensure_state_session,
             save_queue,
@@ -1197,7 +1197,7 @@ class TicAsmCoherenceTests(IsolatedTestCase):
         # ASM CR-4: start_new_state_session must pause active/waiting items
         # in queue.json before invoking close, so the rollover transition
         # is admissible.
-        from aria_queue.core import (
+        from ariaflow_server.core import (
             ensure_state_session,
             load_queue,
             save_queue,
@@ -1223,18 +1223,18 @@ class TicAsmCoherenceTests(IsolatedTestCase):
         # the source-of-truth (aria2) must stop transferring before
         # running=False is written to ariaflow's mirror.
         import time as _time
-        from aria_queue import scheduler
+        from ariaflow_server import scheduler
 
         crash = RuntimeError("simulated process_queue crash")
         with (
-            patch("aria_queue.core.process_queue", side_effect=crash),
-            patch("aria_queue.core.aria2_pause_all") as pause_all,
+            patch("ariaflow_server.core.process_queue", side_effect=crash),
+            patch("ariaflow_server.core.aria2_pause_all") as pause_all,
             patch(
-                "aria_queue.core.ensure_state_session", return_value={"running": False}
+                "ariaflow_server.core.ensure_state_session", return_value={"running": False}
             ),
-            patch("aria_queue.core.save_state"),
-            patch("aria_queue.core.load_state", return_value={}),
-            patch("aria_queue.core.storage_locked"),
+            patch("ariaflow_server.core.save_state"),
+            patch("ariaflow_server.core.load_state", return_value={}),
+            patch("ariaflow_server.core.storage_locked"),
         ):
             scheduler.start_background_process(port=6800)
             # Background thread is daemon=True; give it a moment to crash.
@@ -1249,21 +1249,21 @@ class TicAsmCoherenceTests(IsolatedTestCase):
         # aria2_pause_all may fail. The handler must still complete and
         # write running=False so the mirror reflects the stop.
         import time as _time
-        from aria_queue import scheduler
+        from ariaflow_server import scheduler
 
         crash = RuntimeError("simulated process_queue crash")
         with (
-            patch("aria_queue.core.process_queue", side_effect=crash),
+            patch("ariaflow_server.core.process_queue", side_effect=crash),
             patch(
-                "aria_queue.core.aria2_pause_all",
+                "ariaflow_server.core.aria2_pause_all",
                 side_effect=ConnectionError("daemon dead"),
             ),
             patch(
-                "aria_queue.core.ensure_state_session", return_value={"running": False}
+                "ariaflow_server.core.ensure_state_session", return_value={"running": False}
             ),
-            patch("aria_queue.core.save_state") as save_state_mock,
-            patch("aria_queue.core.load_state", return_value={}),
-            patch("aria_queue.core.storage_locked"),
+            patch("ariaflow_server.core.save_state") as save_state_mock,
+            patch("ariaflow_server.core.load_state", return_value={}),
+            patch("ariaflow_server.core.storage_locked"),
         ):
             scheduler.start_background_process(port=6800)
             for _ in range(50):

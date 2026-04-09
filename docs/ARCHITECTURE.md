@@ -113,7 +113,7 @@ These are the configurable preferences stored in `declaration.json`:
 | `webapp.py` | HTTP server: REST API endpoints, SSE, web UI |
 | `api.py` | Public API surface: re-exports from core |
 | `contracts.py` | Declaration/policy: UIC gates, preflight checks |
-| `cli.py` | CLI entry point (`ariaflow` command) |
+| `cli.py` | CLI entry point (`ariaflow-server` command) |
 | `install.py` | System install helpers (Homebrew, service setup) |
 | `bonjour.py` | mDNS/Bonjour service advertisement |
 | `platform/launchd.py` | macOS launchd service management |

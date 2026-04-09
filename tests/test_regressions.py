@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from conftest import IsolatedTestCase
 
-from aria_queue.core import (
+from ariaflow_server.core import (
     _apply_free_bandwidth_cap,
     _is_metadata_url,
     add_queue_item,
@@ -59,13 +59,13 @@ class TestRegressions(IsolatedTestCase):
         ]
         with (
             patch(
-                "aria_queue.core.load_state",
+                "ariaflow_server.core.load_state",
                 return_value={"session_id": "new-session"},
             ),
-            patch("aria_queue.core.aria2_tell_active", return_value=live),
-            patch("aria_queue.core.load_queue", return_value=[queue_item]),
-            patch("aria_queue.core.save_queue") as save_q,
-            patch("aria_queue.core.record_action"),
+            patch("ariaflow_server.core.aria2_tell_active", return_value=live),
+            patch("ariaflow_server.core.load_queue", return_value=[queue_item]),
+            patch("ariaflow_server.core.save_queue") as save_q,
+            patch("ariaflow_server.core.record_action"),
         ):
             reconcile_live_queue()
         saved = save_q.call_args[0][0]
@@ -96,13 +96,13 @@ class TestRegressions(IsolatedTestCase):
         ]
         with (
             patch(
-                "aria_queue.core.load_state",
+                "ariaflow_server.core.load_state",
                 return_value={"session_id": "batch-1"},
             ),
-            patch("aria_queue.core.aria2_tell_active", return_value=live),
-            patch("aria_queue.core.load_queue", return_value=[queue_item]),
-            patch("aria_queue.core.save_queue") as save_q,
-            patch("aria_queue.core.record_action"),
+            patch("ariaflow_server.core.aria2_tell_active", return_value=live),
+            patch("ariaflow_server.core.load_queue", return_value=[queue_item]),
+            patch("ariaflow_server.core.save_queue") as save_q,
+            patch("ariaflow_server.core.record_action"),
         ):
             reconcile_live_queue()
         saved = save_q.call_args[0][0]
@@ -120,11 +120,11 @@ class TestRegressions(IsolatedTestCase):
         save_queue(items)
 
         with (
-            patch("aria_queue.core.aria2_ensure_daemon"),
-            patch("aria_queue.core.deduplicate_active_transfers"),
-            patch("aria_queue.core.reconcile_live_queue"),
+            patch("ariaflow_server.core.aria2_ensure_daemon"),
+            patch("ariaflow_server.core.deduplicate_active_transfers"),
+            patch("ariaflow_server.core.reconcile_live_queue"),
             patch(
-                "aria_queue.core.probe_bandwidth",
+                "ariaflow_server.core.probe_bandwidth",
                 return_value={
                     "source": "default",
                     "reason": "probe_unavailable",
@@ -132,19 +132,19 @@ class TestRegressions(IsolatedTestCase):
                     "cap_bytes_per_sec": 250000,
                 },
             ),
-            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
-            patch("aria_queue.core.aria2_tell_active", return_value=[]),
+            patch("ariaflow_server.core.aria2_current_bandwidth", return_value={}),
+            patch("ariaflow_server.core.aria2_set_max_overall_download_limit"),
+            patch("ariaflow_server.core.aria2_tell_active", return_value=[]),
             patch(
-                "aria_queue.core.aria2_add_download",
+                "ariaflow_server.core.aria2_add_download",
                 side_effect=RuntimeError("aria2 still unavailable"),
             ),
             patch(
-                "aria_queue.core.aria2_tell_status",
+                "ariaflow_server.core.aria2_tell_status",
                 side_effect=RuntimeError("connection refused"),
             ),
             patch(
-                "aria_queue.core.time.sleep",
+                "ariaflow_server.core.time.sleep",
                 side_effect=[None] * 10 + [StopIteration("stop")],
             ),
         ):
@@ -180,8 +180,8 @@ class TestRegressions(IsolatedTestCase):
         save_state(state)
 
         with (
-            patch("aria_queue.core.aria_rpc"),
-            patch("aria_queue.core.aria2_tell_active", return_value=[]),
+            patch("ariaflow_server.core.aria_rpc"),
+            patch("ariaflow_server.core.aria2_tell_active", return_value=[]),
         ):
             result = resume_active_transfer()
         if result.get("resumed"):
@@ -195,7 +195,7 @@ class TestRegressions(IsolatedTestCase):
     # Before: action log grew without limit
 
     def test_regression_action_log_rotation_exists(self) -> None:
-        from aria_queue.core import _ACTION_LOG_MAX_LINES, _ACTION_LOG_KEEP_LINES
+        from ariaflow_server.core import _ACTION_LOG_MAX_LINES, _ACTION_LOG_KEEP_LINES
 
         self.assertEqual(_ACTION_LOG_MAX_LINES, 10000)
         self.assertEqual(_ACTION_LOG_KEEP_LINES, 5000)
@@ -216,12 +216,12 @@ class TestRegressions(IsolatedTestCase):
     # Before: error responses passed through silently
 
     def test_regression_aria_rpc_raises_on_error_response(self) -> None:
-        from aria_queue.core import aria_rpc
+        from ariaflow_server.core import aria_rpc
 
         error_response = json.dumps(
             {"jsonrpc": "2.0", "id": "1", "error": {"code": -1, "message": "bad"}}
         ).encode()
-        with patch("aria_queue.core.urllib.request.urlopen") as mock_urlopen:
+        with patch("ariaflow_server.core.urllib.request.urlopen") as mock_urlopen:
             mock_resp = unittest.mock.MagicMock()
             mock_resp.read.return_value = error_response
             mock_resp.__enter__ = lambda s: s
@@ -236,9 +236,9 @@ class TestRegressions(IsolatedTestCase):
     # Before: handle leaked if flock failed
 
     def test_regression_storage_lock_closes_handle_on_flock_failure(self) -> None:
-        from aria_queue.core import storage_locked
+        from ariaflow_server.core import storage_locked
 
-        with patch("aria_queue.storage.portalocker.lock", side_effect=OSError("lock failed")):
+        with patch("ariaflow_server.storage.portalocker.lock", side_effect=OSError("lock failed")):
             with self.assertRaises(OSError):
                 with storage_locked():
                     pass  # should not reach here
@@ -248,7 +248,7 @@ class TestRegressions(IsolatedTestCase):
     # Before: probe timing lost between loop iterations
 
     def test_regression_probe_state_persisted(self) -> None:
-        from aria_queue.core import _apply_bandwidth_probe
+        from ariaflow_server.core import _apply_bandwidth_probe
 
         state = {}
         probe_result = {
@@ -259,11 +259,11 @@ class TestRegressions(IsolatedTestCase):
             "downlink_mbps": 80.0,
         }
         with (
-            patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
-            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
-            patch("aria_queue.core.save_state") as mock_save,
-            patch("aria_queue.core.record_action"),
+            patch("ariaflow_server.core.probe_bandwidth", return_value=probe_result),
+            patch("ariaflow_server.core.aria2_current_bandwidth", return_value={}),
+            patch("ariaflow_server.core.aria2_set_max_overall_download_limit"),
+            patch("ariaflow_server.core.save_state") as mock_save,
+            patch("ariaflow_server.core.record_action"),
         ):
             _apply_bandwidth_probe(state=state, force=True)
         mock_save.assert_called_once()
@@ -275,7 +275,7 @@ class TestRegressions(IsolatedTestCase):
     # Before: 5s RPC timeout blocked all other storage operations
 
     def test_regression_per_item_pause_releases_lock_before_rpc(self) -> None:
-        from aria_queue.core import pause_queue_item
+        from ariaflow_server.core import pause_queue_item
 
         add_queue_item("https://example.com/lock-test.bin")
         items = load_queue()
@@ -288,12 +288,12 @@ class TestRegressions(IsolatedTestCase):
 
         def check_rpc(*args, **kwargs):
             # Verify we can acquire the lock (not held during RPC)
-            from aria_queue.core import _STORAGE_LOCK_STATE
+            from ariaflow_server.core import _STORAGE_LOCK_STATE
 
             depth = getattr(_STORAGE_LOCK_STATE, "depth", 0)
             rpc_called_outside_lock.append(depth == 0)
 
-        with patch("aria_queue.core.aria_rpc", side_effect=check_rpc):
+        with patch("ariaflow_server.core.aria_rpc", side_effect=check_rpc):
             pause_queue_item(item_id)
 
         self.assertTrue(any(rpc_called_outside_lock))
@@ -325,11 +325,11 @@ class TestRegressions(IsolatedTestCase):
         save_queue([{"id": "x", "url": "https://x.com/done.bin", "status": "complete"}])
 
         with (
-            patch("aria_queue.core.aria2_ensure_daemon"),
-            patch("aria_queue.core.deduplicate_active_transfers"),
-            patch("aria_queue.core.reconcile_live_queue"),
+            patch("ariaflow_server.core.aria2_ensure_daemon"),
+            patch("ariaflow_server.core.deduplicate_active_transfers"),
+            patch("ariaflow_server.core.reconcile_live_queue"),
             patch(
-                "aria_queue.core.probe_bandwidth",
+                "ariaflow_server.core.probe_bandwidth",
                 return_value={
                     "source": "default",
                     "reason": "probe_unavailable",
@@ -337,12 +337,12 @@ class TestRegressions(IsolatedTestCase):
                     "cap_bytes_per_sec": 250000,
                 },
             ),
-            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
-            patch("aria_queue.core.aria2_tell_active", return_value=[]),
-            patch("aria_queue.core.time.sleep", side_effect=StopIteration("stop")),
+            patch("ariaflow_server.core.aria2_current_bandwidth", return_value={}),
+            patch("ariaflow_server.core.aria2_set_max_overall_download_limit"),
+            patch("ariaflow_server.core.aria2_tell_active", return_value=[]),
+            patch("ariaflow_server.core.time.sleep", side_effect=StopIteration("stop")),
         ):
-            from aria_queue.core import process_queue
+            from ariaflow_server.core import process_queue
 
             try:
                 process_queue()
@@ -356,15 +356,15 @@ class TestRegressions(IsolatedTestCase):
     # Fixed: now retries RPC after spawn, raises on failure
 
     def test_regression_ensure_daemon_raises_on_failed_start(self) -> None:
-        from aria_queue.core import aria2_ensure_daemon
+        from ariaflow_server.core import aria2_ensure_daemon
 
         with (
             patch(
-                "aria_queue.core.aria_rpc",
+                "ariaflow_server.core.aria_rpc",
                 side_effect=RuntimeError("connection refused"),
             ),
-            patch("aria_queue.core.subprocess.Popen"),
-            patch("aria_queue.core.time.sleep"),
+            patch("ariaflow_server.core.subprocess.Popen"),
+            patch("ariaflow_server.core.time.sleep"),
         ):
             with self.assertRaises(RuntimeError) as ctx:
                 aria2_ensure_daemon()
@@ -374,7 +374,7 @@ class TestRegressions(IsolatedTestCase):
     # Fixed: retry now pops recovered, recovered_at, recovery_session_id
 
     def test_regression_retry_clears_recovery_fields(self) -> None:
-        from aria_queue.core import retry_queue_item
+        from ariaflow_server.core import retry_queue_item
 
         item = add_queue_item("https://example.com/recover-clear.bin")
         items = load_queue()
@@ -394,7 +394,7 @@ class TestRegressions(IsolatedTestCase):
     # ── Bug #16: mirror URLs not deduplicated ──
 
     def test_regression_mirror_urls_deduplicated(self) -> None:
-        from aria_queue.core import aria2_add_download
+        from ariaflow_server.core import aria2_add_download
 
         item = {
             "url": "https://a.com/file.bin",
@@ -405,7 +405,7 @@ class TestRegressions(IsolatedTestCase):
                 "https://b.com/file.bin",
             ],
         }
-        with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
+        with patch("ariaflow_server.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
             aria2_add_download(item, cap_bytes_per_sec=250000)
         uris = rpc.call_args[0][1][0]
         self.assertEqual(len(uris), 2)

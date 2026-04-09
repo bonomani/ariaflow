@@ -43,5 +43,5 @@ read_next:
   - "./docs/governance/tic-oracle.md"
   - "./docs/governance/bgs-decision.yaml"
   - "./docs/ARIA2_RPC_WRAPPERS.md"
-  - "./src/aria_queue/contracts.py"
+  - "./src/ariaflow_server/contracts.py"
   - "./tests/"

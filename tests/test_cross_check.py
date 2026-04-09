@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from conftest import APIServerTestCase, request_json
 
-from aria_queue.core import load_queue, save_queue
+from ariaflow_server.core import load_queue, save_queue
 
 
 def _req(
@@ -481,8 +481,8 @@ class TestProbeReflectedInBandwidth(CrossCheckBase):
             "responsiveness_rpm": 1800.0,
         }
         with (
-            patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
+            patch("ariaflow_server.core.probe_bandwidth", return_value=probe_result),
+            patch("ariaflow_server.core.aria2_set_max_overall_download_limit"),
         ):
             _, probed = _req(f"{self.base}/api/bandwidth/probe", "POST")
 
@@ -510,7 +510,7 @@ class TestSessionReflectedInStatus(CrossCheckBase):
             },
         )
 
-        from aria_queue.state import start_new_state_session
+        from ariaflow_server.state import start_new_state_session
 
         new = start_new_state_session(reason="test")
         new_id = new["session_id"]
@@ -543,7 +543,7 @@ class TestFileSelectReflectedInStatus(CrossCheckBase):
                 item["status"] = "paused"
         save_queue(items)
 
-        with patch("aria_queue.core.aria_rpc"):
+        with patch("ariaflow_server.core.aria_rpc"):
             _, selected = _req(
                 f"{self.base}/api/downloads/{item_id}/files",
                 "POST",
@@ -628,8 +628,8 @@ class TestMutationsLoggedInActionLog(CrossCheckBase):
             "downlink_mbps": None,
         }
         with (
-            patch("aria_queue.core.probe_bandwidth", return_value=probe),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
+            patch("ariaflow_server.core.probe_bandwidth", return_value=probe),
+            patch("ariaflow_server.core.aria2_set_max_overall_download_limit"),
         ):
             _req(f"{self.base}/api/bandwidth/probe", "POST")
         _, log = _req(f"{self.base}/api/log?limit=5")
@@ -796,7 +796,7 @@ class TestMultiStepChains(CrossCheckBase):
         )
         item_id = added["added"][0]["id"]
 
-        from aria_queue.state import start_new_state_session
+        from ariaflow_server.state import start_new_state_session
 
         start_new_state_session(reason="test")
 
@@ -808,7 +808,7 @@ class TestMultiStepChains(CrossCheckBase):
 
 class TestMutationsIncrementRevision(CrossCheckBase):
     def _get_rev(self) -> int:
-        from aria_queue.core import load_state
+        from ariaflow_server.core import load_state
 
         return load_state().get("_rev", 0)
 
@@ -835,7 +835,7 @@ class TestMutationsIncrementRevision(CrossCheckBase):
             },
         )
         rev_before = self._get_rev()
-        from aria_queue.state import start_new_state_session
+        from ariaflow_server.state import start_new_state_session
 
         start_new_state_session(reason="test")
         rev_after = self._get_rev()

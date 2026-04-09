@@ -14,7 +14,7 @@ from .storage import (
 
 
 def _core() -> Any:
-    """Lazy import to allow patching through aria_queue.core."""
+    """Lazy import to allow patching through ariaflow_server.core."""
     from . import core
 
     return core
@@ -44,7 +44,7 @@ def aria_rpc(
 ) -> dict[str, Any]:
     payload = {
         "jsonrpc": "2.0",
-        "id": "aria-queue",
+        "id": "ariaflow-server",
         "method": method,
         "params": params or [],
     }

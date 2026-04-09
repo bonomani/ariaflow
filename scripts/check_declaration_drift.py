@@ -19,7 +19,7 @@ sys.path.insert(0, str(_PROJECT / "src"))
 
 
 def main() -> int:
-    from aria_queue.contracts import DEFAULT_DECLARATION, declaration_path
+    from ariaflow_server.contracts import DEFAULT_DECLARATION, declaration_path
 
     path = declaration_path()
     if not path.exists():

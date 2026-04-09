@@ -1,13 +1,13 @@
 """Backward-compatible re-export hub.
 
-All public functions remain importable from aria_queue.core.
+All public functions remain importable from ariaflow_server.core.
 New code should import from the specific submodule.
 """
 
 from __future__ import annotations
 
-import subprocess  # noqa: F401 — tests patch aria_queue.core.subprocess
-import time  # noqa: F401 — tests patch aria_queue.core.time
+import subprocess  # noqa: F401 — tests patch ariaflow_server.core.subprocess
+import time  # noqa: F401 — tests patch ariaflow_server.core.time
 
 from .storage import *  # noqa: F401,F403
 from .state import *  # noqa: F401,F403

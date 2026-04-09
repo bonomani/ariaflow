@@ -49,7 +49,7 @@ oracle. The full decision record lives in
 ## 2. Identity
 
 - **Name:** `ariaflow-server`
-- **Version:** `0.1.147` (live from `src/aria_queue/__init__.py`)
+- **Version:** `0.1.147` (live from `src/ariaflow_server/__init__.py`)
 - **Python:** `>=3.10`
 - **Runtime dependencies:** _none_ (zero-dependency)
 
@@ -147,9 +147,9 @@ CR-3 is enforced at two points: structurally by `process_queue()` (the sole entr
 | Session history | system-to-storage | internal | audit persistence | `sessions.jsonl` — session lifecycle log |
 | Declaration file | system-to-storage | internal | contract persistence | `declaration.json` — UIC gates, preferences, policies |
 | File lock | system-to-storage | internal | concurrency control | `.storage.lock` — fcntl + RLock mutual exclusion |
-| Config directory | system-to-filesystem | internal | configuration | `~/.config/aria-queue/` (override via `ARIA_QUEUE_DIR`) |
-| Bonjour/mDNS | system-to-network | outbound | discovery | `_ariaflow._tcp` service advertisement; torrent discovery via `GET /api/torrents` |
-| Peer polling | system-to-peer | outbound | peer auto-download | `discovery.py` browses `_ariaflow._tcp`, polls peer `GET /api/torrents`, auto-fetches new torrents (gated by `auto_discover_peers`) |
+| Config directory | system-to-filesystem | internal | configuration | `~/.config/ariaflow-server/` (override via `ARIAFLOW_DIR`) |
+| Bonjour/mDNS | system-to-network | outbound | discovery | `_ariaflow-server._tcp` service advertisement; torrent discovery via `GET /api/torrents` |
+| Peer polling | system-to-peer | outbound | peer auto-download | `discovery.py` browses `_ariaflow-server._tcp`, polls peer `GET /api/torrents`, auto-fetches new torrents (gated by `auto_discover_peers`) |
 | Internal tracker | system-to-network | outbound | distribution | Private BitTorrent tracker announce URL for torrent distribution |
 | Torrent file serving | system-to-user | outbound | distribution | `GET /api/torrents/{infohash}.torrent` serves created `.torrent` files |
 | BitTorrent swarm | system-to-network | bidirectional | distribution | aria2 seeds private torrents to peers on internal tracker |
@@ -255,11 +255,11 @@ Every `record_action(action=...)` value is listed here with its target and BGS t
 | `/api/scheduler/resume` | `routes.post_resume` | — |
 | `/api/scheduler/ucc` | `routes.post_ucc` | — |
 
-Schemas marked **✓ typed** appear in `src/aria_queue/openapi_schemas.py::RESPONSE_SCHEMAS` and are emitted into `src/aria_queue/openapi.yaml` by `scripts/gen_openapi.py`. Tests in `TestOpenapiSchemas` (test_unit.py) pin every typed schema against the live response shape.
+Schemas marked **✓ typed** appear in `src/ariaflow_server/openapi_schemas.py::RESPONSE_SCHEMAS` and are emitted into `src/ariaflow_server/openapi.yaml` by `scripts/gen_openapi.py`. Tests in `TestOpenapiSchemas` (test_unit.py) pin every typed schema against the live response shape.
 
 ## 7. aria2 RPC integration
 
-`src/aria_queue/aria2_rpc.py` exposes **37 1:1 RPC wrappers** (each wraps one `aria2.*` or `system.*` JSON-RPC method) plus **11 orchestration helpers**.
+`src/ariaflow_server/aria2_rpc.py` exposes **37 1:1 RPC wrappers** (each wraps one `aria2.*` or `system.*` JSON-RPC method) plus **11 orchestration helpers**.
 
 ### 1:1 RPC wrappers
 
@@ -452,9 +452,9 @@ python scripts/gen_spec.py
 
 - `docs/GOAL.md`
 - `pyproject.toml`
-- `src/aria_queue/webapp.py` (dispatch tables)
-- `src/aria_queue/openapi_schemas.py`
-- `src/aria_queue/contracts.py`
-- `src/aria_queue/queue_ops.py`
-- `src/aria_queue/aria2_rpc.py`
+- `src/ariaflow_server/webapp.py` (dispatch tables)
+- `src/ariaflow_server/openapi_schemas.py`
+- `src/ariaflow_server/contracts.py`
+- `src/ariaflow_server/queue_ops.py`
+- `src/ariaflow_server/aria2_rpc.py`
 - any file under `docs/governance/`

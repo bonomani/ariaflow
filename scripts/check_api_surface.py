@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 _PROJECT = Path(__file__).resolve().parents[1]
-_SPEC = "src/aria_queue/openapi.yaml"
+_SPEC = "src/ariaflow_server/openapi.yaml"
 
 
 def _load_baseline(rev: str) -> str:

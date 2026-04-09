@@ -52,7 +52,7 @@ def render_formula(*, version: str, url: str, sha256: str) -> str:
 
     (bin/"ariaflow-server").write <<~EOS
       #!/bin/bash
-      exec env PYTHONPATH="#{{libexec}}/src:${{PYTHONPATH}}" python3 -m aria_queue "$@"
+      exec env PYTHONPATH="#{{libexec}}/src:${{PYTHONPATH}}" python3 -m ariaflow_server "$@"
     EOS
     chmod 0755, bin/"ariaflow-server"
   end

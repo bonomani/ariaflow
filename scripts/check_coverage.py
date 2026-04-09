@@ -3,7 +3,7 @@
 
 Detects Type 2 drift — where the project grew beyond what the BGS slice models.
 
-For each source module in ``src/aria_queue/``, this script verifies it is
+For each source module in ``src/ariaflow_server/``, this script verifies it is
 referenced in at least one governance artifact:
 - ``docs/governance/biss-classification.md`` (BISS boundary notes)
 - ``docs/governance/asm-state-model.md`` (ASM axis definitions)
@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 _PROJECT = Path(__file__).resolve().parents[1]
-_SRC = _PROJECT / "src" / "aria_queue"
+_SRC = _PROJECT / "src" / "ariaflow_server"
 _GOV = _PROJECT / "docs" / "governance"
 
 # Modules excluded from coverage checks (infrastructure, not governed scope)
@@ -57,7 +57,7 @@ _MODULE_CONCEPTS: dict[str, list[str]] = {
 
 
 def _list_modules() -> list[str]:
-    """Return stem names of all .py files in src/aria_queue/."""
+    """Return stem names of all .py files in src/ariaflow_server/."""
     return sorted(p.stem for p in _SRC.glob("*.py"))
 
 
@@ -80,7 +80,7 @@ def _is_referenced(module: str, corpus: str) -> bool:
     concepts = _MODULE_CONCEPTS.get(module)
     if concepts is None:
         # Unknown module — require a filename reference (conservative)
-        patterns = [f"{module}.py", f"aria_queue/{module}", f"aria_queue.{module}"]
+        patterns = [f"{module}.py", f"ariaflow_server/{module}", f"ariaflow_server.{module}"]
         return any(p in corpus for p in patterns)
     return any(c in corpus for c in concepts)
 

@@ -20,7 +20,7 @@ _META: dict[str, dict] = {
 
 # UCC envelope shape produced by install.ucc_envelope(). Reused across the
 # /api/lifecycle per-target entries via the named UccEnvelope component
-# defined in src/aria_queue/openapi.yaml. Using a $ref keeps the generated
+# defined in src/ariaflow_server/openapi.yaml. Using a $ref keeps the generated
 # spec compact and avoids copy/paste drift.
 _UCC_ENVELOPE: dict = {"$ref": "#/components/schemas/UccEnvelope"}
 
@@ -151,7 +151,7 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
         "aria2": {"$ref": "#/components/schemas/Aria2Health"},
         "bandwidth": {"type": "object", "nullable": True},
         "_rev": {"type": "integer"},
-        "ariaflow": {"$ref": "#/components/schemas/AriaflowHealth"},
+        "ariaflow-server": {"$ref": "#/components/schemas/AriaflowHealth"},
         "active": {"$ref": "#/components/schemas/ActiveTransfer"},
         "actives": {
             "type": "array",
@@ -299,7 +299,7 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
     # ucc_record() in install.py. Session fields are merged in by
     # routes/lifecycle.py::_lifecycle_payload().
     "GET /api/lifecycle": {
-        "ariaflow": _UCC_ENVELOPE,
+        "ariaflow-server": _UCC_ENVELOPE,
         "aria2": _UCC_ENVELOPE,
         "networkquality": _UCC_ENVELOPE,
         "aria2-launchd": _UCC_ENVELOPE,

@@ -101,10 +101,10 @@ class APIServerTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        from aria_queue.webapp import serve
+        from ariaflow_server.webapp import serve
 
         cls._tmp = tempfile.TemporaryDirectory()
-        os.environ["ARIA_QUEUE_DIR"] = cls._tmp.name
+        os.environ["ARIAFLOW_DIR"] = cls._tmp.name
         cls._server = serve(host="127.0.0.1", port=0)
         cls.port = cls._server.server_address[1]
         cls.base = f"http://127.0.0.1:{cls.port}"
@@ -129,10 +129,10 @@ class APIServerPerTestCase(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        from aria_queue.webapp import serve
+        from ariaflow_server.webapp import serve
 
         self._tmp = tempfile.TemporaryDirectory()
-        os.environ["ARIA_QUEUE_DIR"] = self._tmp.name
+        os.environ["ARIAFLOW_DIR"] = self._tmp.name
         self._server = serve(host="127.0.0.1", port=0)
         self.port = self._server.server_address[1]
         self.base = f"http://127.0.0.1:{self.port}"
@@ -151,7 +151,7 @@ class IsolatedTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
-        os.environ["ARIA_QUEUE_DIR"] = self._tmp.name
+        os.environ["ARIAFLOW_DIR"] = self._tmp.name
 
     def tearDown(self) -> None:
         self._tmp.cleanup()

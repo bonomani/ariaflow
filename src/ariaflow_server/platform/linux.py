@@ -56,7 +56,7 @@ def _build_unit(bin_path: str, session_dir: Path, download_dir: Path) -> str:
     session_file = session_dir / "session.txt"
     return f"""\
 [Unit]
-Description=aria2 RPC daemon (managed by ariaflow)
+Description=aria2 RPC daemon (managed by ariaflow-server)
 After=network.target
 
 [Service]

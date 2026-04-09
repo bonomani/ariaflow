@@ -6,7 +6,7 @@
 
 **aria2 version:** 1.37.0  
 **Total wrappers:** 36  
-**Source:** `src/aria_queue/aria2_rpc.py`
+**Source:** `src/ariaflow_server/aria2_rpc.py`
 
 ## Summary
 

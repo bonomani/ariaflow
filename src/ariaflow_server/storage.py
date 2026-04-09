@@ -16,9 +16,14 @@ _STORAGE_LOCK_STATE = threading.local()
 
 
 def config_dir() -> Path:
-    return Path(
-        os.environ.get("ARIA_QUEUE_DIR", Path.home() / ".config" / "aria-queue")
-    )
+    explicit = os.environ.get("ARIAFLOW_DIR") or os.environ.get("ARIA_QUEUE_DIR")
+    if explicit:
+        return Path(explicit)
+    new = Path.home() / ".config" / "ariaflow-server"
+    old = Path.home() / ".config" / "aria-queue"
+    if not new.exists() and old.exists():
+        old.rename(new)
+    return new
 
 
 def queue_path() -> Path:

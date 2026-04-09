@@ -38,7 +38,7 @@ web = []
 launchd = []
 
 [project.scripts]
-ariaflow-server = "aria_queue.cli:main"
+ariaflow-server = "ariaflow_server.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -47,4 +47,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-aria_queue = ["openapi.yaml"]
+ariaflow_server = ["openapi.yaml"]

@@ -7,6 +7,12 @@ from pathlib import Path
 
 from .core import _find_networkquality
 from .platform.detect import is_linux, is_macos, is_windows
+from .ucc import ucc_envelope, ucc_record  # noqa: F401 — re-exported
+
+__all__ = [
+    "ucc_envelope",
+    "ucc_record",
+]
 
 
 def current_ariaflow_server_version() -> str:
@@ -16,55 +22,6 @@ def current_ariaflow_server_version() -> str:
         from . import __version__
 
         return __version__
-
-
-def ucc_envelope(
-    *,
-    target: str,
-    observed: bool,
-    outcome: str,
-    completion: str | None = None,
-    reason: str = "aggregate",
-    detail: str | None = None,
-    commands: list[str] | None = None,
-) -> dict[str, object]:
-    result: dict[str, object] = {
-        "observation": "ok" if observed else "failed",
-        "outcome": outcome,
-        "reason": reason,
-        "target": target,
-    }
-    if completion is not None:
-        result["completion"] = completion
-    if detail is not None:
-        result["message"] = detail
-    if commands is not None:
-        result["commands"] = commands
-    return {
-        "meta": {"contract": "UCC", "version": "2.0", "target": target},
-        "result": result,
-    }
-
-
-def ucc_record(
-    *,
-    target: str,
-    observed: bool,
-    outcome: str,
-    completion: str | None = None,
-    reason: str = "aggregate",
-    detail: str | None = None,
-    commands: list[str] | None = None,
-) -> dict[str, object]:
-    return ucc_envelope(
-        target=target,
-        observed=observed,
-        outcome=outcome,
-        completion=completion,
-        reason=reason,
-        detail=detail,
-        commands=commands,
-    )
 
 
 def brew_is_installed(package: str) -> bool:
@@ -213,8 +170,8 @@ def install_all(
     plan: dict[str, dict[str, object]] = {}
     if is_macos():
         ariaflow_cmds = homebrew_install_ariaflow_server(dry_run=dry_run)
-        plan["ariaflow"] = ucc_record(
-            target="ariaflow",
+        plan["ariaflow-server"] = ucc_record(
+            target="ariaflow-server",
             observed=True,
             outcome="changed",
             completion="complete",
@@ -223,13 +180,13 @@ def install_all(
             commands=ariaflow_cmds,
         )
     else:
-        plan["ariaflow"] = ucc_record(
-            target="ariaflow",
+        plan["ariaflow-server"] = ucc_record(
+            target="ariaflow-server",
             observed=True,
             outcome="unchanged",
             completion="complete",
             reason="info",
-            detail="install ariaflow via: pipx install ariaflow-server",
+            detail="install ariaflow-server via: pipx install ariaflow-server",
             commands=["pipx install ariaflow-server"],
         )
     if include_aria2:
@@ -261,8 +218,8 @@ def status_all() -> dict[str, dict[str, object]]:
     aria2 = _aria2_service_status()
     networkquality = networkquality_status()
     plan: dict[str, dict[str, object]] = {
-        "ariaflow": ucc_record(
-            target="ariaflow",
+        "ariaflow-server": ucc_record(
+            target="ariaflow-server",
             observed=True,
             outcome="converged" if ariaflow_installed else "unchanged",
             completion="complete",
@@ -320,8 +277,8 @@ def uninstall_all(
 ) -> dict[str, dict[str, object]]:
     plan: dict[str, dict[str, object]] = {}
     if is_macos():
-        plan["ariaflow"] = ucc_record(
-            target="ariaflow",
+        plan["ariaflow-server"] = ucc_record(
+            target="ariaflow-server",
             observed=True,
             outcome="changed",
             completion="complete",
@@ -330,13 +287,13 @@ def uninstall_all(
             commands=homebrew_uninstall_ariaflow_server(dry_run=dry_run),
         )
     else:
-        plan["ariaflow"] = ucc_record(
-            target="ariaflow",
+        plan["ariaflow-server"] = ucc_record(
+            target="ariaflow-server",
             observed=True,
             outcome="unchanged",
             completion="complete",
             reason="info",
-            detail="uninstall ariaflow via: pipx uninstall ariaflow-server",
+            detail="uninstall ariaflow-server via: pipx uninstall ariaflow-server",
             commands=["pipx uninstall ariaflow-server"],
         )
     if include_aria2:

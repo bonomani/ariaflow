@@ -770,7 +770,7 @@ paths:
                     $ref: "#/components/schemas/UccEnvelope"
                   aria2-launchd:
                     $ref: "#/components/schemas/UccEnvelope"
-                  ariaflow:
+                  ariaflow-server:
                     $ref: "#/components/schemas/UccEnvelope"
                   networkquality:
                     $ref: "#/components/schemas/UccEnvelope"
@@ -1127,7 +1127,7 @@ paths:
                       type: object
                   aria2:
                     $ref: "#/components/schemas/Aria2Health"
-                  ariaflow:
+                  ariaflow-server:
                     $ref: "#/components/schemas/AriaflowHealth"
                   bandwidth:
                     nullable: true
@@ -1351,7 +1351,7 @@ components:
 
     AriaflowHealth:
       type: object
-      description: ariaflow process info embedded in /api/status.
+      description: ariaflow-server process info embedded in /api/status.
       properties:
         reachable:
           type: boolean

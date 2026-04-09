@@ -20,7 +20,7 @@ def _instance_name() -> str:
 
     Uses the short hostname so the same machine is identified consistently
     across local/discovered views in the frontend (BG-5). The service type
-    ``_ariaflow._tcp`` already identifies the software. Truncated to 63 bytes
+    ``_ariaflow-server._tcp`` already identifies the software. Truncated to 63 bytes
     (RFC 6763 limit for instance names).
     """
     name = _short_hostname()
@@ -66,7 +66,7 @@ def build_dns_sd_cmd(*, port: int, path: str) -> list[str]:
         binary,
         "-R",
         _instance_name(),
-        "_ariaflow._tcp",
+        "_ariaflow-server._tcp",
         "local",
         str(port),
         f"path={path}",
@@ -81,7 +81,7 @@ def build_avahi_cmd(*, port: int, path: str) -> list[str]:
     return [
         binary,
         _instance_name(),
-        "_ariaflow._tcp",
+        "_ariaflow-server._tcp",
         str(port),
         f"path={path}",
         "tls=0",

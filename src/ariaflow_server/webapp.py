@@ -287,7 +287,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             "aria2": aria2_status(timeout=3),
             "bandwidth": bandwidth,
             "_rev": state.get("_rev", 0),
-            "ariaflow": {
+            "ariaflow-server": {
                 "reachable": True,
                 "version": __version__,
                 "schema_version": API_SCHEMA_VERSION,
@@ -376,7 +376,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self._send_json(
                 routes._error_payload(
                     "ui_not_served",
-                    "ariaflow is API-only; use ariaflow-web for the dashboard",
+                    "ariaflow-server is API-only; use ariaflow-web for the dashboard",
                 ),
                 status=400,
             )

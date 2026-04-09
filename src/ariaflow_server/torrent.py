@@ -159,7 +159,7 @@ def _create_with_python(
     }
     if comment:
         torrent["comment"] = comment
-    torrent["created by"] = "ariaflow"
+    torrent["created by"] = "ariaflow-server"
 
     info_bencoded = _bencode(info)
     infohash = hashlib.sha1(info_bencoded).hexdigest()

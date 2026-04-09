@@ -26,7 +26,7 @@ def _find_openapi_spec() -> Path | None:
 
 def _api_discovery() -> dict[str, object]:
     return {
-        "name": "ariaflow",
+        "name": "ariaflow-server",
         "version": __version__,
         "docs": "/api/docs",
         "openapi": "/api/openapi.yaml",
@@ -70,7 +70,7 @@ def _api_discovery() -> dict[str, object]:
                 },
                 {
                     "path": "/api/peers",
-                    "description": "Discovered ariaflow peers on the network",
+                    "description": "Discovered ariaflow-server peers on the network",
                 },
                 {
                     "path": "/api/aria2/get_global_option",

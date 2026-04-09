@@ -33,7 +33,7 @@ from conftest import (
     request_json,
 )
 
-from aria_queue.core import load_queue, save_queue
+from ariaflow_server.core import load_queue, save_queue
 
 
 def _request(
@@ -268,7 +268,7 @@ class TestPerItemActions(APIServerPerTestCase):
         items[0]["status"] = "paused"
         items[0]["gid"] = "gid-1"
         save_queue(items)
-        with patch("aria_queue.core.aria_rpc"):
+        with patch("ariaflow_server.core.aria_rpc"):
             code, body = _request(
                 f"{self.base}/api/downloads/{self.item_id}/resume", "POST"
             )
@@ -297,7 +297,7 @@ class TestPerItemActions(APIServerPerTestCase):
         items[0]["status"] = "active"
         items[0]["gid"] = "gid-1"
         save_queue(items)
-        with patch("aria_queue.core.aria_rpc") as rpc:
+        with patch("ariaflow_server.core.aria_rpc") as rpc:
             code, body = _request(
                 f"{self.base}/api/downloads/{self.item_id}/remove", "POST"
             )
@@ -412,7 +412,7 @@ class TestFileSelection(APIServerPerTestCase):
                 "selected": "true",
             },
         ]
-        with patch("aria_queue.core.aria_rpc", return_value={"result": files}):
+        with patch("ariaflow_server.core.aria_rpc", return_value={"result": files}):
             code, body = _request(f"{self.base}/api/downloads/{self.item_id}/files")
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
@@ -430,7 +430,7 @@ class TestFileSelection(APIServerPerTestCase):
         items[0]["gid"] = "gid-torrent"
         items[0]["status"] = "paused"
         save_queue(items)
-        with patch("aria_queue.core.aria_rpc") as rpc:
+        with patch("ariaflow_server.core.aria_rpc") as rpc:
             code, body = _request(
                 f"{self.base}/api/downloads/{self.item_id}/files",
                 "POST",
@@ -480,8 +480,8 @@ class TestFileSelection(APIServerPerTestCase):
 class TestAria2Options(APIServerPerTestCase):
     def test_safe_option_accepted(self) -> None:
         with (
-            patch("aria_queue.core.aria_rpc"),
-            patch("aria_queue.core.aria2_current_global_options", return_value={}),
+            patch("ariaflow_server.core.aria_rpc"),
+            patch("ariaflow_server.core.aria2_current_global_options", return_value={}),
         ):
             code, body = _request(
                 f"{self.base}/api/aria2/change_global_option",
@@ -496,8 +496,8 @@ class TestAria2Options(APIServerPerTestCase):
 
     def test_multiple_safe_options(self) -> None:
         with (
-            patch("aria_queue.core.aria_rpc"),
-            patch("aria_queue.core.aria2_current_global_options", return_value={}),
+            patch("ariaflow_server.core.aria_rpc"),
+            patch("ariaflow_server.core.aria2_current_global_options", return_value={}),
         ):
             code, body = _request(
                 f"{self.base}/api/aria2/change_global_option",
@@ -555,8 +555,8 @@ class TestAria2Options(APIServerPerTestCase):
             "connect-timeout": "30",
         }
         with (
-            patch("aria_queue.core.aria_rpc"),
-            patch("aria_queue.core.aria2_current_global_options", return_value={}),
+            patch("ariaflow_server.core.aria_rpc"),
+            patch("ariaflow_server.core.aria2_current_global_options", return_value={}),
         ):
             code, body = _request(
                 f"{self.base}/api/aria2/change_global_option", "POST", all_safe
@@ -611,8 +611,8 @@ class TestBandwidth(APIServerPerTestCase):
             "responsiveness_rpm": 1500.0,
         }
         with (
-            patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
+            patch("ariaflow_server.core.probe_bandwidth", return_value=probe_result),
+            patch("ariaflow_server.core.aria2_set_max_overall_download_limit"),
         ):
             _request(f"{self.base}/api/bandwidth/probe", "POST")
         code, body = _request(f"{self.base}/api/bandwidth")
@@ -634,8 +634,8 @@ class TestBandwidth(APIServerPerTestCase):
             "interface_name": "en1",
         }
         with (
-            patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
+            patch("ariaflow_server.core.probe_bandwidth", return_value=probe_result),
+            patch("ariaflow_server.core.aria2_set_max_overall_download_limit"),
         ):
             code, body = _request(f"{self.base}/api/bandwidth/probe", "POST")
         self.assertEqual(code, 200)
@@ -648,7 +648,7 @@ class TestBandwidth(APIServerPerTestCase):
         self.assertEqual(body["source"], "networkquality")
 
     def test_manual_probe_fallback(self) -> None:
-        with patch("aria_queue.core._find_networkquality", return_value=None):
+        with patch("ariaflow_server.core._find_networkquality", return_value=None):
             code, body = _request(f"{self.base}/api/bandwidth/probe", "POST")
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
@@ -703,7 +703,7 @@ class TestEngineControl(APIServerPerTestCase):
     def test_preflight(self) -> None:
         with (
             patch(
-                "aria_queue.webapp.preflight",
+                "ariaflow_server.webapp.preflight",
                 return_value={
                     "contract": "UCC",
                     "version": "2.0",
@@ -716,8 +716,8 @@ class TestEngineControl(APIServerPerTestCase):
                     "exit_code": 0,
                 },
             ),
-            patch("aria_queue.webapp.aria2_status", return_value={}),
-            patch("aria_queue.webapp.aria2_current_bandwidth", return_value={}),
+            patch("ariaflow_server.webapp.aria2_status", return_value={}),
+            patch("ariaflow_server.webapp.aria2_current_bandwidth", return_value={}),
         ):
             code, body = _request(f"{self.base}/api/scheduler/preflight", "POST")
         self.assertEqual(code, 200)
@@ -823,12 +823,12 @@ class TestLifecycle(APIServerPerTestCase):
     def test_lifecycle_status(self) -> None:
         code, body = _request(f"{self.base}/api/lifecycle")
         self.assertEqual(code, 200)
-        self.assertIn("ariaflow", body)
-        self.assertIn("meta", body["ariaflow"])
-        self.assertEqual(body["ariaflow"]["meta"]["contract"], "UCC")
+        self.assertIn("ariaflow-server", body)
+        self.assertIn("meta", body["ariaflow-server"])
+        self.assertEqual(body["ariaflow-server"]["meta"]["contract"], "UCC")
 
     def test_lifecycle_action_non_macos(self) -> None:
-        with patch("aria_queue.routes.lifecycle.is_macos", return_value=False):
+        with patch("ariaflow_server.routes.lifecycle.is_macos", return_value=False):
             code, body = _request(
                 f"{self.base}/api/lifecycle/ariaflow-server/install",
                 "POST",
@@ -850,7 +850,7 @@ class TestUCC(APIServerPerTestCase):
     def test_ucc_returns_structured_result(self) -> None:
         with (
             patch(
-                "aria_queue.contracts.preflight",
+                "ariaflow_server.contracts.preflight",
                 return_value={
                     "contract": "UCC",
                     "version": "2.0",
@@ -863,8 +863,8 @@ class TestUCC(APIServerPerTestCase):
                     "exit_code": 0,
                 },
             ),
-            patch("aria_queue.core.process_queue", return_value=[]),
-            patch("aria_queue.core.get_active_progress", return_value=None),
+            patch("ariaflow_server.core.process_queue", return_value=[]),
+            patch("ariaflow_server.core.get_active_progress", return_value=None),
         ):
             code, body = _request(f"{self.base}/api/scheduler/ucc", "POST")
         self.assertEqual(code, 200)
@@ -1063,7 +1063,7 @@ class TestGetEndpoints(APIServerTestCase):
         self.assertIn("endpoints", body)
         self.assertIn("GET", body["endpoints"])
         self.assertIn("POST", body["endpoints"])
-        self.assertEqual(body["name"], "ariaflow")
+        self.assertEqual(body["name"], "ariaflow-server")
         self.assertIn("version", body)
         self.assertIn("docs", body)
         self.assertIn("openapi", body)
@@ -1078,11 +1078,11 @@ class TestGetEndpoints(APIServerTestCase):
             "summary",
             "aria2",
             "bandwidth",
-            "ariaflow",
+            "ariaflow-server",
             "_rev",
         ):
             self.assertIn(key, body, f"missing key: {key}")
-        self.assertIn("schema_version", body["ariaflow"])
+        self.assertIn("schema_version", body["ariaflow-server"])
         self.assertIn("_schema", body)
         self.assertIn("_request_id", body)
         self.assertIn("ETag", hdrs)
@@ -1136,8 +1136,8 @@ class TestGetEndpoints(APIServerTestCase):
     def test_get_api_lifecycle(self) -> None:
         code, body, _ = _req(f"{self.base}/api/lifecycle")
         self.assertEqual(code, 200)
-        self.assertIn("ariaflow", body)
-        self.assertEqual(body["ariaflow"]["meta"]["contract"], "UCC")
+        self.assertIn("ariaflow-server", body)
+        self.assertEqual(body["ariaflow-server"]["meta"]["contract"], "UCC")
 
     # 8. GET /api/downloads/{id}/files
     def test_get_api_item_files_no_gid(self) -> None:
@@ -1164,7 +1164,7 @@ class TestGetEndpoints(APIServerTestCase):
                 item["gid"] = "gid-files"
         save_queue(items)
         files = [{"index": "1", "path": "/f.mkv", "length": "999", "selected": "true"}]
-        with patch("aria_queue.core.aria_rpc", return_value={"result": files}):
+        with patch("ariaflow_server.core.aria_rpc", return_value={"result": files}):
             code, body, _ = _req(f"{self.base}/api/downloads/{item_id}/files")
         self.assertEqual(code, 200)
         self.assertEqual(len(body["files"]), 1)
@@ -1200,7 +1200,7 @@ class TestGetEndpoints(APIServerTestCase):
                 "stdout": "",
             },
         )()
-        with patch("aria_queue.webapp.subprocess.run", return_value=fake):
+        with patch("ariaflow_server.webapp.subprocess.run", return_value=fake):
             code, body, _ = _req(f"{self.base}/api/tests")
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
@@ -1272,7 +1272,7 @@ class TestPostEndpoints(APIServerTestCase):
     def test_post_api_preflight(self) -> None:
         with (
             patch(
-                "aria_queue.webapp.preflight",
+                "ariaflow_server.webapp.preflight",
                 return_value={
                     "contract": "UCC",
                     "version": "2.0",
@@ -1285,8 +1285,8 @@ class TestPostEndpoints(APIServerTestCase):
                     "exit_code": 0,
                 },
             ),
-            patch("aria_queue.webapp.aria2_status", return_value={}),
-            patch("aria_queue.webapp.aria2_current_bandwidth", return_value={}),
+            patch("ariaflow_server.webapp.aria2_status", return_value={}),
+            patch("ariaflow_server.webapp.aria2_current_bandwidth", return_value={}),
         ):
             code, body, _ = _req(f"{self.base}/api/scheduler/preflight", "POST")
         self.assertEqual(code, 200)
@@ -1296,7 +1296,7 @@ class TestPostEndpoints(APIServerTestCase):
     def test_post_api_ucc(self) -> None:
         with (
             patch(
-                "aria_queue.contracts.preflight",
+                "ariaflow_server.contracts.preflight",
                 return_value={
                     "contract": "UCC",
                     "version": "2.0",
@@ -1309,8 +1309,8 @@ class TestPostEndpoints(APIServerTestCase):
                     "exit_code": 0,
                 },
             ),
-            patch("aria_queue.core.process_queue", return_value=[]),
-            patch("aria_queue.core.get_active_progress", return_value=None),
+            patch("ariaflow_server.core.process_queue", return_value=[]),
+            patch("ariaflow_server.core.get_active_progress", return_value=None),
         ):
             code, body, _ = _req(f"{self.base}/api/scheduler/ucc", "POST")
         self.assertEqual(code, 200)
@@ -1348,8 +1348,8 @@ class TestPostEndpoints(APIServerTestCase):
             "interface_name": "en0",
         }
         with (
-            patch("aria_queue.core.probe_bandwidth", return_value=probe),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
+            patch("ariaflow_server.core.probe_bandwidth", return_value=probe),
+            patch("ariaflow_server.core.aria2_set_max_overall_download_limit"),
         ):
             code, body, _ = _req(f"{self.base}/api/bandwidth/probe", "POST")
         self.assertEqual(code, 200)
@@ -1362,8 +1362,8 @@ class TestPostEndpoints(APIServerTestCase):
     # 11. POST /api/aria2/change_global_option
     def test_post_api_aria2_options_safe(self) -> None:
         with (
-            patch("aria_queue.core.aria_rpc"),
-            patch("aria_queue.core.aria2_current_global_options", return_value={}),
+            patch("ariaflow_server.core.aria_rpc"),
+            patch("ariaflow_server.core.aria2_current_global_options", return_value={}),
         ):
             code, body, _ = _req(
                 f"{self.base}/api/aria2/change_global_option",
@@ -1451,7 +1451,7 @@ class TestPostEndpoints(APIServerTestCase):
                 item["gid"] = "gid-sel"
                 item["status"] = "paused"
         save_queue(items)
-        with patch("aria_queue.core.aria_rpc"):
+        with patch("ariaflow_server.core.aria_rpc"):
             code, body, _ = _req(
                 f"{self.base}/api/downloads/{item_id}/files", "POST", {"select": [1, 2]}
             )
@@ -1472,7 +1472,7 @@ class TestPostEndpoints(APIServerTestCase):
 
     # 17. POST /api/lifecycle/ariaflow-server/install
     def test_post_api_lifecycle_action_non_macos(self) -> None:
-        with patch("aria_queue.routes.lifecycle.is_macos", return_value=False):
+        with patch("ariaflow_server.routes.lifecycle.is_macos", return_value=False):
             code, body, _ = _req(
                 f"{self.base}/api/lifecycle/ariaflow-server/install",
                 "POST",
@@ -1486,10 +1486,10 @@ class TestPostEndpoints(APIServerTestCase):
 
     def test_post_api_lifecycle_action_install(self) -> None:
         with (
-            patch("aria_queue.routes.lifecycle.is_macos", return_value=True),
+            patch("ariaflow_server.routes.lifecycle.is_macos", return_value=True),
             patch(
-                "aria_queue.routes.lifecycle.homebrew_install_ariaflow_server",
-                return_value=["brew install ariaflow"],
+                "ariaflow_server.routes.lifecycle.homebrew_install_ariaflow_server",
+                return_value=["brew install ariaflow-server"],
             ),
         ):
             code, body, _ = _req(

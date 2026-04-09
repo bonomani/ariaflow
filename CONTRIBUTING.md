@@ -38,7 +38,7 @@ python scripts/gen_all_variables.py --check  # naming compliance
 ## Project Structure
 
 ```
-src/aria_queue/
+src/ariaflow_server/
   storage.py      — file I/O, locking, paths
   state.py        — state, sessions, action log, archive
   aria2_rpc.py    — aria_rpc + 36 aria2_* RPC wrappers + 12 helpers

@@ -54,8 +54,8 @@ def post_lifecycle_action(h: object, payload: object, path: str) -> None:
                 return
             commands = homebrew_install_ariaflow_server(dry_run=False)
             result = {
-                "ariaflow": ucc_record(
-                    target="ariaflow",
+                "ariaflow-server": ucc_record(
+                    target="ariaflow-server",
                     observed=True,
                     outcome="changed",
                     completion="complete",
@@ -73,8 +73,8 @@ def post_lifecycle_action(h: object, payload: object, path: str) -> None:
                 return
             commands = homebrew_uninstall_ariaflow_server(dry_run=False)
             result = {
-                "ariaflow": ucc_record(
-                    target="ariaflow",
+                "ariaflow-server": ucc_record(
+                    target="ariaflow-server",
                     observed=True,
                     outcome="changed",
                     completion="complete",

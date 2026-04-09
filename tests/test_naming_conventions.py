@@ -29,7 +29,7 @@ import unittest
 from pathlib import Path
 
 _PROJECT = Path(__file__).resolve().parents[1]
-_SRC = _PROJECT / "src" / "aria_queue"
+_SRC = _PROJECT / "src" / "ariaflow_server"
 
 sys.path.insert(0, str(_PROJECT / "src"))
 
@@ -75,7 +75,7 @@ class TestStatusValues(unittest.TestCase):
     """Status values in ITEM_STATUSES must be lowercase."""
 
     def test_item_statuses_are_lowercase(self) -> None:
-        from aria_queue.queue_ops import ITEM_STATUSES
+        from ariaflow_server.queue_ops import ITEM_STATUSES
 
         for status in ITEM_STATUSES:
             self.assertEqual(
@@ -118,11 +118,11 @@ class TestApiResponseKeys(unittest.TestCase):
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            os.environ["ARIA_QUEUE_DIR"] = tmpdir
+            os.environ["ARIAFLOW_DIR"] = tmpdir
             try:
-                from aria_queue.queue_ops import add_queue_item, load_queue
+                from ariaflow_server.queue_ops import add_queue_item, load_queue
                 from importlib import reload
-                import aria_queue.storage as storage_mod
+                import ariaflow_server.storage as storage_mod
 
                 reload(storage_mod)
 
@@ -136,18 +136,18 @@ class TestApiResponseKeys(unittest.TestCase):
                     "camelCase keys in queue item:\n" + "\n".join(violations),
                 )
             finally:
-                os.environ.pop("ARIA_QUEUE_DIR", None)
+                os.environ.pop("ARIAFLOW_DIR", None)
 
     def test_state_keys_are_snake_case(self) -> None:
         """Load default state and check all keys."""
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            os.environ["ARIA_QUEUE_DIR"] = tmpdir
+            os.environ["ARIAFLOW_DIR"] = tmpdir
             try:
-                from aria_queue.state import load_state
+                from ariaflow_server.state import load_state
                 from importlib import reload
-                import aria_queue.storage as storage_mod
+                import ariaflow_server.storage as storage_mod
 
                 reload(storage_mod)
 
@@ -159,7 +159,7 @@ class TestApiResponseKeys(unittest.TestCase):
                     "camelCase keys in state:\n" + "\n".join(violations),
                 )
             finally:
-                os.environ.pop("ARIA_QUEUE_DIR", None)
+                os.environ.pop("ARIAFLOW_DIR", None)
 
 
 class TestTestNaming(unittest.TestCase):
@@ -245,7 +245,7 @@ class TestDeclarationPreferenceNames(unittest.TestCase):
     """UIC preference names in DEFAULT_DECLARATION must be snake_case."""
 
     def test_preference_names_are_snake_case(self) -> None:
-        from aria_queue.contracts import DEFAULT_DECLARATION
+        from ariaflow_server.contracts import DEFAULT_DECLARATION
 
         prefs = DEFAULT_DECLARATION.get("uic", {}).get("preferences", [])
         violations: list[str] = []
@@ -258,7 +258,7 @@ class TestDeclarationPreferenceNames(unittest.TestCase):
         )
 
     def test_gate_names_are_snake_case(self) -> None:
-        from aria_queue.contracts import DEFAULT_DECLARATION
+        from ariaflow_server.contracts import DEFAULT_DECLARATION
 
         gates = DEFAULT_DECLARATION.get("uic", {}).get("gates", [])
         violations: list[str] = []
@@ -278,11 +278,11 @@ class TestActionLogKeys(unittest.TestCase):
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            os.environ["ARIA_QUEUE_DIR"] = tmpdir
+            os.environ["ARIAFLOW_DIR"] = tmpdir
             try:
-                from aria_queue.state import record_action, load_action_log
+                from ariaflow_server.state import record_action, load_action_log
                 from importlib import reload
-                import aria_queue.storage as storage_mod
+                import ariaflow_server.storage as storage_mod
 
                 reload(storage_mod)
 
@@ -307,7 +307,7 @@ class TestActionLogKeys(unittest.TestCase):
                     f"camelCase keys in action log: {violations}",
                 )
             finally:
-                os.environ.pop("ARIA_QUEUE_DIR", None)
+                os.environ.pop("ARIAFLOW_DIR", None)
 
 
 if __name__ == "__main__":

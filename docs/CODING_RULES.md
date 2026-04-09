@@ -5,7 +5,7 @@ Rules derived from real incidents during development. Each rule exists because w
 ## 1. Git Safety
 
 ### R1: NEVER use `git checkout --` on uncommitted work
-**Incident:** `git checkout -- src/aria_queue/core.py` reverted all Phase A, B, B+ changes — hours of work lost permanently.
+**Incident:** `git checkout -- src/ariaflow_server/core.py` reverted all Phase A, B, B+ changes — hours of work lost permanently.
 **Rule:** Before any destructive git command (`checkout --`, `reset --hard`, `clean -f`), always `git stash` first. Better: commit at every checkpoint.
 **Enforcement:** Documented in `docs/PLAN.md` Rule 0.
 
@@ -24,14 +24,14 @@ Rules derived from real incidents during development. Each rule exists because w
 **Rule:** When bulk-renaming with sed/replace_all, always process longest names first. Or use word-boundary regex (`\b`). Verify with grep after.
 
 ### R5: After any rename, grep ALL files — not just source
-**Incident:** After renaming `active_gids` → `aria2_tell_active` in source, tests still patched `aria_queue.core.active_gids` and failed.
+**Incident:** After renaming `active_gids` → `aria2_tell_active` in source, tests still patched `ariaflow_server.core.active_gids` and failed.
 **Rule:** After renaming a public function:
 1. `grep -rn 'old_name' src/ tests/ docs/ scripts/` — catch all references
 2. Update source, tests, docs, scripts, openapi.yaml
 3. Run tests before committing
 
 ### R6: After moving functions between modules, update test mock targets
-**Incident:** After splitting `webapp.py` → `routes/`, tests patching `aria_queue.webapp.homebrew_install_ariaflow` failed because the function was now imported in `routes/lifecycle.py`. CI release failed.
+**Incident:** After splitting `webapp.py` → `routes/`, tests patching `ariaflow_server.webapp.homebrew_install_ariaflow` failed because the function was now imported in `routes/lifecycle.py`. CI release failed.
 **Rule:** When moving a function from module A to module B, every `patch("module_A.function")` in tests must become `patch("module_B.function")`. Search: `grep -rn 'module_A.function' tests/`.
 
 ## 3. Documentation
@@ -77,7 +77,7 @@ Rules derived from real incidents during development. Each rule exists because w
 **Rule:** When using isolation worktrees for refactoring, ensure the worktree is based on the latest committed code. Commit all changes first.
 
 ### R15: Keep re-export hub when splitting modules
-**Incident:** After splitting `core.py` into 7 modules, all tests patching `aria_queue.core.X` still worked because `core.py` became a re-export hub.
+**Incident:** After splitting `core.py` into 7 modules, all tests patching `ariaflow_server.core.X` still worked because `core.py` became a re-export hub.
 **Rule:** When splitting a module, keep the original filename as a re-export hub using `from .new_module import *`. This ensures all existing `import` and `patch()` statements continue working.
 
 ### R16: Split helpers — single-use helpers go with their handler
@@ -87,7 +87,7 @@ Rules derived from real incidents during development. Each rule exists because w
 ## 6. API Design
 
 ### R17: Keep a single root openapi.yaml synced
-**Incident:** Root `openapi.yaml` and `src/aria_queue/openapi.yaml` diverged. Tests read from root, code served from src.
+**Incident:** Root `openapi.yaml` and `src/ariaflow_server/openapi.yaml` diverged. Tests read from root, code served from src.
 **Rule:** `gen_openapi.py` writes to both files. Never edit either manually. `make docs` keeps them in sync.
 
 ### R18: Use consistent endpoint naming from the start

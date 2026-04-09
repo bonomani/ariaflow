@@ -475,9 +475,9 @@ Storage path resolution for all persistent files.
 
 | # | Test | Intent | Oracle | Trace Target |
 |---|---|---|---|---|
-| 227 | `test_dns_sd_cmd_structure` | dns-sd command has correct service name, type, port, TXT records | cmd[2] == "ariaflow-api", cmd[3] == "_ariaflow._tcp", TXT records present | BISS: Bonjour/mDNS boundary |
-| 228 | `test_avahi_cmd_structure` | avahi command has correct service name, type, port, TXT records | cmd[1] == "ariaflow-api", cmd[2] == "_ariaflow._tcp", TXT records present | BISS: Bonjour/mDNS boundary |
-| 229 | `test_dns_sd_and_avahi_same_service_type` | dns-sd and avahi use identical service type | both == "_ariaflow._tcp" | BISS: Bonjour/mDNS boundary |
+| 227 | `test_dns_sd_cmd_structure` | dns-sd command has correct service name, type, port, TXT records | cmd[2] == "ariaflow-api", cmd[3] == "_ariaflow-server._tcp", TXT records present | BISS: Bonjour/mDNS boundary |
+| 228 | `test_avahi_cmd_structure` | avahi command has correct service name, type, port, TXT records | cmd[1] == "ariaflow-api", cmd[2] == "_ariaflow-server._tcp", TXT records present | BISS: Bonjour/mDNS boundary |
+| 229 | `test_dns_sd_and_avahi_same_service_type` | dns-sd and avahi use identical service type | both == "_ariaflow-server._tcp" | BISS: Bonjour/mDNS boundary |
 | 230 | `test_dns_sd_and_avahi_same_txt_records` | dns-sd and avahi produce identical TXT records | dns_txt == avahi_txt | BISS: Bonjour/mDNS boundary |
 | 230a | `test_instance_name_is_short_hostname` | _instance_name returns the short hostname | _instance_name() == _short_hostname() | BISS: Bonjour/mDNS boundary |
 | 230b | `test_instance_name_truncates_at_63_bytes` | Instance name capped at 63 bytes per DNS-SD spec | len(name.encode("utf-8")) <= 63 | BISS: Bonjour/mDNS boundary |

@@ -1,6 +1,6 @@
 # Backend Gaps Requested by Frontend
 
-> **Ownership:** Authored and maintained by the **ariaflow-web** frontend agent.
+> **Ownership:** Authored and maintained by the **ariaflow-dashboard** frontend agent.
 > The backend agent should read this file at session start, fix open items,
 > and move them to the Resolved section when done — but should NOT add or
 > delete entries (that's the frontend's responsibility).
@@ -8,7 +8,7 @@
 > **Single source of truth — no mirrors.**
 >
 > **Pairing rule:** Every open backend gap should have a paired frontend gap in
-> `../ariaflow-web/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
+> `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
 ---
@@ -50,7 +50,7 @@
 
 The BG-10 backend pass added 7+ component schemas and resolved most
 endpoints, but the frontend cross-check
-(`../ariaflow-web/tests/test_openapi_alignment.py`) still surfaces 14
+(`../ariaflow-dashboard/tests/test_openapi_alignment.py`) still surfaces 14
 field-level gaps across 5 endpoints. These are likely small leftovers
 the BG-10 sweep missed.
 
@@ -69,7 +69,7 @@ the BG-10 sweep missed.
   `Aria2Health` shape lacks `enabled` and `reachable`; `EngineState`
   lacks `pid`; the `active`/`actives` shape lacks `percent`. The
   frontend reference is
-  `../ariaflow-web/docs/schemas/api-status.schema.json`.
+  `../ariaflow-dashboard/docs/schemas/api-status.schema.json`.
 - `/api/declaration`: the top-level `policy` and `ucc` buckets are
   declared in the frontend schema but not in openapi.yaml — they
   should at least be `type: object` with a description, even if
@@ -86,11 +86,11 @@ so the frontend cross-check reports **0 warnings**.
 
 **How to verify:**
 ```
-cd ../ariaflow-web && python3 -m pytest tests/test_openapi_alignment.py -q
+cd ../ariaflow-dashboard && python3 -m pytest tests/test_openapi_alignment.py -q
 ```
 Expected: 16 passing, 0 warnings.
 
-**Impact on ariaflow-web:** Same as BG-10 — no runtime breakage; the
+**Impact on ariaflow-dashboard:** Same as BG-10 — no runtime breakage; the
 cross-check warnings prevent the frontend from tightening
 `tests/test_openapi_alignment.py` to a hard assertion.
 
@@ -135,7 +135,7 @@ These six need a frontend conversation — they're not unilateral backend change
 The frontend agent verified each contested field against `app.js` and
 `index.html` and decided **no backend code change is needed**. The
 frontend already consumes the fields the backend actually publishes;
-the ariaflow-web schemas were declaring fields the frontend never reads.
+the ariaflow-dashboard schemas were declaring fields the frontend never reads.
 
 | Field | Frontend usage | Decision |
 |---|---|---|
@@ -148,7 +148,7 @@ the ariaflow-web schemas were declaring fields the frontend never reads.
 
 **Verification:**
 ```
-cd ../ariaflow-web && python3 -m pytest tests/test_openapi_alignment.py -q
+cd ../ariaflow-dashboard && python3 -m pytest tests/test_openapi_alignment.py -q
 # 16 passed, 0 warnings
 ```
 
@@ -185,4 +185,4 @@ Historical resolved entries are preserved in git history.
 BG-10 was resolved across two backend commits:
 - Generator extension + 3 endpoint schemas (declaration / lifecycle / log) + UccEnvelope component
 - Remaining 6 endpoint schemas (bandwidth / bandwidth-probe / sessions / sessions/stats / torrents / peers)
-Five new TIC tests pin each schema against the live response so future drift surfaces immediately. Run `tests/test_openapi_alignment.py` from ariaflow-web to confirm 0 warnings.
+Five new TIC tests pin each schema against the live response so future drift surfaces immediately. Run `tests/test_openapi_alignment.py` from ariaflow-dashboard to confirm 0 warnings.
