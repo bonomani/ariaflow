@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 
-ARIA2_LABEL = "com.ariaflow.aria2"
+ARIA2_LABEL = "com.ariaflow-server.aria2"
 
 
 def launch_agents_dir() -> Path:

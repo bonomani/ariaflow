@@ -114,14 +114,14 @@ jobs:
         run: |
           mkdir -p release
           artifact=$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)
-          cp "$artifact" "release/ariaflow-${{ steps.release_meta.outputs.tag }}.tar.gz"
+          cp "$artifact" "release/ariaflow-server-${{ steps.release_meta.outputs.tag }}.tar.gz"
 
       - name: Assert tap token is configured
         env:
           TAP_TOKEN: ${{ secrets.ARIAFLOW_TAP_TOKEN }}
         run: |
           if [ -z "$TAP_TOKEN" ]; then
-            echo "Missing ARIAFLOW_TAP_TOKEN secret; cannot update bonomani/homebrew-ariaflow"
+            echo "Missing ARIAFLOW_TAP_TOKEN secret; cannot update bonomani/homebrew-ariaflow-server"
             exit 1
           fi
 
@@ -142,13 +142,13 @@ jobs:
       - name: Checkout tap
         uses: actions/checkout@v4
         with:
-          repository: bonomani/homebrew-ariaflow
+          repository: bonomani/homebrew-ariaflow-server
           token: ${{ secrets.ARIAFLOW_TAP_TOKEN }}
           path: tap
 
       - name: Update tap formula
         run: |
-          python3 scripts/homebrew_formula.py --tag "${{ steps.release_meta.outputs.tag }}" --output tap/Formula/ariaflow.rb
+          python3 scripts/homebrew_formula.py --tag "${{ steps.release_meta.outputs.tag }}" --output tap/Formula/ariaflow-server.rb
 
       - name: Commit tap update
         id: push_tap_update
@@ -156,13 +156,13 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/ariaflow.rb
+          git add Formula/ariaflow-server.rb
           if git diff --cached --quiet; then
             echo "Formula already up to date"
             echo "pushed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git commit -m "Update ariaflow formula to ${{ steps.release_meta.outputs.tag }}"
+          git commit -m "Update ariaflow-server formula to ${{ steps.release_meta.outputs.tag }}"
           git pull --rebase origin main
           git push origin HEAD:main
           echo "pushed=true" >> "$GITHUB_OUTPUT"
@@ -172,7 +172,7 @@ jobs:
         run: |
           expected="${{ steps.release_meta.outputs.tag }}"
           expected="${expected#v}"
-          current=$(python3 -c 'from pathlib import Path; import re; text = Path("tap/Formula/ariaflow.rb").read_text(encoding="utf-8"); match = re.search(r"^  version \"([^\"]+)\"$", text, re.MULTILINE); print(match.group(1) if match else "")')
+          current=$(python3 -c 'from pathlib import Path; import re; text = Path("tap/Formula/ariaflow-server.rb").read_text(encoding="utf-8"); match = re.search(r"^  version \"([^\"]+)\"$", text, re.MULTILINE); print(match.group(1) if match else "")')
           test "$current" = "$expected"
 
       - name: Verify published tap formula
@@ -182,7 +182,7 @@ jobs:
           current=""
           for attempt in 1 2 3 4 5 6; do
             git fetch --depth=1 origin main
-            current=$(git show FETCH_HEAD:Formula/ariaflow.rb | python3 -c 'import re, sys; text = sys.stdin.read(); match = re.search(r"^  version \"([^\"]+)\"$", text, re.MULTILINE); print(match.group(1) if match else "")')
+            current=$(git show FETCH_HEAD:Formula/ariaflow-server.rb | python3 -c 'import re, sys; text = sys.stdin.read(); match = re.search(r"^  version \"([^\"]+)\"$", text, re.MULTILINE); print(match.group(1) if match else "")')
             if [ "$current" = "$expected" ]; then
               echo "Published tap formula is $current"
               exit 0

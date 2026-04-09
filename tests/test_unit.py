@@ -357,11 +357,11 @@ class TestEnsureDeclaration(IsolatedTestCase):
 # ── install.py ──────────────────────────────────────────────────────
 
 
-class TestCurrentAriaflowVersion(unittest.TestCase):
+class TestCurrentAriaflowServerVersion(unittest.TestCase):
     def test_returns_string(self) -> None:
-        from aria_queue.install import current_ariaflow_version
+        from aria_queue.install import current_ariaflow_server_version
 
-        v = current_ariaflow_version()
+        v = current_ariaflow_server_version()
         self.assertIsInstance(v, str)
         self.assertTrue(len(v) > 0)
 

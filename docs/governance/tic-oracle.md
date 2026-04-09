@@ -1,6 +1,6 @@
-# TIC Oracle — Ariaflow
+# TIC Oracle — Ariaflow-server
 
-Profile: ariaflow-scheduler
+Profile: ariaflow-server-scheduler
 TIC ref: tic@7cfba80
 Generated: 2026-04-05
 Test runner: `python -m unittest discover -s tests -v`

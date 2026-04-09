@@ -11,4 +11,4 @@ build/
 .claude/
 docs/ALL_VARIABLES.md
 .codexrules
-src/ariaflow.egg-info/
+src/ariaflow_server.egg-info/

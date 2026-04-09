@@ -41,8 +41,8 @@ from .core import (
 from .install import (
     _aria2_install_service,
     _aria2_uninstall_service,
-    homebrew_install_ariaflow,
-    homebrew_uninstall_ariaflow,
+    homebrew_install_ariaflow_server,
+    homebrew_uninstall_ariaflow_server,
     status_all,
     ucc_record,
 )
@@ -89,8 +89,8 @@ __all__ = [
     "start_new_state_session",
     "status_all",
     "summarize_queue",
-    "homebrew_install_ariaflow",
-    "homebrew_uninstall_ariaflow",
+    "homebrew_install_ariaflow_server",
+    "homebrew_uninstall_ariaflow_server",
     "ucc_record",
     "_aria2_install_service",
     "_aria2_uninstall_service",

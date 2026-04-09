@@ -1,4 +1,4 @@
-# Codebase Audit — ariaflow
+# Codebase Audit — ariaflow-server
 
 Updated: 2026-04-04. Basis: 451 tests, 12 modules, 5544 source lines.
 

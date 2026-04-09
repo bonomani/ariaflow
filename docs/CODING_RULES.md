@@ -14,8 +14,8 @@ Rules derived from real incidents during development. Each rule exists because w
 **Rule:** After each logical change that passes tests → commit immediately. Never batch multiple changes into one big commit.
 
 ### R3: Never commit generated files
-**Incident:** `src/ariaflow.egg-info/` was accidentally committed.
-**Rule:** Run `git diff --cached --stat` before commit. Add generated directories to `.gitignore` proactively. Current gitignore: `.claude/`, `src/ariaflow.egg-info/`, `docs/ALL_VARIABLES.md`.
+**Incident:** `src/ariaflow_server.egg-info/` was accidentally committed.
+**Rule:** Run `git diff --cached --stat` before commit. Add generated directories to `.gitignore` proactively. Current gitignore: `.claude/`, `src/ariaflow_server.egg-info/`, `docs/ALL_VARIABLES.md`.
 
 ## 2. Renaming
 

@@ -13,4 +13,4 @@ VOLUME ["/data/config", "/data/downloads"]
 
 EXPOSE 8000
 
-CMD ["ariaflow", "serve", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["ariaflow-server", "serve", "--host", "0.0.0.0", "--port", "8000"]

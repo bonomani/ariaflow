@@ -1,4 +1,4 @@
-# Ariaflow Frontend Guide
+# Ariaflow-server Frontend Guide
 
 ## 1. Queue System
 

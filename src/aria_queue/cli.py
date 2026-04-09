@@ -14,7 +14,7 @@ from .webapp import serve as serve_api
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="ariaflow",
+        prog="ariaflow-server",
         description="Sequential aria2 queue driver with adaptive bandwidth control.",
     )
     sub = parser.add_subparsers(dest="command", required=True)

@@ -3,7 +3,7 @@
 ## Report a Security Vulnerability
 
 If you discover a security vulnerability in ariaflow, please report it
-privately via [GitHub Security Advisories](https://github.com/bonomani/ariaflow/security/advisories/new).
+privately via [GitHub Security Advisories](https://github.com/bonomani/ariaflow-server/security/advisories/new).
 
 Do NOT open a public issue for security vulnerabilities.
 
@@ -25,13 +25,13 @@ authorization:
 If ariaflow source code has been used to train an AI model without
 consent (see LICENSE Section 3):
 
-- Open a [GitHub Issue](https://github.com/bonomani/ariaflow/issues)
+- Open a [GitHub Issue](https://github.com/bonomani/ariaflow-server/issues)
   with evidence
 - Contact the copyright holder directly
 
 ### 3. Contact
 
-- **GitHub Issues:** https://github.com/bonomani/ariaflow/issues
+- **GitHub Issues:** https://github.com/bonomani/ariaflow-server/issues
 - **Copyright holder:** bonomani (via GitHub profile)
 
 ## Applicable Law

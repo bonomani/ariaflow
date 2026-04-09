@@ -830,10 +830,10 @@ class TestLifecycle(APIServerPerTestCase):
     def test_lifecycle_action_non_macos(self) -> None:
         with patch("aria_queue.routes.lifecycle.is_macos", return_value=False):
             code, body = _request(
-                f"{self.base}/api/lifecycle/ariaflow/install",
+                f"{self.base}/api/lifecycle/ariaflow-server/install",
                 "POST",
                 {
-                    "target": "ariaflow",
+                    "target": "ariaflow-server",
                     "action": "install",
                 },
             )
@@ -1470,14 +1470,14 @@ class TestPostEndpoints(APIServerTestCase):
         )
         self.assertEqual(code, 400)
 
-    # 17. POST /api/lifecycle/ariaflow/install
+    # 17. POST /api/lifecycle/ariaflow-server/install
     def test_post_api_lifecycle_action_non_macos(self) -> None:
         with patch("aria_queue.routes.lifecycle.is_macos", return_value=False):
             code, body, _ = _req(
-                f"{self.base}/api/lifecycle/ariaflow/install",
+                f"{self.base}/api/lifecycle/ariaflow-server/install",
                 "POST",
                 {
-                    "target": "ariaflow",
+                    "target": "ariaflow-server",
                     "action": "install",
                 },
             )
@@ -1488,15 +1488,15 @@ class TestPostEndpoints(APIServerTestCase):
         with (
             patch("aria_queue.routes.lifecycle.is_macos", return_value=True),
             patch(
-                "aria_queue.routes.lifecycle.homebrew_install_ariaflow",
+                "aria_queue.routes.lifecycle.homebrew_install_ariaflow_server",
                 return_value=["brew install ariaflow"],
             ),
         ):
             code, body, _ = _req(
-                f"{self.base}/api/lifecycle/ariaflow/install",
+                f"{self.base}/api/lifecycle/ariaflow-server/install",
                 "POST",
                 {
-                    "target": "ariaflow",
+                    "target": "ariaflow-server",
                     "action": "install",
                 },
             )

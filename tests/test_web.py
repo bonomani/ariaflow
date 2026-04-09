@@ -67,21 +67,21 @@ class WebSmokeTests(unittest.TestCase):
                 with (
                     patch("aria_queue.routes.lifecycle.is_macos", return_value=True),
                     patch(
-                        "aria_queue.routes.lifecycle.homebrew_install_ariaflow",
+                        "aria_queue.routes.lifecycle.homebrew_install_ariaflow_server",
                         return_value=[
                             "brew tap bonomani/ariaflow",
                             "brew install ariaflow",
                         ],
                     ),
                     patch(
-                        "aria_queue.routes.lifecycle.homebrew_uninstall_ariaflow",
+                        "aria_queue.routes.lifecycle.homebrew_uninstall_ariaflow_server",
                         return_value=["brew uninstall ariaflow"],
                     ),
                 ):
                     lifecycle_action = request_json(
-                        f"{base}/api/lifecycle/ariaflow/install",
+                        f"{base}/api/lifecycle/ariaflow-server/install",
                         method="POST",
-                        payload={"target": "ariaflow", "action": "install"},
+                        payload={"target": "ariaflow-server", "action": "install"},
                     )
                 self.assertTrue(lifecycle_action["ok"])
                 self.assertIn("lifecycle", lifecycle_action)

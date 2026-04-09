@@ -1,6 +1,6 @@
 # Repository Workflow
 
-Source repo for `ariaflow`. Documentation lives in [`docs/`](./docs/).
+Source repo for `ariaflow-server`. Documentation lives in [`docs/`](./docs/).
 
 ## Working Rules
 
@@ -24,11 +24,11 @@ See [`docs/RELEASE.md`](./docs/RELEASE.md) for full details.
 
 1. Check GitHub release is published (not draft/prerelease)
 2. Check Homebrew formula version in tap repo
-3. On macOS: `brew tap bonomani/ariaflow && brew upgrade ariaflow && ariaflow --version`
+3. On macOS: `brew tap bonomani/ariaflow-server && brew upgrade ariaflow-server && ariaflow --version`
 
 ## Homebrew Notes
 
-- Release workflow writes tap formula from `scripts/homebrew_formula.py`
+- Release workflow writes tap formula from `scripts/homebrew_formula.py` to `bonomani/homebrew-ariaflow-server`
 - Generated formula tracks `main` for `--HEAD`
 - Don't leave the tap pointing at an older tag after a new release
 

@@ -1,4 +1,4 @@
-# States, Transitions, and Interactions — ariaflow Scheduler & aria2
+# States, Transitions, and Interactions — ariaflow-server Scheduler & aria2
 
 **aria2 version supported:** 1.37.0 (JSON-RPC interface)
 
@@ -8,7 +8,7 @@
 
 ## Section 1: aria2 — States, Transitions, and RPC Commands
 
-aria2 is an external download daemon. ariaflow communicates with it via JSON-RPC on port 6800.
+aria2 is an external download daemon. ariaflow-server communicates with it via JSON-RPC on port 6800.
 
 ### 1.1 aria2 Download States (6)
 
@@ -169,7 +169,7 @@ Terminal states (`complete`, `error`, `removed`) appear in `tellStopped()` and c
 
 ---
 
-## Section 2: ariaflow Scheduler — States and Transitions
+## Section 2: ariaflow-server Scheduler — States and Transitions
 
 ### 2.1 Scheduler States (3)
 
@@ -202,7 +202,7 @@ The scheduler auto-starts with `ariaflow serve` and runs continuously until shut
 **Design:** `queue.json` is the persistent source of truth. aria2 is the volatile executor. Items are submitted eagerly to aria2 when available, with `queued` as a safety-net fallback when aria2 is unreachable.
 
 ```
-    queue.json (persistent)          aria2 (executor)                ariaflow
+    queue.json (persistent)          aria2 (executor)                ariaflow-server
     ───────────────────────    ──────────────────────────────    ──────────────
 
     ┌─────────────┐
@@ -220,19 +220,19 @@ The scheduler auto-starts with `ariaflow serve` and runs continuously until shut
 
 1. **queue.json is always the source of truth.** Survives aria2 crashes, restarts, power failures.
 2. **Submit eagerly.** Items go to aria2 immediately at add time when scheduler is running. No lazy 2s-loop submission.
-3. **Delegate concurrency to aria2.** `aria2_change_global_option({max-concurrent-downloads: N})` at scheduler start. No ariaflow slot-gating.
-4. **Delegate priority to aria2.** After submission, `aria2_change_position` reorders aria2's queue by ariaflow priority.
+3. **Delegate concurrency to aria2.** `aria2_change_global_option({max-concurrent-downloads: N})` at scheduler start. No ariaflow-server slot-gating.
+4. **Delegate priority to aria2.** After submission, `aria2_change_position` reorders aria2's queue by ariaflow-server priority.
 5. **`queued` is a safety net.** Items only stay `queued` when aria2 is unreachable or submission fails.
 6. **Reconcile on startup.** Compare queue.json to aria2 live state. Re-submit `queued` items. Adopt orphaned aria2 downloads.
 
-**What ariaflow owns:**
+**What ariaflow-server owns:**
 - Pre-submission: mode detection, validation
 - Metadata: URL, post_action_rule, session_id, timestamps, session_history
 - Post-completion: post_action execution
 - Bandwidth probing and cap application
 - Session lifecycle, API surface, audit logging
 
-**What ariaflow delegates to aria2:**
+**What ariaflow-server delegates to aria2:**
 - Queue ordering (`aria2_change_position`)
 - Concurrency (`aria2_change_global_option({max-concurrent-downloads})`)
 - Download state (active, waiting, paused, complete, error, removed)
@@ -242,15 +242,15 @@ The scheduler auto-starts with `ariaflow serve` and runs continuously until shut
 
 | Status | Type | Owner | Description |
 |---|---|---|---|
-| `discovering` | Transitional | ariaflow | Auto-detecting download mode, then eager submission |
-| `queued` | Stable | ariaflow | Safety net — waiting for aria2 (unreachable or submission failed) |
+| `discovering` | Transitional | ariaflow-server | Auto-detecting download mode, then eager submission |
+| `queued` | Stable | ariaflow-server | Safety net — waiting for aria2 (unreachable or submission failed) |
 | `waiting` | Stable | aria2 | In aria2's queue, not yet active |
 | `active` | Transitional | aria2 | Active transfer (aria2 `active`) |
 | `paused` | Stable | aria2 | Transfer suspended |
-| `complete` | Terminal | ariaflow | Completed — post-action runs (aria2 `complete`) |
-| `error` | Terminal | ariaflow | Failed (retryable via retry) |
-| `stopped` | Terminal | ariaflow | Stopped by scheduler shutdown or aria2 `removed` |
-| `cancelled` | Terminal | ariaflow | Cancelled by user, archived |
+| `complete` | Terminal | ariaflow-server | Completed — post-action runs (aria2 `complete`) |
+| `error` | Terminal | ariaflow-server | Failed (retryable via retry) |
+| `stopped` | Terminal | ariaflow-server | Stopped by scheduler shutdown or aria2 `removed` |
+| `cancelled` | Terminal | ariaflow-server | Cancelled by user, archived |
 
 ### 2.4 State Transitions
 

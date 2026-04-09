@@ -1,4 +1,4 @@
-# ariaflow — Feature Gap Analysis (Backend)
+# ariaflow-server — Feature Gap Analysis (Backend)
 
 Reference: [webui-aria2](https://github.com/ziahamza/webui-aria2)
 
@@ -30,7 +30,7 @@ Supports `.torrent`, `.metalink`, magnet URLs with `--pause-metadata=true`. File
 
 ### 5.2 Docker image
 
-Dockerfile installs aria2 + ariaflow + ariaflow-web. Exposes ports 8000/8001. Volume mount for downloads/config.
+Dockerfile installs aria2 + ariaflow-server + ariaflow-web. Exposes ports 8000/8001. Volume mount for downloads/config.
 
 ## Remaining
 

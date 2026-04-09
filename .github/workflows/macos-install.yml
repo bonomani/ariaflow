@@ -11,13 +11,13 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - name: Install ariaflow via Homebrew tap
+      - name: Install ariaflow-server via Homebrew tap
         run: |
-          brew tap bonomani/ariaflow
-          brew install ariaflow
+          brew tap bonomani/ariaflow-server
+          brew install ariaflow-server
 
       - name: Verify CLI
         run: |
-          ariaflow --version
-          ariaflow --help
+          ariaflow-server --version
+          ariaflow-server --help
 

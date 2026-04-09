@@ -6,13 +6,13 @@ import subprocess
 from pathlib import Path
 
 
-TASK_NAME = "ariaflow-aria2"
+TASK_NAME = "ariaflow-server-aria2"
 
 
 def _aria2_session_dir() -> Path:
     local = os.environ.get("LOCALAPPDATA")
     if local:
-        return Path(local) / "ariaflow" / ".aria2"
+        return Path(local) / "ariaflow-server" / ".aria2"
     return Path.home() / ".aria2"
 
 

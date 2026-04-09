@@ -573,15 +573,15 @@ class TestScenarioLifecycle(ScenarioBase):
         with (
             patch("aria_queue.routes.lifecycle.is_macos", return_value=True),
             patch(
-                "aria_queue.routes.lifecycle.homebrew_install_ariaflow",
+                "aria_queue.routes.lifecycle.homebrew_install_ariaflow_server",
                 return_value=["brew install ariaflow"],
             ),
         ):
             _, result, _ = _req(
-                f"{base}/api/lifecycle/ariaflow/install",
+                f"{base}/api/lifecycle/ariaflow-server/install",
                 "POST",
                 {
-                    "target": "ariaflow",
+                    "target": "ariaflow-server",
                     "action": "install",
                 },
             )
@@ -591,12 +591,12 @@ class TestScenarioLifecycle(ScenarioBase):
         with (
             patch("aria_queue.routes.lifecycle.is_macos", return_value=True),
             patch(
-                "aria_queue.routes.lifecycle.homebrew_uninstall_ariaflow",
+                "aria_queue.routes.lifecycle.homebrew_uninstall_ariaflow_server",
                 return_value=["brew uninstall ariaflow"],
             ),
         ):
             _, result, _ = _req(
-                f"{base}/api/lifecycle/ariaflow/uninstall",
+                f"{base}/api/lifecycle/ariaflow-server/uninstall",
                 "POST",
                 {},
             )

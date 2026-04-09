@@ -1,4 +1,4 @@
-# ariaflow
+# ariaflow-server
 
 Headless queue driver for `aria2c`.
 
@@ -21,25 +21,25 @@ Headless queue driver for `aria2c`.
 
 ```bash
 pip install -e .
-ariaflow serve              # start HTTP API on 127.0.0.1:8000
-ariaflow add <url>          # enqueue a download
-ariaflow run                # start the scheduler
-ariaflow status             # show queue state
+ariaflow-server serve              # start HTTP API on 127.0.0.1:8000
+ariaflow-server add <url>          # enqueue a download
+ariaflow-server run                # start the scheduler
+ariaflow-server status             # show queue state
 ```
 
 ## CLI Commands
 
 | Command | Description | Key flags |
 |---|---|---|
-| `ariaflow add <url>` | Enqueue a download | `--output`, `--priority`, `--mirror`, `--torrent-data`, `--metalink-data` |
-| `ariaflow run` | Start the scheduler | `--port` (aria2 RPC port, default 6800) |
-| `ariaflow serve` | Start HTTP API server | `--host` (default 127.0.0.1), `--port` (default 8000) |
-| `ariaflow status` | Show queue and scheduler state | `--json` |
-| `ariaflow preflight` | Run UIC pre-flight checks | `--json` |
-| `ariaflow ucc` | Run structured UCC execution cycle | `--port`, `--json` |
-| `ariaflow install` | Install on macOS | `--dry-run`, `--with-aria2` |
-| `ariaflow uninstall` | Remove macOS components | `--dry-run`, `--with-aria2` |
-| `ariaflow lifecycle` | Show install and service status | |
+| `ariaflow-server add <url>` | Enqueue a download | `--output`, `--priority`, `--mirror`, `--torrent-data`, `--metalink-data` |
+| `ariaflow-server run` | Start the scheduler | `--port` (aria2 RPC port, default 6800) |
+| `ariaflow-server serve` | Start HTTP API server | `--host` (default 127.0.0.1), `--port` (default 8000) |
+| `ariaflow-server status` | Show queue and scheduler state | `--json` |
+| `ariaflow-server preflight` | Run UIC pre-flight checks | `--json` |
+| `ariaflow-server ucc` | Run structured UCC execution cycle | `--port`, `--json` |
+| `ariaflow-server install` | Install on macOS | `--dry-run`, `--with-aria2` |
+| `ariaflow-server uninstall` | Remove macOS components | `--dry-run`, `--with-aria2` |
+| `ariaflow-server lifecycle` | Show install and service status | |
 
 Also: `python -m aria_queue <command>`
 
@@ -131,16 +131,16 @@ All documentation lives in [`docs/`](./docs/):
 ## Homebrew (macOS)
 
 ```bash
-brew tap bonomani/ariaflow
-brew install ariaflow-web    # installs ariaflow + web frontend
-brew services start ariaflow
+brew tap bonomani/ariaflow-server
+brew install ariaflow-web    # installs ariaflow-server + web frontend
+brew services start ariaflow-server
 brew services start ariaflow-web
 ```
 
-- `ariaflow` — headless scheduler + REST API
+- `ariaflow-server` — headless scheduler + REST API
 - `ariaflow-web` — web frontend (separate repo, connects via `ARIAFLOW_API_URL`)
 
-Tap formulas in `bonomani/homebrew-ariaflow` update automatically on each release.
+Tap formulas in `bonomani/homebrew-ariaflow-server` update automatically on each release.
 
 ## Release
 
@@ -157,8 +157,8 @@ python3 scripts/publish.py push   # push + auto-release
 
 Free to **use** for personal and internal business purposes. Modification, redistribution, and commercial resale are prohibited. See [LICENSE](./LICENSE).
 
-This software communicates with [aria2](https://aria2.github.io/) (GPL-2.0) via JSON-RPC as a separate process. aria2 is not distributed with ariaflow — install it independently.
+This software communicates with [aria2](https://aria2.github.io/) (GPL-2.0) via JSON-RPC as a separate process. aria2 is not distributed with ariaflow-server — install it independently.
 
 **AI policy:** Source code may NOT be used for AI training. Documentation IS freely referenceable. See [AI-USAGE.md](./AI-USAGE.md).
 
-**Report a violation:** If you believe this license has been violated, contact the copyright holder via [GitHub Issues](https://github.com/bonomani/ariaflow/issues) or file a [DMCA takedown](https://docs.github.com/en/site-policy/content-removal-policies/dmca-takedown-policy) if the code has been redistributed.
+**Report a violation:** If you believe this license has been violated, contact the copyright holder via [GitHub Issues](https://github.com/bonomani/ariaflow-server/issues) or file a [DMCA takedown](https://docs.github.com/en/site-policy/content-removal-policies/dmca-takedown-policy) if the code has been redistributed.

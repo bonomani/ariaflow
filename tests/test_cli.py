@@ -1,4 +1,4 @@
-"""CLI tests — every subcommand of ariaflow CLI."""
+"""CLI tests — every subcommand of ariaflow-server CLI."""
 
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ class TestCliExecution(IsolatedTestCase):
     """Each subcommand executes and produces expected output."""
 
     def test_add_prints_queued(self) -> None:
-        with patch("sys.argv", ["ariaflow", "add", "https://example.com/test.bin"]):
+        with patch("sys.argv", ["ariaflow-server", "add", "https://example.com/test.bin"]):
             stdout = StringIO()
             with patch("sys.stdout", stdout):
                 code = main()
@@ -131,9 +131,9 @@ class TestCliExecution(IsolatedTestCase):
 
     def test_status_plain(self) -> None:
         # Add an item first
-        with patch("sys.argv", ["ariaflow", "add", "https://example.com/s.bin"]):
+        with patch("sys.argv", ["ariaflow-server", "add", "https://example.com/s.bin"]):
             main()
-        with patch("sys.argv", ["ariaflow", "status"]):
+        with patch("sys.argv", ["ariaflow-server", "status"]):
             stdout = StringIO()
             with patch("sys.stdout", stdout):
                 code = main()
@@ -142,9 +142,9 @@ class TestCliExecution(IsolatedTestCase):
         self.assertIn("https://example.com/s.bin", stdout.getvalue())
 
     def test_status_json(self) -> None:
-        with patch("sys.argv", ["ariaflow", "add", "https://example.com/j.bin"]):
+        with patch("sys.argv", ["ariaflow-server", "add", "https://example.com/j.bin"]):
             main()
-        with patch("sys.argv", ["ariaflow", "status", "--json"]):
+        with patch("sys.argv", ["ariaflow-server", "status", "--json"]):
             stdout = StringIO()
             with patch("sys.stdout", stdout):
                 code = main()
@@ -155,7 +155,7 @@ class TestCliExecution(IsolatedTestCase):
 
     def test_preflight_plain(self) -> None:
         with (
-            patch("sys.argv", ["ariaflow", "preflight"]),
+            patch("sys.argv", ["ariaflow-server", "preflight"]),
             patch(
                 "aria_queue.contracts.aria_rpc",
                 return_value={"result": {"version": "1.37.0"}},
@@ -171,7 +171,7 @@ class TestCliExecution(IsolatedTestCase):
 
     def test_preflight_json(self) -> None:
         with (
-            patch("sys.argv", ["ariaflow", "preflight", "--json"]),
+            patch("sys.argv", ["ariaflow-server", "preflight", "--json"]),
             patch(
                 "aria_queue.contracts.aria_rpc",
                 return_value={"result": {"version": "1.37.0"}},
@@ -187,7 +187,7 @@ class TestCliExecution(IsolatedTestCase):
 
     def test_ucc_json(self) -> None:
         with (
-            patch("sys.argv", ["ariaflow", "ucc", "--json"]),
+            patch("sys.argv", ["ariaflow-server", "ucc", "--json"]),
             patch(
                 "aria_queue.contracts.preflight",
                 return_value={
@@ -214,7 +214,7 @@ class TestCliExecution(IsolatedTestCase):
         self.assertIn("result", data)
 
     def test_install_dry_run(self) -> None:
-        with patch("sys.argv", ["ariaflow", "install", "--dry-run"]):
+        with patch("sys.argv", ["ariaflow-server", "install", "--dry-run"]):
             stdout = StringIO()
             with patch("sys.stdout", stdout):
                 code = main()
@@ -223,7 +223,7 @@ class TestCliExecution(IsolatedTestCase):
         self.assertIn("ariaflow", data)
 
     def test_uninstall_dry_run(self) -> None:
-        with patch("sys.argv", ["ariaflow", "uninstall", "--dry-run"]):
+        with patch("sys.argv", ["ariaflow-server", "uninstall", "--dry-run"]):
             stdout = StringIO()
             with patch("sys.stdout", stdout):
                 code = main()
@@ -232,7 +232,7 @@ class TestCliExecution(IsolatedTestCase):
         self.assertIn("ariaflow", data)
 
     def test_lifecycle(self) -> None:
-        with patch("sys.argv", ["ariaflow", "lifecycle"]):
+        with patch("sys.argv", ["ariaflow-server", "lifecycle"]):
             stdout = StringIO()
             with patch("sys.stdout", stdout):
                 code = main()

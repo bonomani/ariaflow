@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 
-UNIT_NAME = "ariaflow-aria2.service"
+UNIT_NAME = "ariaflow-server-aria2.service"
 
 
 def _systemd_user_dir() -> Path:

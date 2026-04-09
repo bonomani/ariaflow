@@ -1,8 +1,8 @@
-decision_id: ariaflow-scheduler-001
+decision_id: ariaflow-server-scheduler-001
 bgs_slice: BGS-State-Modeled-Governed-Verified
 declared_scope: "scheduler execution path: session, run, queue, job lifecycle, distribution pipeline, service discovery, installation lifecycle"
 decision_reason: >
-  Ariaflow is a download manager (BGS DECISION-TREE §2.5) whose governed
+  Ariaflow-server is a download manager (BGS DECISION-TREE §2.5) whose governed
   behavior depends on installation, runtime readiness, recovery, and
   transition legality. The state-model rule in DECISION-TREE §1 mandates
   an ASM-based slice. Preflight gates (aria2 readiness, queue lock,

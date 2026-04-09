@@ -21,7 +21,7 @@ def version_from_tag(tag: str) -> str:
 
 
 def tarball_url(tag: str) -> str:
-    return f"https://github.com/bonomani/ariaflow/archive/refs/tags/{tag}.tar.gz"
+    return f"https://github.com/bonomani/ariaflow-server/archive/refs/tags/{tag}.tar.gz"
 
 
 def download_sha256(url: str) -> str:
@@ -36,37 +36,37 @@ def download_sha256(url: str) -> str:
 
 
 def render_formula(*, version: str, url: str, sha256: str) -> str:
-    return f"""class Ariaflow < Formula
+    return f"""class AriaflowServer < Formula
   desc "Sequential aria2 queue driver with adaptive bandwidth control"
-  homepage "https://github.com/bonomani/ariaflow"
+  homepage "https://github.com/bonomani/ariaflow-server"
   url "{url}"
   sha256 "{sha256}"
   version "{version}"
   license "MIT"
   depends_on "python"
   depends_on "aria2"
-  head "https://github.com/bonomani/ariaflow.git", branch: "main"
+  head "https://github.com/bonomani/ariaflow-server.git", branch: "main"
 
   def install
     libexec.install "src"
 
-    (bin/"ariaflow").write <<~EOS
+    (bin/"ariaflow-server").write <<~EOS
       #!/bin/bash
       exec env PYTHONPATH="#{{libexec}}/src:${{PYTHONPATH}}" python3 -m aria_queue "$@"
     EOS
-    chmod 0755, bin/"ariaflow"
+    chmod 0755, bin/"ariaflow-server"
   end
 
   service do
-    run [opt_bin/"ariaflow", "serve", "--host", "127.0.0.1", "--port", "8000"]
+    run [opt_bin/"ariaflow-server", "serve", "--host", "127.0.0.1", "--port", "8000"]
     keep_alive true
     working_dir var
-    log_path var/"log/ariaflow.log"
-    error_log_path var/"log/ariaflow.err.log"
+    log_path var/"log/ariaflow-server.log"
+    error_log_path var/"log/ariaflow-server.err.log"
   end
 
   test do
-    system bin/"ariaflow", "--help"
+    system bin/"ariaflow-server", "--help"
   end
 end
 """
@@ -78,7 +78,7 @@ def write_formula(path: Path, content: str) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Render the Homebrew formula for ariaflow.")
+    parser = argparse.ArgumentParser(description="Render the Homebrew formula for ariaflow-server.")
     parser.add_argument("--tag", required=True, help="Stable release tag in the form vX.Y.Z.")
     parser.add_argument("--output", type=Path, help="Path to write the rendered formula.")
     parser.add_argument("--sha256", help="Optional precomputed checksum.")

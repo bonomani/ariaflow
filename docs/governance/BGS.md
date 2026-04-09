@@ -1,6 +1,6 @@
 # BGS Entry
 
-project_name: ariaflow
+project_name: ariaflow-server
 bgs_slice: BGS-State-Modeled-Governed-Verified
 decision_reason: >
   Stateful download engine with session/run lifecycle, preflight gates,

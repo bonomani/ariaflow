@@ -1,10 +1,10 @@
-# Contributing to ariaflow
+# Contributing to ariaflow-server
 
 ## Setup
 
 ```bash
-git clone https://github.com/bonomani/ariaflow.git
-cd ariaflow
+git clone https://github.com/bonomani/ariaflow-server.git
+cd ariaflow-server
 pip install -e .
 ```
 

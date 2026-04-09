@@ -3,8 +3,8 @@ from __future__ import annotations
 from ..api import (
     _aria2_install_service,
     _aria2_uninstall_service,
-    homebrew_install_ariaflow,
-    homebrew_uninstall_ariaflow,
+    homebrew_install_ariaflow_server,
+    homebrew_uninstall_ariaflow_server,
     load_state,
     record_action,
     status_all,
@@ -45,14 +45,14 @@ def post_lifecycle_action(h: object, payload: object, path: str) -> None:
     action = str(payload.get("action", "")).strip()
     before = {"lifecycle": status_all()}
     try:
-        if target == "ariaflow" and action == "install":
+        if target == "ariaflow-server" and action == "install":
             if not is_macos():
                 h._send_json(
-                    _error_payload("use_pipx", "install ariaflow via: pipx install ariaflow"),
+                    _error_payload("use_pipx", "install ariaflow-server via: pipx install ariaflow-server"),
                     status=400,
                 )
                 return
-            commands = homebrew_install_ariaflow(dry_run=False)
+            commands = homebrew_install_ariaflow_server(dry_run=False)
             result = {
                 "ariaflow": ucc_record(
                     target="ariaflow",
@@ -60,18 +60,18 @@ def post_lifecycle_action(h: object, payload: object, path: str) -> None:
                     outcome="changed",
                     completion="complete",
                     reason="install",
-                    detail="ariaflow package installed or updated",
+                    detail="ariaflow-server package installed or updated",
                     commands=commands,
                 )
             }
-        elif target == "ariaflow" and action == "uninstall":
+        elif target == "ariaflow-server" and action == "uninstall":
             if not is_macos():
                 h._send_json(
-                    _error_payload("use_pipx", "uninstall ariaflow via: pipx uninstall ariaflow"),
+                    _error_payload("use_pipx", "uninstall ariaflow-server via: pipx uninstall ariaflow-server"),
                     status=400,
                 )
                 return
-            commands = homebrew_uninstall_ariaflow(dry_run=False)
+            commands = homebrew_uninstall_ariaflow_server(dry_run=False)
             result = {
                 "ariaflow": ucc_record(
                     target="ariaflow",
@@ -79,7 +79,7 @@ def post_lifecycle_action(h: object, payload: object, path: str) -> None:
                     outcome="changed",
                     completion="complete",
                     reason="uninstall",
-                    detail="ariaflow package removed",
+                    detail="ariaflow-server package removed",
                     commands=commands,
                 )
             }

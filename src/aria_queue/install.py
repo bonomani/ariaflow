@@ -9,9 +9,9 @@ from .core import _find_networkquality
 from .platform.detect import is_linux, is_macos, is_windows
 
 
-def current_ariaflow_version() -> str:
+def current_ariaflow_server_version() -> str:
     try:
-        return package_version("ariaflow")
+        return package_version("ariaflow-server")
     except PackageNotFoundError:
         from . import __version__
 
@@ -128,13 +128,13 @@ def networkquality_status() -> dict[str, object]:
         "usable": True,
         "version": None,
         "reason": "ready",
-        "message": f"networkquality available at {cmd}; ariaflow uses bounded -u -c -s probes at startup and every 180s during runs",
+        "message": f"networkquality available at {cmd}; ariaflow-server uses bounded -u -c -s probes at startup and every 180s during runs",
         "command": cmd,
     }
 
 
-def homebrew_install_ariaflow(dry_run: bool = False) -> list[str]:
-    commands = [["brew", "tap", "bonomani/ariaflow"], ["brew", "install", "ariaflow"]]
+def homebrew_install_ariaflow_server(dry_run: bool = False) -> list[str]:
+    commands = [["brew", "tap", "bonomani/ariaflow-server"], ["brew", "install", "ariaflow-server"]]
     if dry_run:
         return [" ".join(cmd) for cmd in commands]
     for cmd in commands:
@@ -142,8 +142,8 @@ def homebrew_install_ariaflow(dry_run: bool = False) -> list[str]:
     return [" ".join(cmd) for cmd in commands]
 
 
-def homebrew_uninstall_ariaflow(dry_run: bool = False) -> list[str]:
-    commands = [["brew", "uninstall", "ariaflow"]]
+def homebrew_uninstall_ariaflow_server(dry_run: bool = False) -> list[str]:
+    commands = [["brew", "uninstall", "ariaflow-server"]]
     if dry_run:
         return [" ".join(cmd) for cmd in commands]
     for cmd in commands:
@@ -212,14 +212,14 @@ def install_all(
 ) -> dict[str, dict[str, object]]:
     plan: dict[str, dict[str, object]] = {}
     if is_macos():
-        ariaflow_cmds = homebrew_install_ariaflow(dry_run=dry_run)
+        ariaflow_cmds = homebrew_install_ariaflow_server(dry_run=dry_run)
         plan["ariaflow"] = ucc_record(
             target="ariaflow",
             observed=True,
             outcome="changed",
             completion="complete",
             reason="install",
-            detail="ariaflow package installed or queued for installation",
+            detail="ariaflow-server package installed or queued for installation",
             commands=ariaflow_cmds,
         )
     else:
@@ -229,8 +229,8 @@ def install_all(
             outcome="unchanged",
             completion="complete",
             reason="info",
-            detail="install ariaflow via: pipx install ariaflow",
-            commands=["pipx install ariaflow"],
+            detail="install ariaflow via: pipx install ariaflow-server",
+            commands=["pipx install ariaflow-server"],
         )
     if include_aria2:
         target, cmds = _aria2_install_service(dry_run=dry_run)
@@ -247,14 +247,14 @@ def install_all(
 
 
 def status_all() -> dict[str, dict[str, object]]:
-    current_version = current_ariaflow_version()
+    current_version = current_ariaflow_server_version()
     if is_macos():
-        ariaflow_installed = brew_is_installed("ariaflow")
-        ariaflow_version = brew_package_version("ariaflow")
+        ariaflow_installed = brew_is_installed("ariaflow-server")
+        ariaflow_version = brew_package_version("ariaflow-server")
         aria2_installed = brew_is_installed("aria2")
         aria2_version = brew_package_version("aria2")
     else:
-        ariaflow_installed = shutil.which("ariaflow") is not None
+        ariaflow_installed = shutil.which("ariaflow-server") is not None
         ariaflow_version = current_version if ariaflow_installed else None
         aria2_installed = _aria2_on_path()
         aria2_version = None
@@ -268,9 +268,9 @@ def status_all() -> dict[str, dict[str, object]]:
             completion="complete",
             reason="match" if ariaflow_installed else "missing",
             detail=(
-                f"ariaflow installed {ariaflow_version or 'unknown'}; current production {current_version}"
+                f"ariaflow-server installed {ariaflow_version or 'unknown'}; current production {current_version}"
                 if ariaflow_installed
-                else f"ariaflow package absent; current production {current_version}; install via: pipx install ariaflow"
+                else f"ariaflow-server package absent; current production {current_version}; install via: pipx install ariaflow-server"
             ),
         ),
         "aria2": ucc_record(
@@ -326,8 +326,8 @@ def uninstall_all(
             outcome="changed",
             completion="complete",
             reason="uninstall",
-            detail="ariaflow package removed or queued for removal",
-            commands=homebrew_uninstall_ariaflow(dry_run=dry_run),
+            detail="ariaflow-server package removed or queued for removal",
+            commands=homebrew_uninstall_ariaflow_server(dry_run=dry_run),
         )
     else:
         plan["ariaflow"] = ucc_record(
@@ -336,8 +336,8 @@ def uninstall_all(
             outcome="unchanged",
             completion="complete",
             reason="info",
-            detail="uninstall ariaflow via: pipx uninstall ariaflow",
-            commands=["pipx uninstall ariaflow"],
+            detail="uninstall ariaflow via: pipx uninstall ariaflow-server",
+            commands=["pipx uninstall ariaflow-server"],
         )
     if include_aria2:
         target, cmds = _aria2_uninstall_service(dry_run=dry_run)

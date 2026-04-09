@@ -1,4 +1,4 @@
-# AI Usage Policy — ariaflow
+# AI Usage Policy — ariaflow-server
 
 ## Source Code (src/, tests/, scripts/)
 
@@ -28,4 +28,4 @@ Violations of the AI training restriction (Section 3) are subject to:
 2. **Legal action** under Swiss law (LDA) and the Berne Convention (181 countries)
 3. **License termination** — violator must cease all use
 
-Report violations: [GitHub Issues](https://github.com/bonomani/ariaflow/issues) or see [SECURITY.md](./SECURITY.md).
+Report violations: [GitHub Issues](https://github.com/bonomani/ariaflow-server/issues) or see [SECURITY.md](./SECURITY.md).

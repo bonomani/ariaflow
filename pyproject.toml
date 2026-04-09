@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ariaflow"
+name = "ariaflow-server"
 version = "0.1.159"
 description = "Sequential aria2 download scheduler with adaptive bandwidth control"
 requires-python = ">=3.10"
@@ -29,16 +29,16 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/bonomani/ariaflow"
-Repository = "https://github.com/bonomani/ariaflow"
-Issues = "https://github.com/bonomani/ariaflow/issues"
+Homepage = "https://github.com/bonomani/ariaflow-server"
+Repository = "https://github.com/bonomani/ariaflow-server"
+Issues = "https://github.com/bonomani/ariaflow-server/issues"
 
 [project.optional-dependencies]
 web = []
 launchd = []
 
 [project.scripts]
-ariaflow = "aria_queue.cli:main"
+ariaflow-server = "aria_queue.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

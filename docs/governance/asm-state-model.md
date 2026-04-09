@@ -1,6 +1,6 @@
-# ASM State Model — Ariaflow
+# ASM State Model — Ariaflow-server
 
-Profile: ariaflow-scheduler
+Profile: ariaflow-server-scheduler
 ASM ref: asm@dca032b
 
 ## 1. State Axes

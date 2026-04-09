@@ -1,8 +1,8 @@
-# Ariaflow Engine Architecture
+# Ariaflow-server Engine Architecture
 
 ## Overview
 
-Ariaflow is a headless download scheduler that manages queue state, sessions, runs, and policy. It delegates downloads to aria2 via JSON-RPC and exposes its state through a REST API. The web UI is a separate client.
+Ariaflow-server is a headless download scheduler that manages queue state, sessions, runs, and policy. It delegates downloads to aria2 via JSON-RPC and exposes its state through a REST API. The web UI is a separate client.
 
 ## Core Concepts
 
@@ -12,7 +12,7 @@ The architecture is orthogonal — each concept answers exactly one question:
 |---|---|---|
 | **Status / Readiness** | Can the system run safely? | Service status, preflight checks, dependency checks |
 | **Policy** | How should the scheduler behave? | Concurrency, dedup, ordering, post-action rules |
-| **Session** | Under which context is ariaflow operating? | session_id, started_at, closed_at, close_reason |
+| **Session** | Under which context is ariaflow-server operating? | session_id, started_at, closed_at, close_reason |
 | **Run** | What is the scheduler doing now? | running, paused |
 | **Queue** | What work exists and in what order? | Priority-ordered list of download items |
 | **Group** | Which jobs belong together? | Named set of jobs within a queue |
