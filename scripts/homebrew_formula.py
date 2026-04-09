@@ -47,12 +47,23 @@ def render_formula(*, version: str, url: str, sha256: str) -> str:
   depends_on "aria2"
   head "https://github.com/bonomani/ariaflow-server.git", branch: "main"
 
+  resource "portalocker" do
+    url "https://files.pythonhosted.org/packages/source/p/portalocker/portalocker-3.2.0.tar.gz"
+    sha256 "1f3002956a54a8c3730586c5c77bf18fae4149e07eaf1c29fc3faf4d5a3f89ac"
+  end
+
   def install
+    python3 = "python3"
+    venv = libexec/"venv"
+    system python3, "-m", "venv", venv
+    venv_pip = venv/"bin/pip"
+    resource("portalocker").stage {{ system venv_pip, "install", "." }}
+
     libexec.install "src"
 
     (bin/"ariaflow-server").write <<~EOS
       #!/bin/bash
-      exec env PYTHONPATH="#{{libexec}}/src:${{PYTHONPATH}}" python3 -m ariaflow_server "$@"
+      exec env PYTHONPATH="#{{libexec}}/src:#{{libexec}}/venv/lib/python3.*/site-packages:${{PYTHONPATH}}" python3 -m ariaflow_server "$@"
     EOS
     chmod 0755, bin/"ariaflow-server"
   end
