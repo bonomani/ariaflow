@@ -152,6 +152,13 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
         "bandwidth": {"type": "object", "nullable": True},
         "_rev": {"type": "integer"},
         "ariaflow-server": {"$ref": "#/components/schemas/AriaflowHealth"},
+        "discovery": {
+            "type": "object",
+            "properties": {
+                "available": {"type": "boolean"},
+                "backend": {"type": "string", "nullable": True},
+            },
+        },
         "active": {"$ref": "#/components/schemas/ActiveTransfer"},
         "actives": {
             "type": "array",

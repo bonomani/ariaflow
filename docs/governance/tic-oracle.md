@@ -97,6 +97,7 @@ Core scheduler, state machine, and UCC contract tests.
 | 53 | `test_status_returns_required_fields` | Status response has items, state, summary | code 200, all required keys present | UCC: API contract |
 | 54 | `test_status_summary_counts_match_items` | Summary counts match actual item list | summary.queued == 2, summary.total == 2, len(items) == 2 | UCC: observation consistency |
 | 55 | `test_status_includes_session_info` | Status includes session_id in state | state.session_id is not None | ASM: Session axis |
+| 55a | `test_status_includes_discovery` | Status includes discovery availability and backend | discovery.available is bool, discovery.backend present | BISS: Bonjour/mDNS boundary |
 | 56 | `test_status_empty_queue` | Empty queue returns zero summary | summary.total == 0, items == [] | UCC: observation |
 
 ### `tests/test_api.py` — TestAddEndpoint (8 tests)

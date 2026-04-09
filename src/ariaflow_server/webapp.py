@@ -28,6 +28,7 @@ from .api import (
     start_background_process,  # noqa: F401 — re-exported for test patch compatibility
     summarize_queue,
 )
+from .bonjour import bonjour_available, _detect_backend
 from .core import cleanup_queue_state
 from .storage import config_dir
 
@@ -292,6 +293,10 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 "version": __version__,
                 "schema_version": API_SCHEMA_VERSION,
                 "pid": os.getpid(),
+            },
+            "discovery": {
+                "available": bonjour_available(),
+                "backend": _detect_backend(),
             },
         }
         active = active_status(timeout=3)

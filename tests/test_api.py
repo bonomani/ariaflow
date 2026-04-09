@@ -104,6 +104,13 @@ class TestStatusEndpoint(APIServerPerTestCase):
         self.assertIn("session_id", body["state"])
         self.assertIsNotNone(body["state"]["session_id"])
 
+    def test_status_includes_discovery(self) -> None:
+        code, body = _request(f"{self.base}/api/status")
+        self.assertIn("discovery", body)
+        self.assertIn("available", body["discovery"])
+        self.assertIsInstance(body["discovery"]["available"], bool)
+        self.assertIn("backend", body["discovery"])
+
     def test_status_empty_queue(self) -> None:
         code, body = _request(f"{self.base}/api/status")
         self.assertEqual(body["summary"]["total"], 0)

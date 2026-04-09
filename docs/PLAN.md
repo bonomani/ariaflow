@@ -2,16 +2,6 @@
 
 
 
-### [Low] G-4: Report Bonjour availability in /api/status
-
-**What:** Add `"discovery": {"available": bool, "backend": str|null}` to the `/api/status` response
-**Where:** `src/ariaflow_server/webapp.py:_status_payload()`, `src/ariaflow_server/openapi_schemas.py`
-**Why:** Discovery silently disabled when Bonjour unavailable. Frontend and users have no way to know.
-**Scope:** ~10 lines source + schema + test
-**Depends on:** Nothing
-**TIC:** Register in tic-oracle.md
-
----
 
 ---
 
