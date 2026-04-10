@@ -17,9 +17,15 @@ When your change affects governed artifacts, update them in the same commit:
 - **State model change** → update `docs/governance/asm-state-model.md`
 - **New preference/gate** → update `src/ariaflow_server/contracts.py` (source of truth for UIC)
 
-## Cross-repo boundary — ariaflow-web (frontend)
-- The frontend repo is at /home/bc/repos/github/bonomani/ariaflow-web
+## Cross-repo boundary — ariaflow-dashboard (frontend)
+- The frontend repo is at /home/bc/repos/github/bonomani/ariaflow-dashboard
 - The frontend is a separate project. All communication is through the API.
 - You MAY NOT read, write, or reference any files in the frontend repo. No exceptions.
 - If the user asks you to operate on the frontend repo, remind them of this boundary and suggest they use a separate session from the frontend repo.
-- The frontend agent may write to `docs/BACKEND_GAPS_REQUESTED_BY_FRONTEND.md` to report API gaps. Check this file when starting work — resolve gaps and move them to the Resolved section. Do not add or delete entries yourself (that's the frontend's responsibility).
+
+## Frontend gap governance
+- At session start, read `docs/BACKEND_GAPS_REQUESTED_BY_FRONTEND.md` and fix any open items.
+- The frontend agent owns this file — do NOT add, delete, or rewrite entries.
+- When you resolve a gap, move it to the `## Resolved` table at the bottom (ID, summary, date).
+- File structure: `## Open (N)` heading with count, entries below, `_End of open gaps._` sentinel, then `## Resolved` table.
+- All information you need is in this file. Never read files in `../ariaflow-dashboard/`.

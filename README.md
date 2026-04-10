@@ -132,13 +132,13 @@ All documentation lives in [`docs/`](./docs/):
 
 ```bash
 brew tap bonomani/ariaflow-server
-brew install ariaflow-web    # installs ariaflow-server + web frontend
+brew install ariaflow-dashboard    # installs ariaflow-server + web frontend
 brew services start ariaflow-server
-brew services start ariaflow-web
+brew services start ariaflow-dashboard
 ```
 
 - `ariaflow-server` — headless scheduler + REST API
-- `ariaflow-web` — web frontend (separate repo, connects via `ARIAFLOW_API_URL`)
+- `ariaflow-dashboard` — web frontend (separate repo, connects via `ARIAFLOW_API_URL`)
 
 Tap formulas in `bonomani/homebrew-ariaflow-server` update automatically on each release.
 

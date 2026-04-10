@@ -381,7 +381,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self._send_json(
                 routes._error_payload(
                     "ui_not_served",
-                    "ariaflow-server is API-only; use ariaflow-web for the dashboard",
+                    "ariaflow-server is API-only; use ariaflow-dashboard for the dashboard",
                 ),
                 status=400,
             )

@@ -2,7 +2,7 @@
 
 Reference: [webui-aria2](https://github.com/ziahamza/webui-aria2)
 
-For frontend-only items, see `../ariaflow-web/GAPS.md`.
+For frontend-only items, see `../ariaflow-dashboard/GAPS.md`.
 
 ## Status Summary
 
@@ -30,7 +30,7 @@ Supports `.torrent`, `.metalink`, magnet URLs with `--pause-metadata=true`. File
 
 ### 5.2 Docker image
 
-Dockerfile installs aria2 + ariaflow-server + ariaflow-web. Exposes ports 8000/8001. Volume mount for downloads/config.
+Dockerfile installs aria2 + ariaflow-server + ariaflow-dashboard. Exposes ports 8000/8001. Volume mount for downloads/config.
 
 ## Remaining
 
