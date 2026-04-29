@@ -454,6 +454,56 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     };
   });
 
+  app.post("/api/aria2/multicall", async (req, reply) => {
+    if (requireAria2(reply)) return;
+    const body = req.body;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return reply
+        .code(400)
+        .send(errorPayload("invalid_payload", "expected {calls: [{methodName, params?}, ...]}"));
+    }
+    const rawCalls = (body as { calls?: unknown }).calls;
+    if (!Array.isArray(rawCalls) || rawCalls.length === 0) {
+      return reply.code(400).send(errorPayload("invalid_calls", "calls must be a non-empty list"));
+    }
+    const calls: Array<{ methodName: string; params?: unknown[] }> = [];
+    for (let i = 0; i < rawCalls.length; i++) {
+      const c = rawCalls[i];
+      if (!c || typeof c !== "object" || Array.isArray(c)) {
+        return reply
+          .code(400)
+          .send(errorPayload("invalid_call", `calls[${i}] must be an object`, { index: i }));
+      }
+      const methodName = (c as { methodName?: unknown }).methodName;
+      if (typeof methodName !== "string" || !methodName) {
+        return reply
+          .code(400)
+          .send(
+            errorPayload("invalid_call", `calls[${i}].methodName must be a non-empty string`, {
+              index: i,
+            }),
+          );
+      }
+      const params = (c as { params?: unknown }).params;
+      if (params !== undefined && !Array.isArray(params)) {
+        return reply
+          .code(400)
+          .send(
+            errorPayload("invalid_call", `calls[${i}].params must be an array`, { index: i }),
+          );
+      }
+      calls.push(params !== undefined ? { methodName, params } : { methodName });
+    }
+    try {
+      const results = await aria2.multicall(deps.aria2!, calls);
+      return { ok: true, results };
+    } catch (err) {
+      return reply
+        .code(502)
+        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+    }
+  });
+
   app.post("/api/aria2/set_limits", async (req, reply) => {
     if (requireAria2(reply)) return;
     const body = req.body;

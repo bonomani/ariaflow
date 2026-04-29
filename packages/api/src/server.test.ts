@@ -516,6 +516,71 @@ describe("GET /api/downloads/:id/files", () => {
   });
 });
 
+describe("POST /api/aria2/multicall", () => {
+  it("503 when no aria2 client is wired", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/aria2/multicall",
+      payload: { calls: [{ methodName: "aria2.tellActive" }] },
+    });
+    expect(res.statusCode).toBe(503);
+  });
+
+  it("400 on missing or empty calls", async () => {
+    const mock = await mockServerWithAria2(dir, () => "OK");
+    try {
+      const r1 = await mock.inject({
+        method: "POST",
+        url: "/api/aria2/multicall",
+        payload: { calls: [] },
+      });
+      expect(r1.statusCode).toBe(400);
+      expect(r1.json().error).toBe("invalid_calls");
+      const r2 = await mock.inject({
+        method: "POST",
+        url: "/api/aria2/multicall",
+        payload: { calls: [{}] },
+      });
+      expect(r2.statusCode).toBe(400);
+      expect(r2.json().error).toBe("invalid_call");
+      expect(r2.json().index).toBe(0);
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("forwards calls to system.multicall and returns the results array", async () => {
+    const mock = await mockServerWithAria2(dir, ({ method, params }) => {
+      if (method === "system.multicall") {
+        const batch = params[0] as Array<{ methodName: string }>;
+        return batch.map((c) => ({ ok: true, method: c.methodName }));
+      }
+      return [];
+    });
+    try {
+      const res = await mock.inject({
+        method: "POST",
+        url: "/api/aria2/multicall",
+        payload: {
+          calls: [
+            { methodName: "aria2.tellActive" },
+            { methodName: "aria2.tellWaiting", params: [0, 50] },
+          ],
+        },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.ok).toBe(true);
+      expect(body.results).toEqual([
+        { ok: true, method: "aria2.tellActive" },
+        { ok: true, method: "aria2.tellWaiting" },
+      ]);
+    } finally {
+      await mock.close();
+    }
+  });
+});
+
 describe("GET /api/lifecycle", () => {
   it("returns ariaflow_server + networkquality status and session fields", async () => {
     const res = await app.inject({ method: "GET", url: "/api/lifecycle" });
