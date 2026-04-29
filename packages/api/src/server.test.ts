@@ -411,6 +411,37 @@ describe("ActionLog -> EventBus bridge", () => {
   });
 });
 
+describe("GET /api/log", () => {
+  it("returns {items: [...]} matching the Python route shape", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/x" }] },
+    });
+    const res = await app.inject({ method: "GET", url: "/api/log" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.items.some((e: { action: string }) => e.action === "add")).toBe(true);
+    // No `ok` / `limit` fields — that's /api/actions, not /api/log.
+    expect(body.ok).toBeUndefined();
+    expect(body.limit).toBeUndefined();
+  });
+
+  it("clamps limit into [1, 500]", async () => {
+    // Push >5 entries to verify the clamp applies.
+    for (let i = 0; i < 5; i++) {
+      await app.inject({
+        method: "POST",
+        url: "/api/downloads",
+        payload: { items: [{ url: `http://h/${i}` }] },
+      });
+    }
+    const r = await app.inject({ method: "GET", url: "/api/log?limit=2" });
+    expect(r.json().items.length).toBeLessThanOrEqual(2);
+  });
+});
+
 describe("GET /api/health and /api/version", () => {
   it("/api/health is reachable with a numeric uptime", async () => {
     const res = await app.inject({ method: "GET", url: "/api/health" });

@@ -261,6 +261,17 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return { ok: true, limit, entries };
   });
 
+  // /api/log mirrors the Python route's {items} shape — a clamped tail
+  // of actions.jsonl. Default limit 120, max 500 (matches Python).
+  app.get<{ Querystring: { limit?: string } }>("/api/log", async (req) => {
+    const limitRaw = req.query?.limit;
+    let limit = 120;
+    const n = Number(limitRaw);
+    if (Number.isFinite(n)) limit = Math.max(1, Math.min(500, Math.trunc(n)));
+    const items = await deps.actionLog.load(limit);
+    return { items };
+  });
+
   app.get("/api/health", async () => {
     return { ok: true, status: "healthy", uptime_seconds: Math.round(process.uptime()) };
   });
