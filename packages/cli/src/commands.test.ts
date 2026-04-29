@@ -8,7 +8,9 @@ import {
   cmdBandwidth,
   cmdDeclaration,
   cmdList,
+  cmdPause,
   cmdRemove,
+  cmdResume,
   cmdStatus,
 } from "./commands.js";
 
@@ -101,6 +103,33 @@ describe("cmdStatus", () => {
     expect(body.running).toBe(false);
     expect(body.summary.total).toBe(1);
     expect(body.summary.queued).toBe(1);
+  });
+});
+
+describe("cmdPause / cmdResume", () => {
+  it("pause flips status to paused with a paused_at stamp", async () => {
+    const add = await cmdAdd(ctx, "http://h/x");
+    const id = JSON.parse(add.stdout).id;
+    const r = await cmdPause(ctx, id);
+    const body = JSON.parse(r.stdout);
+    expect(body.status).toBe("paused");
+    expect(typeof body.paused_at).toBe("string");
+  });
+
+  it("resume flips status back to queued with a resumed_at stamp", async () => {
+    const add = await cmdAdd(ctx, "http://h/x");
+    const id = JSON.parse(add.stdout).id;
+    await cmdPause(ctx, id);
+    const r = await cmdResume(ctx, id);
+    const body = JSON.parse(r.stdout);
+    expect(body.status).toBe("queued");
+    expect(typeof body.resumed_at).toBe("string");
+  });
+
+  it("exits 2 on a missing id for pause/resume", async () => {
+    const fakeId = "00000000-0000-0000-0000-000000000000";
+    expect((await cmdPause(ctx, fakeId)).exitCode).toBe(2);
+    expect((await cmdResume(ctx, fakeId)).exitCode).toBe(2);
   });
 });
 

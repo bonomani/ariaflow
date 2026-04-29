@@ -112,6 +112,24 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return { ok: true, id: removed.id };
   });
 
+  app.post<{ Params: { id: string } }>("/api/downloads/:id/pause", async (req, reply) => {
+    if (!validateItemId(req.params.id)) {
+      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
+    }
+    const next = await deps.queueOps.transitionStatus(req.params.id, "paused", "paused_at");
+    if (!next) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    return { ok: true, item: next };
+  });
+
+  app.post<{ Params: { id: string } }>("/api/downloads/:id/resume", async (req, reply) => {
+    if (!validateItemId(req.params.id)) {
+      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
+    }
+    const next = await deps.queueOps.transitionStatus(req.params.id, "queued", "resumed_at");
+    if (!next) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    return { ok: true, item: next };
+  });
+
   app.get("/api/declaration", async () => {
     const declaration = await deps.declarationStore.load();
     return { ok: true, declaration };

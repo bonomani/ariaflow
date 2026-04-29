@@ -65,6 +65,20 @@ export async function cmdRemove(ctx: CliContext, itemId: string): Promise<CmdRes
   return ok(json({ removed: removed.id }) + "\n");
 }
 
+export async function cmdPause(ctx: CliContext, itemId: string): Promise<CmdResult> {
+  if (!itemId) return fail("error: id is required\n");
+  const next = await ctx.queueOps.transitionStatus(itemId, "paused", "paused_at");
+  if (!next) return fail(`error: item ${itemId} not found\n`, 2);
+  return ok(json({ id: next.id, status: next.status, paused_at: next.paused_at }) + "\n");
+}
+
+export async function cmdResume(ctx: CliContext, itemId: string): Promise<CmdResult> {
+  if (!itemId) return fail("error: id is required\n");
+  const next = await ctx.queueOps.transitionStatus(itemId, "queued", "resumed_at");
+  if (!next) return fail(`error: item ${itemId} not found\n`, 2);
+  return ok(json({ id: next.id, status: next.status, resumed_at: next.resumed_at }) + "\n");
+}
+
 export async function cmdBandwidth(ctx: CliContext): Promise<CmdResult> {
   const declaration = await ctx.declaration.load();
   const state = await ctx.state.load();

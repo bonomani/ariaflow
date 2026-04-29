@@ -5,7 +5,9 @@ import {
   cmdBandwidth,
   cmdDeclaration,
   cmdList,
+  cmdPause,
   cmdRemove,
+  cmdResume,
   cmdStatus,
 } from "./commands.js";
 import { makeContext } from "./context.js";
@@ -45,6 +47,26 @@ program
   .action(async (id: string) => {
     const ctx = makeContext();
     const r = await cmdRemove(ctx, id);
+    process.stdout.write(r.stdout);
+    process.exit(r.exitCode);
+  });
+
+program
+  .command("pause")
+  .argument("<id>", "queue item id (UUID)")
+  .action(async (id: string) => {
+    const ctx = makeContext();
+    const r = await cmdPause(ctx, id);
+    process.stdout.write(r.stdout);
+    process.exit(r.exitCode);
+  });
+
+program
+  .command("resume")
+  .argument("<id>", "queue item id (UUID)")
+  .action(async (id: string) => {
+    const ctx = makeContext();
+    const r = await cmdResume(ctx, id);
     process.stdout.write(r.stdout);
     process.exit(r.exitCode);
   });

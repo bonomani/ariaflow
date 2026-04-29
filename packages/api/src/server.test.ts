@@ -169,6 +169,43 @@ describe("GET /api/declaration", () => {
   });
 });
 
+describe("pause / resume routes", () => {
+  it("POST /api/downloads/:id/pause flips status to paused", async () => {
+    const add = await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/x" }] },
+    });
+    const id = add.json().items[0].id;
+    const res = await app.inject({ method: "POST", url: `/api/downloads/${id}/pause` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().item.status).toBe("paused");
+  });
+
+  it("POST /api/downloads/:id/resume flips status back to queued", async () => {
+    const add = await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/y" }] },
+    });
+    const id = add.json().items[0].id;
+    await app.inject({ method: "POST", url: `/api/downloads/${id}/pause` });
+    const res = await app.inject({ method: "POST", url: `/api/downloads/${id}/resume` });
+    expect(res.json().item.status).toBe("queued");
+    expect(typeof res.json().item.resumed_at).toBe("string");
+  });
+
+  it("400 on a non-UUID id, 404 on an unknown id", async () => {
+    const bad = await app.inject({ method: "POST", url: "/api/downloads/x/pause" });
+    expect(bad.statusCode).toBe(400);
+    const miss = await app.inject({
+      method: "POST",
+      url: "/api/downloads/00000000-0000-0000-0000-000000000000/pause",
+    });
+    expect(miss.statusCode).toBe(404);
+  });
+});
+
 describe("GET /api/preflight", () => {
   it("returns fail when aria2 is unreachable (no client wired)", async () => {
     const res = await app.inject({ method: "GET", url: "/api/preflight" });
