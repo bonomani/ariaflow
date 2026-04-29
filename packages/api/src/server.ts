@@ -148,6 +148,65 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return { ok: true, item: next };
   });
 
+  app.post<{ Params: { id: string } }>("/api/downloads/:id/priority", async (req, reply) => {
+    if (!validateItemId(req.params.id)) {
+      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
+    }
+    const body = req.body;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return reply.code(400).send(errorPayload("invalid_payload", "expected {priority: number}"));
+    }
+    const raw = (body as { priority?: unknown }).priority;
+    const priority = Number(raw);
+    if (!Number.isFinite(priority)) {
+      return reply
+        .code(400)
+        .send(errorPayload("invalid_priority", "priority must be a finite number"));
+    }
+    const items = await deps.queueStore.load();
+    const item = items.find((i) => i.id === req.params.id);
+    if (!item) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    item.priority = Math.trunc(priority);
+    await deps.queueStore.save(items);
+    await deps.actionLog.record({
+      action: "set_priority",
+      target: "queue_item",
+      outcome: "changed",
+      reason: "api_request",
+      detail: { item_id: item.id, priority: item.priority },
+    });
+    return { ok: true, id: item.id, priority: item.priority };
+  });
+
+  app.post<{ Params: { id: string } }>("/api/downloads/:id/retry", async (req, reply) => {
+    if (!validateItemId(req.params.id)) {
+      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
+    }
+    const items = await deps.queueStore.load();
+    const item = items.find((i) => i.id === req.params.id);
+    if (!item) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    const before = { ...item };
+    // Reset failure fields and re-queue. The aria2-side re-add lives in
+    // the deferred scheduler integration.
+    item.status = "queued";
+    item.error_code = null;
+    item.error_message = null;
+    item.error_at = null;
+    item.gid = null;
+    item.live_status = null;
+    await deps.queueStore.save(items);
+    await deps.actionLog.record({
+      action: "retry",
+      target: "queue_item",
+      outcome: "changed",
+      reason: "api_request",
+      before: { item: before },
+      after: { item: { ...item } },
+      detail: { item_id: item.id },
+    });
+    return { ok: true, item };
+  });
+
   app.post<{ Params: { id: string } }>("/api/downloads/:id/resume", async (req, reply) => {
     if (!validateItemId(req.params.id)) {
       return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));

@@ -32,11 +32,16 @@ export function diffOpenApi(live: OpenApiDoc, expected: OpenApiDoc): DriftReport
   const changed: DriftReport["changed"] = [];
   for (const path of [...livePaths].sort()) {
     if (!expPaths.has(path)) continue;
+    // HEAD is auto-attached to every GET by Fastify; the canonical
+    // openapi.yaml never declares it, so dropping it here removes a
+    // class of false-positive method drift entries.
     const liveMethods = Object.keys(live.paths![path] ?? {})
       .map((m) => m.toUpperCase())
+      .filter((m) => m !== "HEAD")
       .sort();
     const expMethods = Object.keys(expected.paths![path] ?? {})
       .map((m) => m.toUpperCase())
+      .filter((m) => m !== "HEAD")
       .sort();
     if (liveMethods.join(",") !== expMethods.join(",")) {
       changed.push({ path, live: liveMethods, expected: expMethods });

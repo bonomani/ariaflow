@@ -581,6 +581,79 @@ describe("POST /api/aria2/multicall", () => {
   });
 });
 
+describe("priority / retry routes", () => {
+  it("POST /:id/priority writes the new value and records an action", async () => {
+    const add = await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/x" }] },
+    });
+    const id = add.json().items[0].id;
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/downloads/${id}/priority`,
+      payload: { priority: 5 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, id, priority: 5 });
+    const list = await app.inject({ method: "GET", url: "/api/downloads" });
+    expect(list.json().items[0].id).toBe(id);
+  });
+
+  it("POST /:id/priority 400s on a non-numeric priority", async () => {
+    const add = await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/y" }] },
+    });
+    const id = add.json().items[0].id;
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/downloads/${id}/priority`,
+      payload: { priority: "high" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("invalid_priority");
+  });
+
+  it("POST /:id/retry resets failure fields and bumps status back to queued", async () => {
+    const add = await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/z" }] },
+    });
+    const id = add.json().items[0].id;
+    // Inject an error state via the queue file directly (no scheduler yet).
+    const { readFileSync, writeFileSync } = await import("node:fs");
+    const data = JSON.parse(readFileSync(`${dir}/queue.json`, "utf8"));
+    data.items[0].status = "error";
+    data.items[0].error_code = "1";
+    data.items[0].error_message = "boom";
+    data.items[0].gid = "G1";
+    writeFileSync(`${dir}/queue.json`, JSON.stringify(data));
+
+    const res = await app.inject({ method: "POST", url: `/api/downloads/${id}/retry` });
+    expect(res.statusCode).toBe(200);
+    const item = res.json().item;
+    expect(item.status).toBe("queued");
+    expect(item.error_code).toBeNull();
+    expect(item.error_message).toBeNull();
+    expect(item.gid).toBeNull();
+  });
+
+  it("priority and retry both 404 on an unknown id", async () => {
+    const fake = "00000000-0000-0000-0000-000000000000";
+    const p = await app.inject({
+      method: "POST",
+      url: `/api/downloads/${fake}/priority`,
+      payload: { priority: 1 },
+    });
+    const r = await app.inject({ method: "POST", url: `/api/downloads/${fake}/retry` });
+    expect(p.statusCode).toBe(404);
+    expect(r.statusCode).toBe(404);
+  });
+});
+
 describe("torrent serving routes", () => {
   it("GET /api/torrents lists only items in distribute_status=seeding", async () => {
     const { writeFileSync } = await import("node:fs");
