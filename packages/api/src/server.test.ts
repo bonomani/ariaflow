@@ -485,6 +485,104 @@ describe("GET /api/downloads/:id/files", () => {
   });
 });
 
+describe("POST /api/aria2/set_limits", () => {
+  it("503 when no aria2 client is wired", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/aria2/set_limits",
+      payload: { max_overall_download_limit: 1000 },
+    });
+    expect(res.statusCode).toBe(503);
+  });
+
+  it("400 on a non-object payload", async () => {
+    const mock = await mockServerWithAria2(dir, () => "OK");
+    try {
+      const res = await mock.inject({
+        method: "POST",
+        url: "/api/aria2/set_limits",
+        payload: "null",
+        headers: { "content-type": "application/json" },
+      });
+      expect(res.statusCode).toBe(400);
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("calls the matching change_global_option keys for overall + seed limits", async () => {
+    const calls: Array<{ method: string; params: unknown[] }> = [];
+    const mock = await mockServerWithAria2(dir, ({ method, params }) => {
+      calls.push({ method, params });
+      return "OK";
+    });
+    try {
+      const res = await mock.inject({
+        method: "POST",
+        url: "/api/aria2/set_limits",
+        payload: {
+          max_overall_download_limit: 125000,
+          max_overall_upload_limit: 50000,
+          seed_ratio: 1.5,
+          seed_time: 60,
+        },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.ok).toBe(true);
+      expect(body.errors).toEqual([]);
+      // Each setter routes through aria2.changeGlobalOption with one key.
+      const opts = calls
+        .filter((c) => c.method === "aria2.changeGlobalOption")
+        .map((c) => Object.keys(c.params[0] as object)[0]);
+      expect(opts.sort()).toEqual([
+        "max-overall-download-limit",
+        "max-overall-upload-limit",
+        "seed-ratio",
+        "seed-time",
+      ]);
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("per-gid limits route through aria2.changeOption with the supplied gid", async () => {
+    const calls: Array<{ method: string; params: unknown[] }> = [];
+    const mock = await mockServerWithAria2(dir, ({ method, params }) => {
+      calls.push({ method, params });
+      return "OK";
+    });
+    try {
+      await mock.inject({
+        method: "POST",
+        url: "/api/aria2/set_limits",
+        payload: { gid: "G1", max_download_limit: 200000, max_upload_limit: 100000 },
+      });
+      const optionCalls = calls.filter((c) => c.method === "aria2.changeOption");
+      expect(optionCalls.map((c) => c.params[0])).toEqual(["G1", "G1"]);
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("collects per-key errors for non-numeric values", async () => {
+    const mock = await mockServerWithAria2(dir, () => "OK");
+    try {
+      const res = await mock.inject({
+        method: "POST",
+        url: "/api/aria2/set_limits",
+        payload: { max_overall_download_limit: "not-a-number" },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.ok).toBe(false);
+      expect(body.errors).toContain("max_overall_download_limit");
+    } finally {
+      await mock.close();
+    }
+  });
+});
+
 describe("aria2 option routes", () => {
   it("/api/aria2/option_tiers returns managed/safe sets and unsafe flag", async () => {
     const res = await app.inject({ method: "GET", url: "/api/aria2/option_tiers" });

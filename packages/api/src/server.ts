@@ -423,6 +423,75 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
   });
 
+  app.post("/api/aria2/set_limits", async (req, reply) => {
+    if (requireAria2(reply)) return;
+    const body = req.body;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return reply.code(400).send(errorPayload("invalid_payload", "expected JSON object"));
+    }
+    const p = body as Record<string, unknown>;
+    const gid = typeof p.gid === "string" && p.gid.trim() ? p.gid.trim() : null;
+    const applied: Record<string, unknown> = {};
+    const errors: string[] = [];
+
+    const num = (v: unknown): number => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : NaN;
+    };
+
+    const tryRun = async (key: string, fn: () => Promise<unknown>) => {
+      try {
+        await fn();
+        applied[key] = p[key];
+      } catch {
+        errors.push(key);
+      }
+    };
+
+    if ("max_overall_download_limit" in p) {
+      const v = num(p.max_overall_download_limit);
+      if (Number.isFinite(v)) {
+        await tryRun("max_overall_download_limit", () =>
+          aria2.setMaxOverallDownloadLimit(deps.aria2!, v),
+        );
+      } else errors.push("max_overall_download_limit");
+    }
+    if ("max_overall_upload_limit" in p) {
+      const v = num(p.max_overall_upload_limit);
+      if (Number.isFinite(v)) {
+        await tryRun("max_overall_upload_limit", () =>
+          aria2.setMaxOverallUploadLimit(deps.aria2!, v),
+        );
+      } else errors.push("max_overall_upload_limit");
+    }
+    if ("max_download_limit" in p && gid) {
+      const v = num(p.max_download_limit);
+      if (Number.isFinite(v)) {
+        await tryRun("max_download_limit", () => aria2.setMaxDownloadLimit(deps.aria2!, gid, v));
+      } else errors.push("max_download_limit");
+    }
+    if ("max_upload_limit" in p && gid) {
+      const v = num(p.max_upload_limit);
+      if (Number.isFinite(v)) {
+        await tryRun("max_upload_limit", () => aria2.setMaxUploadLimit(deps.aria2!, gid, v));
+      } else errors.push("max_upload_limit");
+    }
+    if ("seed_ratio" in p) {
+      const v = num(p.seed_ratio);
+      if (Number.isFinite(v)) {
+        await tryRun("seed_ratio", () => aria2.setSeedRatio(deps.aria2!, v));
+      } else errors.push("seed_ratio");
+    }
+    if ("seed_time" in p) {
+      const v = num(p.seed_time);
+      if (Number.isFinite(v)) {
+        await tryRun("seed_time", () => aria2.setSeedTime(deps.aria2!, v));
+      } else errors.push("seed_time");
+    }
+
+    return { ok: errors.length === 0, applied, errors };
+  });
+
   app.post("/api/aria2/change_option", async (req, reply) => {
     if (requireAria2(reply)) return;
     const body = req.body;
