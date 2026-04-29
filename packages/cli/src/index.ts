@@ -3,6 +3,7 @@ import { Command } from "commander";
 import {
   cmdAdd,
   cmdBandwidth,
+  cmdDashboard,
   cmdDeclaration,
   cmdList,
   cmdPause,
@@ -134,6 +135,17 @@ program
       signal: ctrl.signal,
     });
     if (!r.ok) process.stdout.write(r.stdout);
+    process.exit(r.exitCode);
+  });
+
+program
+  .command("dashboard")
+  .description("combined snapshot of scheduler / queue / bandwidth / declaration")
+  .option("--pretty", "human-readable layout instead of JSON")
+  .action(async (opts: { pretty?: boolean }) => {
+    const ctx = makeContext();
+    const r = await cmdDashboard(ctx, opts);
+    process.stdout.write(r.stdout);
     process.exit(r.exitCode);
   });
 

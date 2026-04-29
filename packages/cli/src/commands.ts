@@ -311,6 +311,66 @@ export async function cmdSetPref(
   return ok(json({ name, before, after: value }) + "\n");
 }
 
+export async function cmdDashboard(
+  ctx: CliContext,
+  opts: { pretty?: boolean } = {},
+): Promise<CmdResult> {
+  const state = await ctx.state.load();
+  const declaration = await ctx.declaration.load();
+  const items = await ctx.queue.load();
+  const summary = summarizeQueue(items);
+  const config = bandwidthConfigFrom(declaration);
+  const running = Boolean(state.running);
+  const paused = Boolean(state.paused);
+  const schedulerStatus = running && paused ? "paused" : running ? "running" : "starting";
+  const dashboard = {
+    scheduler: {
+      status: schedulerStatus,
+      running,
+      paused,
+      session_id: state.session_id,
+    },
+    queue: summary,
+    bandwidth: {
+      config,
+      last_probe: state.last_bandwidth_probe ?? null,
+      last_probe_at: state.last_bandwidth_probe_at ?? null,
+    },
+    declaration: {
+      contract: declaration.meta?.contract,
+      version: declaration.meta?.version,
+      gates: declaration.uic?.gates?.length ?? 0,
+      preferences: declaration.uic?.preferences?.length ?? 0,
+    },
+  };
+
+  if (!opts.pretty) return ok(json(dashboard) + "\n");
+
+  const lines: string[] = [];
+  lines.push(`Scheduler: ${schedulerStatus}  (running=${running} paused=${paused})`);
+  if (state.session_id) lines.push(`  session: ${state.session_id}`);
+  lines.push(
+    `Queue: total=${summary.total}  active=${summary.active ?? 0}  ` +
+      `queued=${summary.queued ?? 0}  paused=${summary.paused ?? 0}  ` +
+      `complete=${summary.complete ?? 0}  error=${summary.error ?? 0}`,
+  );
+  const probe = state.last_bandwidth_probe as Record<string, unknown> | null;
+  if (probe) {
+    const dl = probe.downlink_mbps ?? "—";
+    const ul = probe.uplink_mbps ?? "—";
+    const cap = probe.cap_mbps ?? "—";
+    lines.push(`Bandwidth: downlink=${dl}Mbps  uplink=${ul}Mbps  cap=${cap}Mbps`);
+  } else {
+    lines.push(`Bandwidth: no probe yet  (use 'ariaflow probe')`);
+  }
+  lines.push(
+    `Declaration: ${declaration.meta?.contract} v${declaration.meta?.version}  ` +
+      `(${declaration.uic?.gates?.length ?? 0} gates, ` +
+      `${declaration.uic?.preferences?.length ?? 0} prefs)`,
+  );
+  return ok(lines.join("\n") + "\n");
+}
+
 export async function cmdProbe(ctx: CliContext): Promise<CmdResult> {
   const declaration = await ctx.declaration.load();
   const config = bandwidthConfigFrom(declaration);

@@ -6,6 +6,7 @@ import { makeContext, type CliContext } from "./context.js";
 import {
   cmdAdd,
   cmdBandwidth,
+  cmdDashboard,
   cmdDeclaration,
   cmdList,
   cmdPause,
@@ -200,6 +201,34 @@ describe("cmdServe", () => {
     } finally {
       await handle.close();
     }
+  });
+});
+
+describe("cmdDashboard", () => {
+  it("JSON mode emits scheduler / queue / bandwidth / declaration sections", async () => {
+    await cmdAdd(ctx, "http://h/x");
+    const r = await cmdDashboard(ctx);
+    const body = JSON.parse(r.stdout);
+    expect(body.scheduler.status).toBe("starting");
+    expect(body.queue.total).toBe(1);
+    expect(body.queue.queued).toBe(1);
+    expect(body.bandwidth.config.probe_interval_seconds).toBeGreaterThanOrEqual(30);
+    expect(body.declaration.contract).toBe("UCC");
+    expect(body.declaration.gates).toBe(2);
+  });
+
+  it("--pretty emits a human layout including the no-probe hint", async () => {
+    const r = await cmdDashboard(ctx, { pretty: true });
+    expect(r.stdout).toContain("Scheduler: starting");
+    expect(r.stdout).toContain("Queue: total=0");
+    expect(r.stdout).toContain("Bandwidth: no probe yet");
+    expect(r.stdout).toContain("Declaration: UCC v2.0");
+  });
+
+  it("--pretty surfaces a saved probe's downlink / cap", async () => {
+    await cmdProbe(ctx);
+    const r = await cmdDashboard(ctx, { pretty: true });
+    expect(r.stdout).toMatch(/Bandwidth: downlink=/);
   });
 });
 
