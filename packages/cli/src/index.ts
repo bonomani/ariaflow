@@ -8,6 +8,7 @@ import {
   cmdPause,
   cmdRemove,
   cmdResume,
+  cmdServe,
   cmdStatus,
 } from "./commands.js";
 import { makeContext } from "./context.js";
@@ -91,5 +92,22 @@ program.command("declaration").description("show the UCC declaration").action(as
   process.stdout.write(r.stdout);
   process.exit(r.exitCode);
 });
+
+program
+  .command("serve")
+  .description("start the HTTP API server")
+  .option("--host <h>", "bind host", "127.0.0.1")
+  .option("--port <p>", "bind port", (v) => Number(v), 8000)
+  .action(async (opts: { host: string; port: number }) => {
+    const ctx = makeContext();
+    const handle = await cmdServe(ctx, { host: opts.host, port: opts.port });
+    process.stdout.write(`ariaflow-server listening at ${handle.url}\n`);
+    const stop = async () => {
+      await handle.close();
+      process.exit(0);
+    };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+  });
 
 program.parseAsync(process.argv);

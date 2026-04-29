@@ -11,6 +11,7 @@ import {
   cmdPause,
   cmdRemove,
   cmdResume,
+  cmdServe,
   cmdStatus,
 } from "./commands.js";
 
@@ -149,5 +150,23 @@ describe("cmdDeclaration", () => {
     const body = JSON.parse(r.stdout);
     expect(body.meta.contract).toBe("UCC");
     expect(Array.isArray(body.uic.preferences)).toBe(true);
+  });
+});
+
+describe("cmdServe", () => {
+  it("boots a real HTTP server on a free port and answers /api/health", async () => {
+    const handle = await cmdServe(ctx, { host: "127.0.0.1", port: 0, version: "9.9.9" });
+    try {
+      const res = await fetch(`${handle.url}/api/health`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { ok: boolean; status: string };
+      expect(body.ok).toBe(true);
+      expect(body.status).toBe("healthy");
+      const v = await fetch(`${handle.url}/api/version`);
+      const versionBody = (await v.json()) as { version: string };
+      expect(versionBody.version).toBe("9.9.9");
+    } finally {
+      await handle.close();
+    }
   });
 });

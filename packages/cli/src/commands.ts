@@ -1,4 +1,5 @@
-import { allowedActions, bandwidthConfigFrom, summarizeQueue } from "@ariaflow/core";
+import { allowedActions, bandwidthConfigFrom, EventBus, summarizeQueue } from "@ariaflow/core";
+import { buildServer } from "@ariaflow/api";
 import type { CliContext } from "./context.js";
 
 export interface CmdResult {
@@ -110,4 +111,55 @@ export async function cmdStatus(ctx: CliContext): Promise<CmdResult> {
       summary,
     }) + "\n",
   );
+}
+
+export interface ServeOptions {
+  host?: string;
+  port?: number;
+  version?: string;
+}
+
+export interface ServeHandle {
+  url: string;
+  port: number;
+  close: () => Promise<void>;
+}
+
+/**
+ * Boot the Fastify server with the CLI's storage stack. Returns a
+ * handle the caller can close — the bin uses this to wire SIGINT.
+ *
+ * NOTE: this does NOT call process.exit; the listening loop keeps the
+ * process alive on its own once Fastify starts.
+ */
+export async function cmdServe(
+  ctx: CliContext,
+  opts: ServeOptions = {},
+): Promise<ServeHandle> {
+  const eventBus = new EventBus();
+  const app = buildServer({
+    queueOps: ctx.queueOps,
+    queueStore: ctx.queue,
+    declarationStore: ctx.declaration,
+    stateStore: ctx.state,
+    sessionService: ctx.sessions,
+    actionLog: ctx.actions,
+    eventBus,
+    ...(opts.version !== undefined ? { version: opts.version } : {}),
+  });
+  const requestedPort = opts.port ?? 8000;
+  const host = opts.host ?? "127.0.0.1";
+  await app.listen({ host, port: requestedPort });
+  // When port=0 was passed, ask Fastify for the bound port so the URL
+  // we hand back actually reaches the listener.
+  const addr = app.server.address();
+  const port =
+    typeof addr === "object" && addr !== null && "port" in addr ? addr.port : requestedPort;
+  return {
+    url: `http://${host}:${port}`,
+    port,
+    close: async () => {
+      await app.close();
+    },
+  };
 }
