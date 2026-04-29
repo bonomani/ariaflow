@@ -320,6 +320,36 @@ describe("GET /api/actions", () => {
   });
 });
 
+describe("POST /api/bandwidth/probe", () => {
+  it("returns the default probe shape when networkQuality is unavailable", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/bandwidth/probe",
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.ok).toBe(true);
+    expect(body.probe.source).toBe("default");
+    expect(body.probe.reason).toBe("probe_unavailable");
+    expect(body.config.probe_interval_seconds).toBeGreaterThanOrEqual(30);
+  });
+
+  it("persists last_bandwidth_probe + records 'probe' action on each call", async () => {
+    await app.inject({ method: "POST", url: "/api/bandwidth/probe", payload: {} });
+    const status = await app.inject({ method: "GET", url: "/api/bandwidth" });
+    const body = status.json();
+    expect(body.last_probe).not.toBeNull();
+    expect(typeof body.last_probe_at).toBe("number");
+    const log = await app.inject({ method: "GET", url: "/api/actions" });
+    expect(
+      (log.json().entries as Array<{ action: string; target: string }>).some(
+        (e) => e.action === "probe" && e.target === "bandwidth",
+      ),
+    ).toBe(true);
+  });
+});
+
 describe("GET /api/bandwidth", () => {
   it("returns the bandwidth config + null probe before any probe has run", async () => {
     const res = await app.inject({ method: "GET", url: "/api/bandwidth" });

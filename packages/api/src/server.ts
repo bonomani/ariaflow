@@ -597,6 +597,128 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return reply;
   });
 
+  app.post("/api/bandwidth/probe", async (_req, reply) => {
+    const core = await import("@ariaflow/core");
+    const declaration = await deps.declarationStore.load();
+    const config = bandwidthConfigFrom(declaration);
+    const cmd = core.install.findNetworkQuality();
+    let probe: ReturnType<typeof core.bandwidth.defaultBandwidthProbe>;
+    if (!cmd) {
+      probe = core.bandwidth.defaultBandwidthProbe({
+        floorMbps: 1,
+        reason: "probe_unavailable",
+      });
+    } else {
+      const { spawn } = await import("node:child_process");
+      const argv = [cmd, "-u", "-c", "-s", "-M", "8"];
+      const command = argv.join(" ");
+      try {
+        const stdout = await runProcess(spawn, argv, 10_000);
+        const parsed = core.bandwidth.parseNetworkQualityOutput(stdout, {
+          percent: config.down_use_percent,
+          floorMbps: 1,
+        });
+        if (parsed) {
+          probe = parsed;
+          probe.command = command;
+        } else {
+          probe = core.bandwidth.defaultBandwidthProbe({
+            floorMbps: 1,
+            reason: "probe_no_parse",
+            command,
+          });
+        }
+      } catch (err) {
+        const reason =
+          err instanceof Error && err.message === "timeout"
+            ? "probe_timeout_no_parse"
+            : "probe_error";
+        probe = core.bandwidth.defaultBandwidthProbe({
+          floorMbps: 1,
+          reason,
+          partial: reason === "probe_timeout_no_parse",
+          command,
+        });
+      }
+    }
+
+    const probeRec = probe as typeof probe & {
+      interval_seconds?: number;
+      down_cap_mbps?: number | null;
+      up_cap_mbps?: number | null;
+      cap_mbps?: number;
+      cap_bytes_per_sec?: number;
+    };
+    probeRec.interval_seconds = config.probe_interval_seconds;
+    const downCap = core.bandwidthUnits.applyFreeBandwidthCap(
+      probeRec.downlink_mbps,
+      config.down_free_percent,
+      config.down_free_absolute_mbps,
+    );
+    const upCap = core.bandwidthUnits.applyFreeBandwidthCap(
+      probeRec.uplink_mbps ?? null,
+      config.up_free_percent,
+      config.up_free_absolute_mbps,
+    );
+    probeRec.down_cap_mbps = downCap;
+    probeRec.up_cap_mbps = upCap;
+    if (downCap !== null) {
+      probeRec.cap_mbps = downCap;
+      probeRec.cap_bytes_per_sec = Math.max(
+        1,
+        Math.trunc(downCap * core.bandwidthUnits.BYTES_PER_MEGABIT),
+      );
+    }
+
+    await deps.stateStore.update((s) => {
+      (s as Record<string, unknown>).last_bandwidth_probe = probeRec as unknown as Record<
+        string,
+        unknown
+      >;
+      s.last_bandwidth_probe_at = Date.now() / 1000;
+    });
+
+    if (deps.aria2 && typeof probeRec.cap_bytes_per_sec === "number") {
+      try {
+        await aria2.setMaxOverallDownloadLimit(deps.aria2, probeRec.cap_bytes_per_sec);
+      } catch {
+        /* RPC failure is logged-only; the probe still applies locally */
+      }
+      const upCapBytes = Math.trunc(
+        Number(probeRec.up_cap_mbps ?? 0) * core.bandwidthUnits.BYTES_PER_MEGABIT,
+      );
+      if (upCapBytes > 0) {
+        try {
+          await aria2.setMaxOverallUploadLimit(deps.aria2, upCapBytes);
+        } catch {
+          /* same */
+        }
+      }
+    }
+
+    await deps.actionLog.record({
+      action: "probe",
+      target: "bandwidth",
+      outcome: probeRec.source === "networkquality" ? "changed" : "unchanged",
+      reason: "manual_probe",
+      detail: probeRec as unknown as Record<string, unknown>,
+    });
+
+    return reply.send({
+      ok: true,
+      probe: probeRec,
+      config,
+      interface: probeRec.interface_name ?? null,
+      downlink_mbps: probeRec.downlink_mbps,
+      uplink_mbps: probeRec.uplink_mbps ?? null,
+      down_cap_mbps: downCap,
+      up_cap_mbps: upCap,
+      cap_bytes_per_sec: probeRec.cap_bytes_per_sec ?? null,
+      responsiveness_rpm: probeRec.responsiveness_rpm ?? null,
+      source: probeRec.source,
+    });
+  });
+
   app.get("/api/bandwidth", async () => {
     const declaration = await deps.declarationStore.load();
     const state = await deps.stateStore.load();
@@ -1219,4 +1341,41 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   });
 
   return app;
+}
+
+/**
+ * Spawn `argv` and resolve with the stdout buffer joined as utf8.
+ * Rejects with Error("timeout") after `timeoutMs` and kills the process
+ * (SIGTERM, then SIGKILL after 1s if still alive).
+ */
+function runProcess(
+  spawn: typeof import("node:child_process").spawn,
+  argv: string[],
+  timeoutMs: number,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(argv[0]!, argv.slice(1), { stdio: ["ignore", "pipe", "ignore"] });
+    const chunks: Buffer[] = [];
+    proc.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+    let settled = false;
+    const timer = setTimeout(() => {
+      settled = true;
+      proc.kill("SIGTERM");
+      setTimeout(() => proc.kill("SIGKILL"), 1000).unref();
+      reject(new Error("timeout"));
+    }, timeoutMs);
+    timer.unref();
+    proc.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    });
+    proc.on("close", () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    });
+  });
 }
