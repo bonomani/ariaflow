@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import {
+  ActionLog,
   allowedActions,
   Aria2Client,
   buildTransferSummary,
@@ -14,6 +15,7 @@ import {
   StateStore,
   summarizeQueue,
   validateItemId,
+  type Declaration,
   type ParsedAddItem,
   type QueueOps,
 } from "@ariaflow/core";
@@ -24,6 +26,7 @@ export interface ServerDeps {
   declarationStore: DeclarationStore;
   stateStore: StateStore;
   sessionService: SessionService;
+  actionLog: ActionLog;
   /** aria2 client; if omitted, /api/active and /api/preflight degrade gracefully. */
   aria2?: Aria2Client;
   /** Optional override for the cwd used during output path validation. */
@@ -179,6 +182,40 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   app.get("/api/sessions/history", async () => {
     return { ok: true, history: await deps.sessionService.loadHistory() };
+  });
+
+  app.put("/api/declaration", async (req, reply) => {
+    const body = req.body;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return reply.code(400).send(errorPayload("invalid_payload", "expected an object"));
+    }
+    const incoming = (body as { declaration?: unknown }).declaration ?? body;
+    if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+      return reply.code(400).send(errorPayload("invalid_declaration", "declaration must be an object"));
+    }
+    const meta = (incoming as { meta?: unknown }).meta;
+    const uic = (incoming as { uic?: unknown }).uic;
+    if (
+      !meta ||
+      typeof meta !== "object" ||
+      !uic ||
+      typeof uic !== "object" ||
+      !Array.isArray((uic as { preferences?: unknown }).preferences) ||
+      !Array.isArray((uic as { gates?: unknown }).gates)
+    ) {
+      return reply
+        .code(400)
+        .send(errorPayload("invalid_declaration", "missing meta or uic.{gates,preferences}"));
+    }
+    const saved = await deps.declarationStore.save(incoming as Declaration);
+    return { ok: true, declaration: saved };
+  });
+
+  app.get<{ Querystring: { limit?: string } }>("/api/actions", async (req) => {
+    const limitRaw = req.query?.limit;
+    const limit = Math.min(Math.max(Number(limitRaw) || 200, 1), 5000);
+    const entries = await deps.actionLog.load(limit);
+    return { ok: true, limit, entries };
   });
 
   return app;

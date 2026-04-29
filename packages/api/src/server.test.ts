@@ -35,6 +35,7 @@ beforeEach(() => {
     declarationStore: declaration,
     stateStore: state,
     sessionService: sessions,
+    actionLog: actions,
     cwd: dir,
   });
 });
@@ -230,6 +231,54 @@ describe("session lifecycle endpoints", () => {
   it("history is empty by default", async () => {
     const res = await app.inject({ method: "GET", url: "/api/sessions/history" });
     expect(res.json()).toEqual({ ok: true, history: [] });
+  });
+});
+
+describe("PUT /api/declaration", () => {
+  it("persists a mutated declaration accepted via the declaration key", async () => {
+    const got = await app.inject({ method: "GET", url: "/api/declaration" });
+    const decl = got.json().declaration;
+    decl.uic.preferences[0].value = "edited";
+    const put = await app.inject({
+      method: "PUT",
+      url: "/api/declaration",
+      payload: { declaration: decl },
+    });
+    expect(put.statusCode).toBe(200);
+    const reloaded = await app.inject({ method: "GET", url: "/api/declaration" });
+    expect(reloaded.json().declaration.uic.preferences[0].value).toBe("edited");
+  });
+
+  it("400s on a missing meta / uic", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/declaration",
+      payload: { declaration: { meta: {}, uic: {} } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("invalid_declaration");
+  });
+});
+
+describe("GET /api/actions", () => {
+  it("returns recently appended action entries", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/x" }] },
+    });
+    const res = await app.inject({ method: "GET", url: "/api/actions" });
+    const body = res.json();
+    expect(body.ok).toBe(true);
+    expect(Array.isArray(body.entries)).toBe(true);
+    expect(body.entries.some((e: { action: string }) => e.action === "add")).toBe(true);
+  });
+
+  it("clamps the limit query into [1, 5000]", async () => {
+    const r1 = await app.inject({ method: "GET", url: "/api/actions?limit=0" });
+    expect(r1.json().limit).toBe(200);
+    const r2 = await app.inject({ method: "GET", url: "/api/actions?limit=99999" });
+    expect(r2.json().limit).toBe(5000);
   });
 });
 
