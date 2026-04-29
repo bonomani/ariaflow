@@ -612,6 +612,38 @@ describe("POST /api/aria2/multicall", () => {
   });
 });
 
+describe("GET /api/tests", () => {
+  it("returns the {ok, available:false, message} stub", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/tests" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, available: false });
+  });
+});
+
+describe("PATCH /api/declaration/preferences", () => {
+  it("PATCH and POST are both wired and apply identically", async () => {
+    const patch = await app.inject({
+      method: "PATCH",
+      url: "/api/declaration/preferences",
+      payload: { max_simultaneous_downloads: 7 },
+    });
+    expect(patch.statusCode).toBe(200);
+    expect(patch.json().applied.max_simultaneous_downloads).toEqual({
+      before: 1,
+      after: 7,
+    });
+    const post = await app.inject({
+      method: "POST",
+      url: "/api/declaration/preferences",
+      payload: { max_simultaneous_downloads: 9 },
+    });
+    expect(post.json().applied.max_simultaneous_downloads).toEqual({
+      before: 7,
+      after: 9,
+    });
+  });
+});
+
 describe("POST /api/declaration/preferences", () => {
   it("400s on empty / non-object payload", async () => {
     const a = await app.inject({

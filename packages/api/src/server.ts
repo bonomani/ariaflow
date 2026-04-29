@@ -435,8 +435,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // POST alias for the canonical openapi.yaml.
   app.post("/api/declaration", (req, reply) => saveDeclaration(req.body, reply));
 
-  app.post("/api/declaration/preferences", async (req, reply) => {
-    const body = req.body;
+  const patchPreferences = async (
+    body: unknown,
+    reply: import("fastify").FastifyReply,
+  ): Promise<unknown> => {
     if (
       !body ||
       typeof body !== "object" ||
@@ -475,7 +477,21 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       detail: { applied },
     });
     return { ok: true, applied, declaration: saved };
-  });
+  };
+
+  app.post("/api/declaration/preferences", (req, reply) => patchPreferences(req.body, reply));
+  // PATCH is the canonical method per openapi.yaml; POST is kept as an
+  // alias for clients that can't issue PATCH.
+  app.patch("/api/declaration/preferences", (req, reply) => patchPreferences(req.body, reply));
+
+  // Stub /api/tests so the documented endpoint exists. The Python
+  // version actually runs the project's test suite — that's a TS-build
+  // concern (vitest invocation) so this just reports availability.
+  app.get("/api/tests", async () => ({
+    ok: true,
+    available: false,
+    message: "use 'pnpm test' on the host; in-server test execution is not implemented",
+  }));
 
   app.get<{ Querystring: { limit?: string } }>("/api/actions", async (req) => {
     const limitRaw = req.query?.limit;
