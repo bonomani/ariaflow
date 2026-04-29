@@ -29,7 +29,14 @@ beforeEach(() => {
   const sessions = new SessionService(lock, state, queue, archive, env);
   const declaration = new DeclarationStore(lock, env);
   const queueOps = new QueueOps(queue, sessions, declaration, actions);
-  app = buildServer({ queueOps, queueStore: queue, declarationStore: declaration, cwd: dir });
+  app = buildServer({
+    queueOps,
+    queueStore: queue,
+    declarationStore: declaration,
+    stateStore: state,
+    sessionService: sessions,
+    cwd: dir,
+  });
 });
 
 afterEach(async () => {
@@ -158,6 +165,71 @@ describe("GET /api/declaration", () => {
     const body = res.json();
     expect(body.declaration.meta.contract).toBe("UCC");
     expect(body.declaration.uic.gates).toHaveLength(2);
+  });
+});
+
+describe("GET /api/preflight", () => {
+  it("returns fail when aria2 is unreachable (no client wired)", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/preflight" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.status).toBe("fail");
+    expect(body.hard_failures).toContain("aria2_available");
+  });
+});
+
+describe("GET /api/active", () => {
+  it("returns active=null with reason when no aria2 client is wired", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/active" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, active: null, reason: "aria2_unavailable" });
+  });
+});
+
+describe("session lifecycle endpoints", () => {
+  it("/api/sessions/current returns null before any session is open", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/sessions/current" });
+    expect(res.json()).toEqual({ ok: true, session: null });
+  });
+
+  it("opens a session via POST and reports it via /current with stats", async () => {
+    const start = await app.inject({ method: "POST", url: "/api/sessions/start" });
+    expect(start.statusCode).toBe(200);
+    const sid = start.json().session.session_id;
+    expect(typeof sid).toBe("string");
+    const cur = await app.inject({ method: "GET", url: "/api/sessions/current" });
+    const body = cur.json();
+    expect(body.session.session_id).toBe(sid);
+    expect(body.stats.session_id).toBe(sid);
+  });
+
+  it("close refuses while items are active (ASM CR-4)", async () => {
+    await app.inject({ method: "POST", url: "/api/sessions/start" });
+    // Add an item, then mark it active by writing the queue directly via
+    // the storage path the server exposes — easiest is a fresh add (which
+    // is queued) followed by close: queued items don't trip CR-4, so we
+    // need to inject an active row. Use the queueOps to transition.
+    const add = await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/x" }] },
+    });
+    // Switch the row's status to "active" via the store directly (no
+    // transition route is exposed yet).
+    const id = add.json().items[0].id;
+    const items = (await (await import("node:fs/promises")).readFile(`${dir}/queue.json`, "utf8"))
+      .replace(/"queued"/g, '"active"');
+    await (await import("node:fs/promises")).writeFile(`${dir}/queue.json`, items);
+    const close = await app.inject({ method: "POST", url: "/api/sessions/close" });
+    expect(close.statusCode).toBe(409);
+    expect(close.json().error).toBe("session_close_blocked");
+    // sanity: id round-trip
+    expect(id).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("history is empty by default", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/sessions/history" });
+    expect(res.json()).toEqual({ ok: true, history: [] });
   });
 });
 
