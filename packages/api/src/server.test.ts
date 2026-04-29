@@ -411,6 +411,19 @@ describe("ActionLog -> EventBus bridge", () => {
   });
 });
 
+describe("GET /api/openapi", () => {
+  it("returns the generated OpenAPI 3.0.3 doc with our routes tagged", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/openapi" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.openapi).toBe("3.0.3");
+    expect(body.paths["/api/downloads"].post.tags).toEqual(["Queue"]);
+    expect(body.paths["/api/declaration"].get.tags).toEqual(["Config"]);
+    // The doc itself is a path, so it must show up too.
+    expect(body.paths["/api/openapi"]).toBeTruthy();
+  });
+});
+
 describe("404 handler", () => {
   it("returns the canonical not_found shape", async () => {
     const res = await app.inject({ method: "GET", url: "/api/nope" });

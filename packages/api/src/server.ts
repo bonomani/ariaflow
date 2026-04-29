@@ -245,6 +245,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return { ok: true, limit, entries };
   });
 
+  app.get("/api/openapi", async () => {
+    const { generateOpenApi } = await import("./openapi.js");
+    return generateOpenApi(app);
+  });
+
   app.get("/api/events", async (req, reply) => {
     const bus = deps.eventBus;
     if (!bus) {
