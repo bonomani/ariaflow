@@ -1,6 +1,12 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { allowedActions, bandwidthConfigFrom, EventBus, summarizeQueue } from "@ariaflow/core";
+import {
+  allowedActions,
+  bandwidthConfigFrom,
+  EventBus,
+  runBandwidthProbe,
+  summarizeQueue,
+} from "@ariaflow/core";
 import { buildServer } from "@ariaflow/api";
 import type { CliContext } from "./context.js";
 
@@ -303,6 +309,27 @@ export async function cmdSetPref(
     detail: { applied: { [name]: { before, after: value } } },
   });
   return ok(json({ name, before, after: value }) + "\n");
+}
+
+export async function cmdProbe(ctx: CliContext): Promise<CmdResult> {
+  const declaration = await ctx.declaration.load();
+  const config = bandwidthConfigFrom(declaration);
+  const probe = await runBandwidthProbe({ config });
+  await ctx.state.update((s) => {
+    (s as Record<string, unknown>).last_bandwidth_probe = probe as unknown as Record<
+      string,
+      unknown
+    >;
+    s.last_bandwidth_probe_at = Date.now() / 1000;
+  });
+  await ctx.actions.record({
+    action: "probe",
+    target: "bandwidth",
+    outcome: probe.source === "networkquality" ? "changed" : "unchanged",
+    reason: "cli_probe",
+    detail: probe as unknown as Record<string, unknown>,
+  });
+  return ok(json({ probe, config }) + "\n");
 }
 
 export async function cmdSeedStop(

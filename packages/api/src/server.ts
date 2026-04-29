@@ -617,74 +617,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const core = await import("@ariaflow/core");
     const declaration = await deps.declarationStore.load();
     const config = bandwidthConfigFrom(declaration);
-    const cmd = core.install.findNetworkQuality();
-    let probe: ReturnType<typeof core.bandwidth.defaultBandwidthProbe>;
-    if (!cmd) {
-      probe = core.bandwidth.defaultBandwidthProbe({
-        floorMbps: 1,
-        reason: "probe_unavailable",
-      });
-    } else {
-      const { spawn } = await import("node:child_process");
-      const argv = [cmd, "-u", "-c", "-s", "-M", "8"];
-      const command = argv.join(" ");
-      try {
-        const stdout = await runProcess(spawn, argv, 10_000);
-        const parsed = core.bandwidth.parseNetworkQualityOutput(stdout, {
-          percent: config.down_use_percent,
-          floorMbps: 1,
-        });
-        if (parsed) {
-          probe = parsed;
-          probe.command = command;
-        } else {
-          probe = core.bandwidth.defaultBandwidthProbe({
-            floorMbps: 1,
-            reason: "probe_no_parse",
-            command,
-          });
-        }
-      } catch (err) {
-        const reason =
-          err instanceof Error && err.message === "timeout"
-            ? "probe_timeout_no_parse"
-            : "probe_error";
-        probe = core.bandwidth.defaultBandwidthProbe({
-          floorMbps: 1,
-          reason,
-          partial: reason === "probe_timeout_no_parse",
-          command,
-        });
-      }
-    }
-
-    const probeRec = probe as typeof probe & {
-      interval_seconds?: number;
-      down_cap_mbps?: number | null;
-      up_cap_mbps?: number | null;
-      cap_mbps?: number;
-      cap_bytes_per_sec?: number;
-    };
-    probeRec.interval_seconds = config.probe_interval_seconds;
-    const downCap = core.bandwidthUnits.applyFreeBandwidthCap(
-      probeRec.downlink_mbps,
-      config.down_free_percent,
-      config.down_free_absolute_mbps,
-    );
-    const upCap = core.bandwidthUnits.applyFreeBandwidthCap(
-      probeRec.uplink_mbps ?? null,
-      config.up_free_percent,
-      config.up_free_absolute_mbps,
-    );
-    probeRec.down_cap_mbps = downCap;
-    probeRec.up_cap_mbps = upCap;
-    if (downCap !== null) {
-      probeRec.cap_mbps = downCap;
-      probeRec.cap_bytes_per_sec = Math.max(
-        1,
-        Math.trunc(downCap * core.bandwidthUnits.BYTES_PER_MEGABIT),
-      );
-    }
+    const probeRec = await core.runBandwidthProbe({ config });
+    const downCap = probeRec.down_cap_mbps;
+    const upCap = probeRec.up_cap_mbps;
 
     await deps.stateStore.update((s) => {
       (s as Record<string, unknown>).last_bandwidth_probe = probeRec as unknown as Record<

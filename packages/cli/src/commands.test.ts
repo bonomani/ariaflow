@@ -9,6 +9,7 @@ import {
   cmdDeclaration,
   cmdList,
   cmdPause,
+  cmdProbe,
   cmdRemove,
   cmdResume,
   cmdSeedStop,
@@ -199,6 +200,19 @@ describe("cmdServe", () => {
     } finally {
       await handle.close();
     }
+  });
+});
+
+describe("cmdProbe", () => {
+  it("returns the default-source probe and persists it on state", async () => {
+    const r = await cmdProbe(ctx);
+    expect(r.exitCode).toBe(0);
+    const body = JSON.parse(r.stdout);
+    expect(body.probe.source).toBe("default");
+    expect(body.config.probe_interval_seconds).toBeGreaterThanOrEqual(30);
+    const state = await ctx.state.load();
+    expect(state.last_bandwidth_probe).toBeTruthy();
+    expect(typeof state.last_bandwidth_probe_at).toBe("number");
   });
 });
 

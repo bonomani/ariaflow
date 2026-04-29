@@ -6,6 +6,7 @@ import {
   cmdDeclaration,
   cmdList,
   cmdPause,
+  cmdProbe,
   cmdRemove,
   cmdResume,
   cmdSeedStop,
@@ -133,6 +134,16 @@ program
       signal: ctrl.signal,
     });
     if (!r.ok) process.stdout.write(r.stdout);
+    process.exit(r.exitCode);
+  });
+
+program
+  .command("probe")
+  .description("run a manual bandwidth probe (networkQuality)")
+  .action(async () => {
+    const ctx = makeContext();
+    const r = await cmdProbe(ctx);
+    process.stdout.write(r.stdout);
     process.exit(r.exitCode);
   });
 

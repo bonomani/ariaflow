@@ -73,6 +73,7 @@ export { parseAddItems, type ParsedAddItem } from "./routes/parse-add.js";
 export * as bandwidth from "./bandwidth/probe.js";
 export * as bandwidthUnits from "./bandwidth/units.js";
 export { bandwidthConfigFrom, type BandwidthConfig } from "./bandwidth/config.js";
+export { runBandwidthProbe, type ResolvedProbe } from "./bandwidth/run.js";
 export * as scheduler from "./scheduler/helpers.js";
 export { getActiveProgress } from "./scheduler/progress.js";
 export * as transfers from "./transfers/helpers.js";
