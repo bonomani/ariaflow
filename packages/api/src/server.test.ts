@@ -581,6 +581,90 @@ describe("POST /api/aria2/multicall", () => {
   });
 });
 
+describe("torrent serving routes", () => {
+  it("GET /api/torrents lists only items in distribute_status=seeding", async () => {
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(
+      `${dir}/queue.json`,
+      JSON.stringify({
+        items: [
+          {
+            id: "11111111-1111-1111-1111-111111111111",
+            url: "http://h/x.iso",
+            output: "x.iso",
+            distribute_status: "seeding",
+            distribute_infohash: "abc",
+            distribute_torrent_path: "/tmp/missing.torrent",
+            distribute_started_at: "2026-04-30T00:00:00Z",
+            distribute_seed_gid: "GID",
+          },
+          {
+            id: "22222222-2222-2222-2222-222222222222",
+            url: "http://h/y.iso",
+            distribute_status: "stopped",
+            distribute_infohash: "def",
+          },
+        ],
+      }),
+    );
+    const res = await app.inject({ method: "GET", url: "/api/torrents" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.count).toBe(1);
+    expect(body.torrents[0]).toMatchObject({
+      infohash: "abc",
+      name: "x.iso",
+      torrent_url: "/api/torrents/abc.torrent",
+    });
+  });
+
+  it("GET /api/torrents/:infohash.torrent serves the file body", async () => {
+    const { writeFileSync } = await import("node:fs");
+    const torrentPath = `${dir}/served.torrent`;
+    writeFileSync(torrentPath, "BENCODED");
+    writeFileSync(
+      `${dir}/queue.json`,
+      JSON.stringify({
+        items: [
+          {
+            id: "11111111-1111-1111-1111-111111111111",
+            url: "http://h/x.iso",
+            distribute_status: "seeding",
+            distribute_infohash: "abc123",
+            distribute_torrent_path: torrentPath,
+          },
+        ],
+      }),
+    );
+    const res = await app.inject({ method: "GET", url: "/api/torrents/abc123.torrent" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toBe("application/x-bittorrent");
+    expect(res.body).toBe("BENCODED");
+  });
+
+  it("404 when the suffix is missing or the file isn't on disk", async () => {
+    const noSuffix = await app.inject({ method: "GET", url: "/api/torrents/abc" });
+    expect(noSuffix.statusCode).toBe(404);
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(
+      `${dir}/queue.json`,
+      JSON.stringify({
+        items: [
+          {
+            id: "11111111-1111-1111-1111-111111111111",
+            url: "http://h/x.iso",
+            distribute_status: "seeding",
+            distribute_infohash: "ghost",
+            distribute_torrent_path: "/tmp/does-not-exist.torrent",
+          },
+        ],
+      }),
+    );
+    const missing = await app.inject({ method: "GET", url: "/api/torrents/ghost.torrent" });
+    expect(missing.statusCode).toBe(404);
+  });
+});
+
 describe("GET /api/peers", () => {
   it("returns an empty list when no registry is wired", async () => {
     const res = await app.inject({ method: "GET", url: "/api/peers" });
