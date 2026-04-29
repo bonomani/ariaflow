@@ -434,6 +434,48 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
   });
 
+  app.get("/api/scheduler", async () => {
+    const s = await deps.stateStore.load();
+    const running = Boolean(s.running);
+    const paused = Boolean(s.paused);
+    const status = running && paused ? "paused" : running ? "running" : "starting";
+    return {
+      status,
+      running,
+      paused,
+      session_id: s.session_id,
+      session_started_at: s.session_started_at,
+      session_closed_at: s.session_closed_at,
+      _rev: Number(s._rev ?? 0),
+    };
+  });
+
+  app.post("/api/scheduler/pause", async () => {
+    const next = await deps.stateStore.update((s) => {
+      s.paused = true;
+    });
+    await deps.actionLog.record({
+      action: "pause",
+      target: "scheduler",
+      outcome: "changed",
+      reason: "api_request",
+    });
+    return { ok: true, paused: next.paused, _rev: Number(next._rev ?? 0) };
+  });
+
+  app.post("/api/scheduler/resume", async () => {
+    const next = await deps.stateStore.update((s) => {
+      s.paused = false;
+    });
+    await deps.actionLog.record({
+      action: "resume",
+      target: "scheduler",
+      outcome: "changed",
+      reason: "api_request",
+    });
+    return { ok: true, paused: next.paused, _rev: Number(next._rev ?? 0) };
+  });
+
   app.get("/api/lifecycle", async () => {
     const core = await import("@ariaflow/core");
     const state = await deps.stateStore.load();

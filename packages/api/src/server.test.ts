@@ -581,6 +581,38 @@ describe("POST /api/aria2/multicall", () => {
   });
 });
 
+describe("scheduler routes", () => {
+  it("GET /api/scheduler reports 'starting' before any run is started", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/scheduler" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.status).toBe("starting");
+    expect(body.running).toBe(false);
+    expect(body.paused).toBe(false);
+  });
+
+  it("pause then resume flips state.paused and bumps _rev each time", async () => {
+    const before = await app.inject({ method: "GET", url: "/api/scheduler" });
+    const pause = await app.inject({ method: "POST", url: "/api/scheduler/pause" });
+    expect(pause.json().paused).toBe(true);
+    expect(pause.json()._rev).toBeGreaterThan(before.json()._rev);
+    const resume = await app.inject({ method: "POST", url: "/api/scheduler/resume" });
+    expect(resume.json().paused).toBe(false);
+    expect(resume.json()._rev).toBeGreaterThan(pause.json()._rev);
+  });
+
+  it("each pause/resume records an action entry", async () => {
+    await app.inject({ method: "POST", url: "/api/scheduler/pause" });
+    await app.inject({ method: "POST", url: "/api/scheduler/resume" });
+    const log = await app.inject({ method: "GET", url: "/api/actions" });
+    const entries = log.json().entries as Array<{ action: string; target: string }>;
+    const schedulerEvents = entries.filter((e) => e.target === "scheduler");
+    expect(schedulerEvents.map((e) => e.action)).toEqual(
+      expect.arrayContaining(["pause", "resume"]),
+    );
+  });
+});
+
 describe("GET /api/lifecycle", () => {
   it("returns ariaflow_server + networkquality status and session fields", async () => {
     const res = await app.inject({ method: "GET", url: "/api/lifecycle" });
