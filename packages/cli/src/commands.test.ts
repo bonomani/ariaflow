@@ -13,6 +13,7 @@ import {
   cmdResume,
   cmdServe,
   cmdStatus,
+  cmdWatch,
 } from "./commands.js";
 
 let dir: string;
@@ -150,6 +151,34 @@ describe("cmdDeclaration", () => {
     const body = JSON.parse(r.stdout);
     expect(body.meta.contract).toBe("UCC");
     expect(Array.isArray(body.uic.preferences)).toBe(true);
+  });
+});
+
+describe("cmdWatch", () => {
+  it("streams an action_logged event from a running server", async () => {
+    const handle = await cmdServe(ctx, { host: "127.0.0.1", port: 0 });
+    const lines: string[] = [];
+    const out = { write: (s: string) => void lines.push(s) };
+    const watch = cmdWatch({
+      url: `${handle.url}/api/events`,
+      out,
+      // cmdAdd emits session_started THEN action_logged, so wait for both.
+      limit: 2,
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    await cmdAdd(ctx, "http://h/x");
+    await watch;
+    await handle.close();
+    const parsed = lines.map((l) => JSON.parse(l));
+    const action = parsed.find((p: { event: string }) => p.event === "action_logged");
+    expect(action).toBeDefined();
+    expect(action.data.action).toBe("add");
+  });
+
+  it("returns a fail result when the URL is unreachable", async () => {
+    const r = await cmdWatch({ url: "http://127.0.0.1:1/api/events", limit: 1 });
+    expect(r.exitCode).toBe(1);
+    expect(r.stdout).toContain("failed to connect");
   });
 });
 

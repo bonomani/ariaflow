@@ -10,6 +10,7 @@ import {
   cmdResume,
   cmdServe,
   cmdStatus,
+  cmdWatch,
 } from "./commands.js";
 import { makeContext } from "./context.js";
 
@@ -108,6 +109,24 @@ program
     };
     process.once("SIGINT", stop);
     process.once("SIGTERM", stop);
+  });
+
+program
+  .command("watch")
+  .description("subscribe to /api/events on a running ariaflow-server")
+  .option("--url <u>", "events URL", "http://127.0.0.1:8000/api/events")
+  .option("--limit <n>", "exit after N events", (v) => Number(v))
+  .action(async (opts: { url: string; limit?: number }) => {
+    const ctrl = new AbortController();
+    process.once("SIGINT", () => ctrl.abort());
+    process.once("SIGTERM", () => ctrl.abort());
+    const r = await cmdWatch({
+      url: opts.url,
+      ...(opts.limit !== undefined ? { limit: opts.limit } : {}),
+      signal: ctrl.signal,
+    });
+    if (!r.ok) process.stdout.write(r.stdout);
+    process.exit(r.exitCode);
   });
 
 program.parseAsync(process.argv);
