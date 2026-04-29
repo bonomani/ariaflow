@@ -3,6 +3,7 @@ import {
   ActionLog,
   allowedActions,
   aria2,
+  PeerRegistry,
   Aria2Client,
   bandwidthConfigFrom,
   buildTransferSummary,
@@ -37,6 +38,8 @@ export interface ServerDeps {
   version?: string;
   /** Optional EventBus; if provided, /api/events streams its publish() calls. */
   eventBus?: EventBus;
+  /** Optional peer registry; if omitted, /api/peers returns an empty list. */
+  peerRegistry?: PeerRegistry;
   /** aria2 client; if omitted, /api/active and /api/preflight degrade gracefully. */
   aria2?: Aria2Client;
   /** Optional override for the cwd used during output path validation. */
@@ -432,6 +435,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         .code(502)
         .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
     }
+  });
+
+  app.get("/api/peers", async () => {
+    const peers = deps.peerRegistry?.list() ?? [];
+    return { ok: true, peers };
   });
 
   app.get("/api/scheduler", async () => {

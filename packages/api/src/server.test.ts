@@ -581,6 +581,82 @@ describe("POST /api/aria2/multicall", () => {
   });
 });
 
+describe("GET /api/peers", () => {
+  it("returns an empty list when no registry is wired", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/peers" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true, peers: [] });
+  });
+
+  it("surfaces upserted peers when a registry is wired", async () => {
+    const { PeerRegistry } = await import("@ariaflow/core");
+    const registry = new PeerRegistry();
+    registry.upsert({
+      instance: "bc-mac",
+      status: "browsed",
+      last_seen: 1_700_000_000,
+    });
+    registry.upsert({
+      instance: "bc-pi",
+      host: "bc-pi.local",
+      port: 8000,
+      path: "/api",
+      tls: false,
+      base_url: "http://bc-pi.local:8000/api",
+      last_seen: 1_700_000_000,
+      status: "discovered",
+    });
+    const sibling = await freshAppWithPeerRegistry(dir, registry);
+    try {
+      const res = await sibling.inject({ method: "GET", url: "/api/peers" });
+      const body = res.json();
+      expect(body.peers).toHaveLength(2);
+      expect(body.peers.map((p: { instance: string }) => p.instance)).toEqual([
+        "bc-mac",
+        "bc-pi",
+      ]);
+    } finally {
+      await sibling.close();
+    }
+  });
+});
+
+async function freshAppWithPeerRegistry(
+  baseDir: string,
+  registry: import("@ariaflow/core").PeerRegistry,
+) {
+  const env = { ARIAFLOW_DIR: baseDir };
+  const {
+    StorageLock,
+    storageLockPath,
+    StateStore,
+    QueueStore,
+    ArchiveStore,
+    ActionLog,
+    SessionService,
+    DeclarationStore,
+    QueueOps,
+  } = await import("@ariaflow/core");
+  const lock = new StorageLock(storageLockPath(env));
+  const state = new StateStore(lock, env);
+  const queue = new QueueStore(lock, env);
+  const archive = new ArchiveStore(lock, env);
+  const actions = new ActionLog(lock, state, env);
+  const sessions = new SessionService(lock, state, queue, archive, env);
+  const declaration = new DeclarationStore(lock, env);
+  const queueOps = new QueueOps(queue, sessions, declaration, actions);
+  return buildServer({
+    queueOps,
+    queueStore: queue,
+    declarationStore: declaration,
+    stateStore: state,
+    sessionService: sessions,
+    actionLog: actions,
+    peerRegistry: registry,
+    cwd: baseDir,
+  });
+}
+
 describe("scheduler routes", () => {
   it("GET /api/scheduler reports 'starting' before any run is started", async () => {
     const res = await app.inject({ method: "GET", url: "/api/scheduler" });
