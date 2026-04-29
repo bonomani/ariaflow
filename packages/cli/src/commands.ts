@@ -4,6 +4,7 @@ import {
   allowedActions,
   bandwidthConfigFrom,
   EventBus,
+  planAutoCleanup,
   runBandwidthProbe,
   summarizeQueue,
 } from "@ariaflow/core";
@@ -309,6 +310,56 @@ export async function cmdSetPref(
     detail: { applied: { [name]: { before, after: value } } },
   });
   return ok(json({ name, before, after: value }) + "\n");
+}
+
+export interface CleanupOptions {
+  maxDoneAgeDays?: number;
+  maxDoneCount?: number;
+  archiveNonComplete?: boolean;
+  dryRun?: boolean;
+}
+
+/**
+ * Apply or preview the queue auto-cleanup decision: split items into
+ * keep/archive given an age cutoff + max-complete cap, persist the
+ * archive on real runs, record the action.
+ */
+export async function cmdCleanup(
+  ctx: CliContext,
+  opts: CleanupOptions = {},
+): Promise<CmdResult> {
+  const items = await ctx.queue.load();
+  const plan = planAutoCleanup(items as never, {
+    maxDoneAgeDays: opts.maxDoneAgeDays ?? 7,
+    maxDoneCount: opts.maxDoneCount ?? 100,
+    archiveNonComplete: opts.archiveNonComplete ?? true,
+  });
+  const summary = {
+    archived: plan.archive.length,
+    remaining: plan.keep.length,
+    dry_run: !!opts.dryRun,
+  };
+  if (opts.dryRun || plan.archive.length === 0) return ok(json(summary) + "\n");
+  const archived = await ctx.archive.load();
+  const stamped = plan.archive.map((it) => ({
+    ...it,
+    archived_at: new Date().toISOString(),
+  })) as unknown as Awaited<ReturnType<typeof ctx.archive.load>>;
+  await ctx.archive.save([...archived, ...stamped]);
+  await ctx.queue.save(plan.keep as never);
+  await ctx.actions.record({
+    action: "auto_cleanup",
+    target: "queue",
+    outcome: "changed",
+    reason: "cli_cleanup",
+    before: { total: items.length },
+    after: { total: plan.keep.length, archived: plan.archive.length },
+    detail: {
+      max_done_age_days: opts.maxDoneAgeDays ?? 7,
+      max_done_count: opts.maxDoneCount ?? 100,
+    },
+  });
+  return ok(json(summary) + "\n");
 }
 
 export async function cmdDashboard(

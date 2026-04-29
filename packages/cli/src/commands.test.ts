@@ -6,6 +6,7 @@ import { makeContext, type CliContext } from "./context.js";
 import {
   cmdAdd,
   cmdBandwidth,
+  cmdCleanup,
   cmdDashboard,
   cmdDeclaration,
   cmdList,
@@ -201,6 +202,49 @@ describe("cmdServe", () => {
     } finally {
       await handle.close();
     }
+  });
+});
+
+describe("cmdCleanup", () => {
+  const writeStaleItem = async () => {
+    const { writeFileSync } = await import("node:fs");
+    const oldDate = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+    writeFileSync(
+      `${dir}/queue.json`,
+      JSON.stringify({
+        items: [
+          {
+            id: "11111111-1111-1111-1111-111111111111",
+            url: "http://h/x",
+            status: "complete",
+            completed_at: oldDate,
+          },
+          {
+            id: "22222222-2222-2222-2222-222222222222",
+            url: "http://h/y",
+            status: "active",
+          },
+        ],
+      }),
+    );
+  };
+
+  it("--dry-run reports the split without persisting", async () => {
+    await writeStaleItem();
+    const r = await cmdCleanup(ctx, { dryRun: true });
+    expect(JSON.parse(r.stdout)).toEqual({ archived: 1, remaining: 1, dry_run: true });
+    const items = await ctx.queue.load();
+    expect(items).toHaveLength(2); // unchanged
+  });
+
+  it("real run archives stale terminals and shrinks the queue", async () => {
+    await writeStaleItem();
+    const r = await cmdCleanup(ctx);
+    expect(JSON.parse(r.stdout)).toEqual({ archived: 1, remaining: 1, dry_run: false });
+    expect(await ctx.queue.load()).toHaveLength(1);
+    const archived = await ctx.archive.load();
+    expect(archived).toHaveLength(1);
+    expect(archived[0]!.id).toBe("11111111-1111-1111-1111-111111111111");
   });
 });
 

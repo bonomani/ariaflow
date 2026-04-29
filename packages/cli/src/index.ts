@@ -3,6 +3,7 @@ import { Command } from "commander";
 import {
   cmdAdd,
   cmdBandwidth,
+  cmdCleanup,
   cmdDashboard,
   cmdDeclaration,
   cmdList,
@@ -137,6 +138,25 @@ program
     if (!r.ok) process.stdout.write(r.stdout);
     process.exit(r.exitCode);
   });
+
+program
+  .command("cleanup")
+  .description("archive stale terminal queue items")
+  .option("--max-done-age-days <n>", "age cutoff in days", (v) => Number(v), 7)
+  .option("--max-done-count <n>", "max retained complete items", (v) => Number(v), 100)
+  .option("--dry-run", "preview the split without persisting")
+  .action(
+    async (opts: { maxDoneAgeDays: number; maxDoneCount: number; dryRun?: boolean }) => {
+      const ctx = makeContext();
+      const r = await cmdCleanup(ctx, {
+        maxDoneAgeDays: opts.maxDoneAgeDays,
+        maxDoneCount: opts.maxDoneCount,
+        ...(opts.dryRun ? { dryRun: true } : {}),
+      });
+      process.stdout.write(r.stdout);
+      process.exit(r.exitCode);
+    },
+  );
 
 program
   .command("dashboard")
