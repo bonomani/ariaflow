@@ -13,3 +13,7 @@ build/
 docs/ALL_VARIABLES.md
 .codexrules
 src/ariaflow_server.egg-info/
+node_modules/
+packages/*/dist/
+*.tsbuildinfo
+
