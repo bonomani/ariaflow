@@ -48,6 +48,16 @@ export interface ServerDeps {
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger ?? false });
 
+  // Capture full registered URLs for the OpenAPI introspector. Fastify's
+  // printRoutes() formats output as a tree with relative leaf segments
+  // that's awkward to parse; the onRoute hook fires once per route with
+  // the full url, so we just record them here.
+  const recorded: Array<{ method: string | string[]; url: string }> = [];
+  (app as unknown as { _ariaflowRoutes: typeof recorded })._ariaflowRoutes = recorded;
+  app.addHook("onRoute", (route) => {
+    recorded.push({ method: route.method, url: route.url });
+  });
+
   if (deps.eventBus) {
     deps.actionLog.setBus(deps.eventBus);
     deps.sessionService.setBus(deps.eventBus);

@@ -63,10 +63,12 @@ export function generateOpenApi(
 ): OpenApiDoc {
   const paths: Record<string, OpenApiPathItem> = {};
   const tags = new Set<string>();
-  // Fastify exposes routes via printRoutes(); use the structured form
-  // by reading the internal route store via getRoutes-like API.
+  // buildServer() attaches an onRoute hook that records every full
+  // registered URL; prefer that list when present (it's accurate) and
+  // fall back to parsing printRoutes() for instances built without it.
   type Route = { method: string | string[]; url: string };
-  const routes = (app as unknown as { _routes?: Route[] })._routes ?? collectRoutes(app);
+  const routes =
+    (app as unknown as { _ariaflowRoutes?: Route[] })._ariaflowRoutes ?? collectRoutes(app);
   for (const route of routes) {
     const url = toOpenApiPath(route.url);
     const methods = Array.isArray(route.method) ? route.method : [route.method];

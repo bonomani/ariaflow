@@ -58,3 +58,7 @@ ts-test: ## Run the TS test suite (vitest)
 
 ts-docker: ## Build the TS Docker image (Dockerfile.ts)
 	docker build -f Dockerfile.ts -t ariaflow-server:ts .
+
+ts-check-drift: ## Compare live TS routes against openapi.yaml (requires ts-build)
+	pnpm build
+	node scripts/check-openapi-drift.mjs
