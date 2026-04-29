@@ -86,3 +86,10 @@ export {
 export * as bonjour from "./bonjour/bonjour.js";
 export * as platform from "./platform/detect.js";
 export * as install from "./install/networkquality.js";
+export {
+  versionFromTag,
+  tarballUrl,
+  downloadSha256,
+  renderFormula,
+  writeFormula,
+} from "./install/formula.js";
