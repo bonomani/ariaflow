@@ -82,6 +82,7 @@ export {
   type SchedulerTickDeps,
   type SchedulerTickResult,
 } from "./scheduler/tick.js";
+export { pollActiveItems, type PollDeps, type PollResult } from "./scheduler/poll.js";
 export * as transfers from "./transfers/helpers.js";
 export {
   buildTransferSummary,
