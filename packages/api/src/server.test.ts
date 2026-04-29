@@ -958,6 +958,47 @@ describe("priority / retry routes", () => {
   });
 });
 
+describe("POST /api/torrents/:infohash/stop", () => {
+  it("404 when no active seed matches the infohash", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/torrents/missing/stop",
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("flips distribute_status to stopped + records 'seed_stopped'", async () => {
+    const { writeFileSync, existsSync } = await import("node:fs");
+    const torrentPath = `${dir}/served.torrent`;
+    writeFileSync(torrentPath, "BENCODED");
+    writeFileSync(
+      `${dir}/queue.json`,
+      JSON.stringify({
+        items: [
+          {
+            id: "11111111-1111-1111-1111-111111111111",
+            url: "http://h/x.iso",
+            distribute_status: "seeding",
+            distribute_infohash: "abc123",
+            distribute_torrent_path: torrentPath,
+            distribute_seed_gid: "GID",
+          },
+        ],
+      }),
+    );
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/torrents/abc123/stop",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true, infohash: "abc123", status: "stopped" });
+    expect(existsSync(torrentPath)).toBe(false);
+    const log = await app.inject({ method: "GET", url: "/api/actions" });
+    const entries = log.json().entries as Array<{ action: string }>;
+    expect(entries.some((e) => e.action === "seed_stopped")).toBe(true);
+  });
+});
+
 describe("torrent serving routes", () => {
   it("GET /api/torrents lists only items in distribute_status=seeding", async () => {
     const { writeFileSync } = await import("node:fs");

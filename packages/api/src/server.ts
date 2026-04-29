@@ -816,6 +816,55 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return { torrents: seeds, count: seeds.length };
   });
 
+  app.post<{ Params: { infohash: string } }>(
+    "/api/torrents/:infohash/stop",
+    async (req, reply) => {
+      const infohash = req.params.infohash.trim();
+      if (!infohash) {
+        return reply.code(400).send(errorPayload("invalid_payload", "infohash required"));
+      }
+      const items = await deps.queueStore.load();
+      const item = items.find(
+        (i) =>
+          (i as Record<string, unknown>).distribute_infohash === infohash &&
+          (i as Record<string, unknown>).distribute_status === "seeding",
+      );
+      if (!item) {
+        return reply.code(404).send(errorPayload("not_found", `no active seed for ${infohash}`));
+      }
+      const itemRec = item as Record<string, unknown>;
+      const seedGid = itemRec.distribute_seed_gid;
+      if (typeof seedGid === "string" && seedGid && deps.aria2) {
+        try {
+          await aria2.remove(deps.aria2, seedGid);
+        } catch {
+          /* RPC failure shouldn't block the local mutation */
+        }
+      }
+      const torrentPath = itemRec.distribute_torrent_path;
+      if (typeof torrentPath === "string" && torrentPath) {
+        try {
+          const { unlinkSync, existsSync } = await import("node:fs");
+          if (existsSync(torrentPath)) unlinkSync(torrentPath);
+        } catch {
+          /* best-effort cleanup */
+        }
+      }
+      itemRec.distribute_status = "stopped";
+      delete itemRec.distribute_seed_gid;
+      await deps.queueStore.save(items);
+      await deps.actionLog.record({
+        action: "seed_stopped",
+        target: "queue_item",
+        outcome: "changed",
+        reason: "user_stop_seed",
+        after: { item_id: item.id, infohash },
+        detail: { item_id: item.id, infohash },
+      });
+      return { ok: true, infohash, status: "stopped" };
+    },
+  );
+
   app.get<{ Params: { file: string } }>("/api/torrents/:file", async (req, reply) => {
     const file = req.params.file;
     if (!file.endsWith(".torrent")) {
