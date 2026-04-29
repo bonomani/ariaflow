@@ -1,14 +1,14 @@
 import { readJson, writeJson } from "./json.js";
 import { archivePath, queuePath } from "./paths.js";
 import type { StorageLock } from "./lock.js";
-import type { QueueItem } from "../state/archivable.js";
+import type { QueueItemRecord } from "../queue/types.js";
 
 interface QueueFile {
-  items: QueueItem[];
+  items: QueueItemRecord[];
   [k: string]: unknown;
 }
 
-const EMPTY_QUEUE: QueueFile = { items: [] };
+const emptyQueue = (): QueueFile => ({ items: [] });
 
 export class QueueStore {
   constructor(
@@ -16,14 +16,14 @@ export class QueueStore {
     private readonly env: NodeJS.ProcessEnv = process.env,
   ) {}
 
-  load(): Promise<QueueItem[]> {
+  load(): Promise<QueueItemRecord[]> {
     return this.lock.with(async () => {
-      const data = await readJson<QueueFile>(queuePath(this.env), EMPTY_QUEUE);
+      const data = await readJson<QueueFile>(queuePath(this.env), emptyQueue());
       return Array.isArray(data.items) ? data.items : [];
     });
   }
 
-  save(items: QueueItem[]): Promise<void> {
+  save(items: QueueItemRecord[]): Promise<void> {
     return this.lock.with(() => writeJson(queuePath(this.env), { items }));
   }
 }
@@ -34,18 +34,18 @@ export class ArchiveStore {
     private readonly env: NodeJS.ProcessEnv = process.env,
   ) {}
 
-  load(): Promise<QueueItem[]> {
+  load(): Promise<QueueItemRecord[]> {
     return this.lock.with(async () => {
-      const data = await readJson<QueueFile>(archivePath(this.env), EMPTY_QUEUE);
+      const data = await readJson<QueueFile>(archivePath(this.env), emptyQueue());
       return Array.isArray(data.items) ? data.items : [];
     });
   }
 
-  save(items: QueueItem[]): Promise<void> {
+  save(items: QueueItemRecord[]): Promise<void> {
     return this.lock.with(() => writeJson(archivePath(this.env), { items }));
   }
 
-  async append(item: QueueItem): Promise<void> {
+  async append(item: QueueItemRecord): Promise<void> {
     return this.lock.with(async () => {
       const existing = await this.load();
       const stamped = { ...item, archived_at: new Date().toISOString() };

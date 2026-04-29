@@ -74,14 +74,14 @@ describe("QueueStore + ArchiveStore", () => {
   it("round-trips queue items", async () => {
     const queue = new QueueStore(lock, env);
     expect(await queue.load()).toEqual([]);
-    await queue.save([{ id: "a", status: "queued" }, { id: "b", status: "active" }]);
+    await queue.save([{ id: "a", url: "u", status: "queued" }, { id: "b", url: "u", status: "active" }]);
     const items = await queue.load();
     expect(items.map((i) => i.id)).toEqual(["a", "b"]);
   });
 
   it("archive append() stamps archived_at", async () => {
     const archive = new ArchiveStore(lock, env);
-    await archive.append({ id: "x", status: "complete" });
+    await archive.append({ id: "x", url: "u", status: "complete" });
     const items = await archive.load();
     expect(items).toHaveLength(1);
     expect(typeof items[0]!.archived_at).toBe("string");
