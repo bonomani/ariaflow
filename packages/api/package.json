@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ariaflow/core": "workspace:*"
+    "@ariaflow/core": "workspace:*",
+    "fastify": "^5.8.5"
   }
 }

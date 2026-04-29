@@ -1,1 +1,86 @@
 export const VERSION = "0.0.0";
+
+// Storage primitives
+export { StorageLock } from "./storage/lock.js";
+export {
+  configDir,
+  queuePath,
+  statePath,
+  archivePath,
+  actionLogPath,
+  sessionsLogPath,
+  storageLockPath,
+} from "./storage/paths.js";
+export { readJson, writeJson } from "./storage/json.js";
+export { StateStore, type ServerState } from "./storage/state.js";
+export { QueueStore, ArchiveStore } from "./storage/queue.js";
+export { ActionLog } from "./storage/action-log.js";
+export { DeclarationStore, declarationPath } from "./storage/declaration.js";
+export { SessionService } from "./storage/sessions.js";
+
+// Queue
+export type {
+  QueueItemRecord,
+  ItemStatus,
+  DownloadMode,
+} from "./queue/types.js";
+export { ITEM_STATUSES, TERMINAL_STATUSES } from "./queue/types.js";
+export { QueueOps, type AddInput, type AddResult } from "./queue/ops.js";
+export { allowedActions, detectDownloadMode, summarizeQueue } from "./queue/policy.js";
+export { findItemById, findItemByGid, findLiveItemByUrl } from "./queue/lookup.js";
+
+// Contracts
+export {
+  defaultDeclaration,
+  prefValue,
+  type Declaration,
+  type UicGate,
+  type UicPreference,
+} from "./contracts/declaration.js";
+export {
+  evaluatePreflight,
+  uccResultToDict,
+  type PreflightResult,
+  type GateSignals,
+  type UCCResult,
+} from "./contracts/preflight.js";
+export { uccEnvelope, uccRecord, type UccEnvelope, type UccResult } from "./contracts/ucc.js";
+
+// aria2
+export { Aria2Client, Aria2RpcError, type Aria2ClientOptions } from "./aria2/client.js";
+export * as aria2 from "./aria2/methods.js";
+export { dispatchDownload, dispatchPrefsFrom, type DispatchPrefs } from "./aria2/dispatch.js";
+
+// Routes (validators)
+export {
+  errorPayload,
+  validateItemId,
+  validateUrl,
+  validateOutputPath,
+  isValidBase64,
+  ALLOWED_URL_SCHEMES,
+} from "./routes/helpers.js";
+export { parseAddItems, type ParsedAddItem } from "./routes/parse-add.js";
+
+// Bandwidth / scheduler / transfers / reconcile / discovery / bonjour / install
+export * as bandwidth from "./bandwidth/probe.js";
+export * as bandwidthUnits from "./bandwidth/units.js";
+export * as scheduler from "./scheduler/helpers.js";
+export { getActiveProgress } from "./scheduler/progress.js";
+export * as transfers from "./transfers/helpers.js";
+export {
+  buildTransferSummary,
+  rankActiveInfos,
+  type TransferSummary,
+} from "./transfers/progress.js";
+export * as reconcile from "./reconcile/merge.js";
+export { planCleanup } from "./reconcile/cleanup.js";
+export { queueItemForActiveInfo } from "./reconcile/match.js";
+export * as discovery from "./discovery/parse.js";
+export {
+  matchesAllowlist,
+  matchesContentFilter,
+} from "./discovery/filter.js";
+export * as bonjour from "./bonjour/bonjour.js";
+export * as platform from "./platform/detect.js";
+export * as install from "./install/networkquality.js";
