@@ -1,13 +1,20 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import {
+  allowedActions,
+  DeclarationStore,
   errorPayload,
   parseAddItems,
+  QueueStore,
+  summarizeQueue,
+  validateItemId,
   type ParsedAddItem,
   type QueueOps,
 } from "@ariaflow/core";
 
 export interface ServerDeps {
   queueOps: QueueOps;
+  queueStore: QueueStore;
+  declarationStore: DeclarationStore;
   /** Optional override for the cwd used during output path validation. */
   cwd?: string;
   logger?: boolean;
@@ -50,6 +57,49 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       });
     }
     return reply.code(200).send({ ok: true, items: created });
+  });
+
+  app.get("/api/downloads", async () => {
+    const items = await deps.queueStore.load();
+    return {
+      ok: true,
+      summary: summarizeQueue(items),
+      items: items.map((i) => ({
+        id: i.id,
+        url: i.url,
+        status: i.status ?? "queued",
+        gid: i.gid ?? null,
+        actions: allowedActions(String(i.status ?? "")),
+      })),
+    };
+  });
+
+  app.get<{ Params: { id: string } }>("/api/downloads/:id", async (req, reply) => {
+    if (!validateItemId(req.params.id)) {
+      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
+    }
+    const items = await deps.queueStore.load();
+    const item = items.find((i) => i.id === req.params.id);
+    if (!item) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    return {
+      ok: true,
+      item,
+      actions: allowedActions(String(item.status ?? "")),
+    };
+  });
+
+  app.delete<{ Params: { id: string } }>("/api/downloads/:id", async (req, reply) => {
+    if (!validateItemId(req.params.id)) {
+      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
+    }
+    const removed = await deps.queueOps.remove(req.params.id);
+    if (!removed) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    return { ok: true, id: removed.id };
+  });
+
+  app.get("/api/declaration", async () => {
+    const declaration = await deps.declarationStore.load();
+    return { ok: true, declaration };
   });
 
   return app;
