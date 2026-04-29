@@ -76,6 +76,12 @@ export { bandwidthConfigFrom, type BandwidthConfig } from "./bandwidth/config.js
 export { runBandwidthProbe, type ResolvedProbe } from "./bandwidth/run.js";
 export * as scheduler from "./scheduler/helpers.js";
 export { getActiveProgress } from "./scheduler/progress.js";
+export {
+  runSchedulerTick,
+  isTerminalStatus,
+  type SchedulerTickDeps,
+  type SchedulerTickResult,
+} from "./scheduler/tick.js";
 export * as transfers from "./transfers/helpers.js";
 export {
   buildTransferSummary,
