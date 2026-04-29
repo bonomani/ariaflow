@@ -282,6 +282,59 @@ describe("GET /api/actions", () => {
   });
 });
 
+describe("GET /api/bandwidth", () => {
+  it("returns the bandwidth config + null probe before any probe has run", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/bandwidth" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.ok).toBe(true);
+    expect(body.config.probe_interval_seconds).toBeGreaterThanOrEqual(30);
+    expect(body.config.down_use_percent).toBeCloseTo(0.8, 5);
+    expect(body.config.up_use_percent).toBeCloseTo(0.5, 5);
+    expect(body.last_probe).toBeNull();
+    expect(body.cap_bytes_per_sec).toBeNull();
+  });
+
+  it("surfaces probe fields when the state already has a saved probe", async () => {
+    // Inject a probe directly into state.json; the route does not
+    // probe networkQuality itself.
+    const { writeFileSync, mkdirSync } = await import("node:fs");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      `${dir}/state.json`,
+      JSON.stringify({
+        paused: false,
+        active_gid: null,
+        active_url: null,
+        running: false,
+        session_id: null,
+        session_started_at: null,
+        session_last_seen_at: null,
+        session_closed_at: null,
+        session_closed_reason: null,
+        last_bandwidth_probe: {
+          source: "networkquality",
+          downlink_mbps: 100,
+          uplink_mbps: 25,
+          down_cap_mbps: 80,
+          up_cap_mbps: 12.5,
+          cap_bytes_per_sec: 10_000_000,
+          interface_name: "en0",
+          responsiveness_rpm: 740.4,
+        },
+        last_bandwidth_probe_at: 1_700_000_000,
+      }),
+    );
+    const res = await app.inject({ method: "GET", url: "/api/bandwidth" });
+    const body = res.json();
+    expect(body.downlink_mbps).toBe(100);
+    expect(body.up_cap_mbps).toBe(12.5);
+    expect(body.cap_bytes_per_sec).toBe(10_000_000);
+    expect(body.interface).toBe("en0");
+    expect(body.last_probe_at).toBe(1_700_000_000);
+  });
+});
+
 describe("404 handler", () => {
   it("returns the canonical not_found shape", async () => {
     const res = await app.inject({ method: "GET", url: "/api/nope" });
