@@ -427,6 +427,64 @@ describe("GET /api/health and /api/version", () => {
   });
 });
 
+describe("GET /api/downloads/:id/files", () => {
+  it("400 on a non-UUID id", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/downloads/bad/files" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("invalid_id");
+  });
+
+  it("404 when the item doesn't exist", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/downloads/00000000-0000-0000-0000-000000000000/files",
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("409 when the item has no aria2 GID yet (still queued)", async () => {
+    const add = await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/x" }] },
+    });
+    const id = add.json().items[0].id;
+    const res = await app.inject({ method: "GET", url: `/api/downloads/${id}/files` });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe("no_gid");
+  });
+
+  it("returns aria2.getFiles when the gid is known and the client is wired", async () => {
+    const mock = await mockServerWithAria2(dir, ({ method }) => {
+      if (method === "aria2.getFiles") return [{ index: "1", path: "/x", length: "10" }];
+      return "OK";
+    });
+    try {
+      // Add an item, then write a gid into queue.json so the route resolves
+      // it as "in flight". Calling QueueOps directly through the storage
+      // stack the mock app shares avoids having to expose a transition route.
+      const add = await mock.inject({
+        method: "POST",
+        url: "/api/downloads",
+        payload: { items: [{ url: "http://h/y" }] },
+      });
+      const id = add.json().items[0].id;
+      const queuePath = `${dir}/queue.json`;
+      const { readFileSync, writeFileSync } = await import("node:fs");
+      const data = JSON.parse(readFileSync(queuePath, "utf8"));
+      data.items[0].gid = "GID42";
+      writeFileSync(queuePath, JSON.stringify(data));
+      const res = await mock.inject({ method: "GET", url: `/api/downloads/${id}/files` });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.gid).toBe("GID42");
+      expect(body.files).toEqual([{ index: "1", path: "/x", length: "10" }]);
+    } finally {
+      await mock.close();
+    }
+  });
+});
+
 describe("aria2 option routes", () => {
   it("/api/aria2/option_tiers returns managed/safe sets and unsafe flag", async () => {
     const res = await app.inject({ method: "GET", url: "/api/aria2/option_tiers" });

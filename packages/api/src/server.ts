@@ -401,6 +401,28 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
   });
 
+  app.get<{ Params: { id: string } }>("/api/downloads/:id/files", async (req, reply) => {
+    if (!validateItemId(req.params.id)) {
+      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
+    }
+    const items = await deps.queueStore.load();
+    const item = items.find((i) => i.id === req.params.id);
+    if (!item) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    const gid = item.gid;
+    if (!gid) {
+      return reply.code(409).send(errorPayload("no_gid", "item has no aria2 GID"));
+    }
+    if (requireAria2(reply)) return;
+    try {
+      const files = await aria2.getFiles(deps.aria2!, gid);
+      return { ok: true, item_id: item.id, gid, files };
+    } catch (err) {
+      return reply
+        .code(502)
+        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+    }
+  });
+
   app.post("/api/aria2/change_option", async (req, reply) => {
     if (requireAria2(reply)) return;
     const body = req.body;
