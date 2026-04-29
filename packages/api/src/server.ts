@@ -463,6 +463,40 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return { ok: true, paused: next.paused, _rev: Number(next._rev ?? 0) };
   });
 
+  app.post("/api/scheduler/preflight", async () => {
+    const declaration = await deps.declarationStore.load();
+    let aria2Available = false;
+    if (deps.aria2) {
+      try {
+        await deps.aria2.call("aria2.getVersion");
+        aria2Available = true;
+      } catch {
+        aria2Available = false;
+      }
+    }
+    const stateBefore = await deps.stateStore.load();
+    const queueBefore = await deps.queueStore.load();
+    const result = evaluatePreflight(declaration, {
+      aria2_available: aria2Available,
+      queue_readable: true,
+      paused: stateBefore.paused,
+    });
+    await deps.actionLog.record({
+      action: "preflight",
+      target: "system",
+      outcome: result.status === "pass" ? "converged" : "blocked",
+      reason: result.status,
+      before: { state: stateBefore, queue: summarizeQueue(queueBefore) },
+      after: {
+        state: await deps.stateStore.load(),
+        queue: summarizeQueue(await deps.queueStore.load()),
+        preflight: result as unknown as Record<string, unknown>,
+      },
+      detail: result as unknown as Record<string, unknown>,
+    });
+    return result;
+  });
+
   app.post("/api/scheduler/resume", async () => {
     const next = await deps.stateStore.update((s) => {
       s.paused = false;

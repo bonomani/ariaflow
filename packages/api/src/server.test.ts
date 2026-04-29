@@ -611,6 +611,20 @@ describe("scheduler routes", () => {
       expect.arrayContaining(["pause", "resume"]),
     );
   });
+
+  it("POST /api/scheduler/preflight returns the gate result and logs an action", async () => {
+    const res = await app.inject({ method: "POST", url: "/api/scheduler/preflight" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // No aria2 wired -> the readiness gate fails.
+    expect(body.status).toBe("fail");
+    expect(body.hard_failures).toContain("aria2_available");
+    const log = await app.inject({ method: "GET", url: "/api/actions" });
+    const entries = log.json().entries as Array<{ action: string; outcome: string }>;
+    const last = entries.find((e) => e.action === "preflight");
+    expect(last).toBeDefined();
+    expect(last!.outcome).toBe("blocked");
+  });
 });
 
 describe("GET /api/lifecycle", () => {
