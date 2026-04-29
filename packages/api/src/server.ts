@@ -435,6 +435,48 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // POST alias for the canonical openapi.yaml.
   app.post("/api/declaration", (req, reply) => saveDeclaration(req.body, reply));
 
+  app.post("/api/declaration/preferences", async (req, reply) => {
+    const body = req.body;
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body) ||
+      Object.keys(body as object).length === 0
+    ) {
+      return reply
+        .code(400)
+        .send(errorPayload("invalid_payload", "expected {preference_name: value}"));
+    }
+    const declaration = await deps.declarationStore.load();
+    const preferences = declaration.uic?.preferences ?? [];
+    const applied: Record<string, { before: unknown; after: unknown }> = {};
+    const unknown: string[] = [];
+    for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+      const pref = preferences.find((p) => p.name === key);
+      if (!pref) {
+        unknown.push(key);
+        continue;
+      }
+      applied[key] = { before: pref.value, after: value };
+      pref.value = value;
+    }
+    if (unknown.length > 0) {
+      return reply
+        .code(400)
+        .send(errorPayload("unknown_preferences", `unknown: ${unknown.join(", ")}`));
+    }
+    const saved = await deps.declarationStore.save(declaration);
+    await deps.actionLog.record({
+      action: "patch_preferences",
+      target: "declaration",
+      outcome: "changed",
+      reason: "user_patch_preferences",
+      after: { applied },
+      detail: { applied },
+    });
+    return { ok: true, applied, declaration: saved };
+  });
+
   app.get<{ Querystring: { limit?: string } }>("/api/actions", async (req) => {
     const limitRaw = req.query?.limit;
     const limit = Math.min(Math.max(Number(limitRaw) || 200, 1), 5000);
@@ -675,6 +717,59 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         .code(502)
         .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
     }
+  });
+
+  app.post<{ Params: { id: string } }>("/api/downloads/:id/files", async (req, reply) => {
+    if (!validateItemId(req.params.id)) {
+      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
+    }
+    const body = req.body;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return reply
+        .code(400)
+        .send(errorPayload("invalid_payload", "expected {select: [1, 3, 5]}"));
+    }
+    const select = (body as { select?: unknown }).select;
+    if (!Array.isArray(select) || select.length === 0) {
+      return reply
+        .code(400)
+        .send(errorPayload("invalid_payload", "expected {select: [1, 3, 5]}"));
+    }
+    const indices: number[] = [];
+    for (const v of select) {
+      const n = Number(v);
+      if (!Number.isFinite(n)) {
+        return reply
+          .code(400)
+          .send(errorPayload("invalid_indices", "select entries must be integers"));
+      }
+      indices.push(Math.trunc(n));
+    }
+    const items = await deps.queueStore.load();
+    const item = items.find((i) => i.id === req.params.id);
+    if (!item) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    const before = item.selected_files ?? null;
+    item.selected_files = indices;
+    await deps.queueStore.save(items);
+    await deps.actionLog.record({
+      action: "select_files",
+      target: "queue_item",
+      outcome: "changed",
+      reason: "user_select_files",
+      detail: { item_id: item.id, before, after: indices },
+    });
+    // The aria2-side select-file change requires changeOption(gid, ...);
+    // when an aria2 client is wired and the item has a gid, push it now.
+    if (deps.aria2 && item.gid) {
+      try {
+        await aria2.changeOption(deps.aria2, item.gid, {
+          "select-file": indices.join(","),
+        });
+      } catch {
+        /* RPC errors don't block the local mutation — caller can retry */
+      }
+    }
+    return { ok: true, item_id: item.id, selected_files: indices };
   });
 
   app.get<{ Params: { id: string } }>("/api/downloads/:id/files", async (req, reply) => {

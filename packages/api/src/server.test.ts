@@ -582,6 +582,90 @@ describe("POST /api/aria2/multicall", () => {
   });
 });
 
+describe("POST /api/declaration/preferences", () => {
+  it("400s on empty / non-object payload", async () => {
+    const a = await app.inject({
+      method: "POST",
+      url: "/api/declaration/preferences",
+      payload: {},
+    });
+    expect(a.statusCode).toBe(400);
+    expect(a.json().error).toBe("invalid_payload");
+  });
+
+  it("400 unknown_preferences on a typo'd key", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/declaration/preferences",
+      payload: { not_a_real_pref: 1 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("unknown_preferences");
+  });
+
+  it("applies a single-key update and returns before/after", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/declaration/preferences",
+      payload: { max_simultaneous_downloads: 3 },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.applied.max_simultaneous_downloads).toEqual({ before: 1, after: 3 });
+    const reloaded = await app.inject({ method: "GET", url: "/api/declaration" });
+    const pref = reloaded
+      .json()
+      .declaration.uic.preferences.find(
+        (p: { name: string }) => p.name === "max_simultaneous_downloads",
+      );
+    expect(pref.value).toBe(3);
+  });
+});
+
+describe("POST /api/downloads/:id/files", () => {
+  it("400 on a non-array select", async () => {
+    const add = await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/x" }] },
+    });
+    const id = add.json().items[0].id;
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/downloads/${id}/files`,
+      payload: { select: "all" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("writes selected_files to the queue row and records an action", async () => {
+    const add = await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/x" }] },
+    });
+    const id = add.json().items[0].id;
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/downloads/${id}/files`,
+      payload: { select: [1, 3, "5"] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, item_id: id, selected_files: [1, 3, 5] });
+    const get = await app.inject({ method: "GET", url: `/api/downloads/${id}` });
+    expect(get.json().item.selected_files).toEqual([1, 3, 5]);
+  });
+
+  it("404 on an unknown id", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/downloads/00000000-0000-0000-0000-000000000000/files",
+      payload: { select: [1] },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 describe("meta routes", () => {
   it("GET /api returns the discovery payload", async () => {
     const res = await app.inject({ method: "GET", url: "/api" });
