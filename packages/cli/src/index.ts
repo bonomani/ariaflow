@@ -99,9 +99,14 @@ program
   .description("start the HTTP API server")
   .option("--host <h>", "bind host", "127.0.0.1")
   .option("--port <p>", "bind port", (v) => Number(v), 8000)
-  .action(async (opts: { host: string; port: number }) => {
+  .option("--openapi-yaml <path>", "path to openapi.yaml (auto-discovered if omitted)")
+  .action(async (opts: { host: string; port: number; openapiYaml?: string }) => {
     const ctx = makeContext();
-    const handle = await cmdServe(ctx, { host: opts.host, port: opts.port });
+    const handle = await cmdServe(ctx, {
+      host: opts.host,
+      port: opts.port,
+      ...(opts.openapiYaml ? { openapiYamlPath: opts.openapiYaml } : {}),
+    });
     process.stdout.write(`ariaflow-server listening at ${handle.url}\n`);
     const stop = async () => {
       await handle.close();

@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { allowedActions, bandwidthConfigFrom, EventBus, summarizeQueue } from "@ariaflow/core";
 import { buildServer } from "@ariaflow/api";
 import type { CliContext } from "./context.js";
@@ -208,6 +210,24 @@ export interface ServeOptions {
   host?: string;
   port?: number;
   version?: string;
+  /** Path to openapi.yaml; auto-discovered when omitted. */
+  openapiYamlPath?: string;
+}
+
+/**
+ * Walk up from cwd looking for an openapi.yaml at the repo root. Returns
+ * the resolved absolute path or null when not found within 5 levels.
+ */
+function findOpenApiYaml(start: string = process.cwd()): string | null {
+  let dir = start;
+  for (let i = 0; i < 5; i++) {
+    const candidate = join(dir, "openapi.yaml");
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
 }
 
 export interface ServeHandle {
@@ -228,15 +248,18 @@ export async function cmdServe(
   opts: ServeOptions = {},
 ): Promise<ServeHandle> {
   const eventBus = new EventBus();
+  const yamlPath = opts.openapiYamlPath ?? findOpenApiYaml();
   const app = buildServer({
     queueOps: ctx.queueOps,
     queueStore: ctx.queue,
+    archiveStore: ctx.archive,
     declarationStore: ctx.declaration,
     stateStore: ctx.state,
     sessionService: ctx.sessions,
     actionLog: ctx.actions,
     eventBus,
     ...(opts.version !== undefined ? { version: opts.version } : {}),
+    ...(yamlPath ? { openapiYamlPath: yamlPath } : {}),
   });
   const requestedPort = opts.port ?? 8000;
   const host = opts.host ?? "127.0.0.1";

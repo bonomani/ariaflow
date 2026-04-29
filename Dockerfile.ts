@@ -28,10 +28,11 @@ RUN apk add --no-cache aria2 tini
 
 WORKDIR /app
 COPY --from=builder /out ./
+COPY openapi.yaml ./openapi.yaml
 
 ENV ARIAFLOW_DIR=/data/config
 VOLUME ["/data/config", "/data/downloads"]
 EXPOSE 8000
 
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "dist/index.js", "serve", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["node", "dist/index.js", "serve", "--host", "0.0.0.0", "--port", "8000", "--openapi-yaml", "/app/openapi.yaml"]
