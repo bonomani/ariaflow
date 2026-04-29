@@ -463,6 +463,85 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return { ok: true, paused: next.paused, _rev: Number(next._rev ?? 0) };
   });
 
+  app.post("/api/scheduler/ucc", async () => {
+    const declaration = await deps.declarationStore.load();
+    let aria2Available = false;
+    if (deps.aria2) {
+      try {
+        await deps.aria2.call("aria2.getVersion");
+        aria2Available = true;
+      } catch {
+        aria2Available = false;
+      }
+    }
+    const stateBefore = await deps.stateStore.load();
+    const queueBefore = await deps.queueStore.load();
+    const pf = evaluatePreflight(declaration, {
+      aria2_available: aria2Available,
+      queue_readable: true,
+      paused: stateBefore.paused,
+    });
+    if (pf.exit_code !== 0) {
+      const result = {
+        observation: "failed",
+        outcome: "failed",
+        failure_class: "permanent",
+        message: "preflight failed",
+        reason: "gate_failed",
+        observed_before: { gates: pf.gates },
+        diff: { failures: pf.hard_failures },
+      };
+      await deps.actionLog.record({
+        action: "ucc",
+        target: "queue",
+        outcome: result.outcome,
+        observation: result.observation,
+        reason: result.reason,
+        before: { state: stateBefore, queue: summarizeQueue(queueBefore) },
+        after: {
+          state: await deps.stateStore.load(),
+          queue: summarizeQueue(await deps.queueStore.load()),
+          ucc: { result, preflight: pf },
+        },
+        detail: { result, preflight: pf },
+      });
+      return { meta: { contract: "UCC", version: "2.0" }, result, preflight: pf };
+    }
+
+    // Gates passed. The full process_queue() loop lives in the deferred
+    // scheduler integration, so the UCC run currently converges on a
+    // no-op with the live queue summary as the diff payload.
+    const queueAfter = await deps.queueStore.load();
+    const result = {
+      observation: "ok",
+      outcome: "converged",
+      message: "queue processed",
+      reason: "converged",
+      observed_before: { items: queueBefore },
+      observed_after: { items: queueAfter },
+      diff: {
+        count_delta: queueAfter.length - queueBefore.length,
+        summary: summarizeQueue(queueAfter),
+        active: null,
+      },
+    };
+    await deps.actionLog.record({
+      action: "ucc",
+      target: "queue",
+      outcome: result.outcome,
+      observation: result.observation,
+      reason: result.reason,
+      before: { state: stateBefore, queue: summarizeQueue(queueBefore) },
+      after: {
+        state: await deps.stateStore.load(),
+        queue: summarizeQueue(queueAfter),
+        ucc: { result, preflight: pf },
+      },
+      detail: { result, preflight: pf },
+    });
+    return { meta: { contract: "UCC", version: "2.0" }, result, preflight: pf };
+  });
+
   app.post("/api/scheduler/preflight", async () => {
     const declaration = await deps.declarationStore.load();
     let aria2Available = false;

@@ -612,6 +612,29 @@ describe("scheduler routes", () => {
     );
   });
 
+  it("POST /api/scheduler/ucc returns failed envelope when preflight gates fail", async () => {
+    const res = await app.inject({ method: "POST", url: "/api/scheduler/ucc" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.meta).toEqual({ contract: "UCC", version: "2.0" });
+    expect(body.result).toMatchObject({
+      observation: "failed",
+      outcome: "failed",
+      failure_class: "permanent",
+      reason: "gate_failed",
+    });
+    expect(body.preflight.hard_failures).toContain("aria2_available");
+  });
+
+  it("POST /api/scheduler/ucc records a 'ucc' action entry", async () => {
+    await app.inject({ method: "POST", url: "/api/scheduler/ucc" });
+    const log = await app.inject({ method: "GET", url: "/api/actions" });
+    const entries = log.json().entries as Array<{ action: string; outcome: string }>;
+    const ucc = entries.find((e) => e.action === "ucc");
+    expect(ucc).toBeDefined();
+    expect(ucc!.outcome).toBe("failed");
+  });
+
   it("POST /api/scheduler/preflight returns the gate result and logs an action", async () => {
     const res = await app.inject({ method: "POST", url: "/api/scheduler/preflight" });
     expect(res.statusCode).toBe(200);
