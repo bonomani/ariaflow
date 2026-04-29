@@ -39,6 +39,8 @@ export interface ServerDeps {
   actionLog: ActionLog;
   /** Optional version string surfaced at /api/version (default "0.0.0"). */
   version?: string;
+  /** Path to openapi.yaml on disk; if omitted, /api/openapi.yaml 404s. */
+  openapiYamlPath?: string;
   /** Optional EventBus; if provided, /api/events streams its publish() calls. */
   eventBus?: EventBus;
   /** Optional peer registry; if omitted, /api/peers returns an empty list. */
@@ -49,6 +51,24 @@ export interface ServerDeps {
   cwd?: string;
   logger?: boolean;
 }
+
+const SWAGGER_UI_HTML = `<!DOCTYPE html>
+<html><head>
+  <meta charset="utf-8">
+  <title>ariaflow-server API</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+</head><body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.ui = SwaggerUIBundle({
+      url: '/api/openapi.yaml',
+      dom_id: '#swagger-ui',
+      deepLinking: true,
+    });
+  </script>
+</body></html>
+`;
 
 /**
  * Build a Fastify instance wired with the migrated routes. The caller
@@ -439,6 +459,62 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   app.get("/api/version", async () => {
     return { ok: true, version: deps.version ?? "0.0.0" };
+  });
+
+  app.get("/api", async () => ({
+    name: "ariaflow-server",
+    version: deps.version ?? "0.0.0",
+    docs: "/api/docs",
+    openapi: "/api/openapi.yaml",
+  }));
+
+  app.get<{ Querystring: { status?: string; session?: string } }>(
+    "/api/status",
+    async (req) => {
+      const items = await deps.queueStore.load();
+      const state = await deps.stateStore.load();
+      const statusFilter = (req.query?.status ?? "").trim();
+      const sessionFilter = (req.query?.session ?? "").trim();
+      let filtered = items;
+      if (statusFilter) {
+        const allowed = new Set(statusFilter.split(",").map((s) => s.trim()).filter(Boolean));
+        filtered = filtered.filter((i) => allowed.has(String(i.status ?? "")));
+      }
+      if (sessionFilter === "current") {
+        filtered = filtered.filter((i) => i.session_id === state.session_id);
+      } else if (sessionFilter) {
+        filtered = filtered.filter((i) => i.session_id === sessionFilter);
+      }
+      const payload: Record<string, unknown> = {
+        items: filtered,
+        summary: summarizeQueue(filtered),
+        state,
+      };
+      if (statusFilter || sessionFilter) payload.filtered = true;
+      return payload;
+    },
+  );
+
+  app.get("/api/openapi.yaml", async (_req, reply) => {
+    const yamlPath = deps.openapiYamlPath;
+    if (!yamlPath) {
+      return reply
+        .code(404)
+        .send(errorPayload("not_found", "openapi.yaml path not configured"));
+    }
+    const { existsSync, readFileSync } = await import("node:fs");
+    if (!existsSync(yamlPath)) {
+      return reply
+        .code(404)
+        .send(errorPayload("not_found", "openapi.yaml not found on disk"));
+    }
+    reply.type("application/yaml");
+    return reply.send(readFileSync(yamlPath, "utf8"));
+  });
+
+  app.get("/api/docs", async (_req, reply) => {
+    reply.type("text/html; charset=utf-8");
+    return reply.send(SWAGGER_UI_HTML);
   });
 
   app.get("/api/openapi", async () => {

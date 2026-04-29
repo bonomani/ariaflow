@@ -582,6 +582,106 @@ describe("POST /api/aria2/multicall", () => {
   });
 });
 
+describe("meta routes", () => {
+  it("GET /api returns the discovery payload", async () => {
+    const res = await app.inject({ method: "GET", url: "/api" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      name: "ariaflow-server",
+      docs: "/api/docs",
+      openapi: "/api/openapi.yaml",
+    });
+  });
+
+  it("GET /api/docs serves the Swagger UI HTML page", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/docs" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/text\/html/);
+    expect(res.body).toContain("SwaggerUIBundle");
+    expect(res.body).toContain("/api/openapi.yaml");
+  });
+
+  it("GET /api/openapi.yaml 404s when not configured", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/openapi.yaml" });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("GET /api/openapi.yaml serves the file when configured", async () => {
+    const { writeFileSync } = await import("node:fs");
+    const yamlPath = `${dir}/openapi.yaml`;
+    writeFileSync(yamlPath, "openapi: 3.0.3\ninfo: {title: t, version: '0'}\npaths: {}\n");
+    const sibling = await freshAppWithOpenApiYaml(dir, yamlPath);
+    try {
+      const res = await sibling.inject({ method: "GET", url: "/api/openapi.yaml" });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["content-type"]).toMatch(/yaml/);
+      expect(res.body).toContain("openapi: 3.0.3");
+    } finally {
+      await sibling.close();
+    }
+  });
+
+  it("GET /api/status returns items + summary + state", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/a" }, { url: "http://h/b" }] },
+    });
+    const res = await app.inject({ method: "GET", url: "/api/status" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.summary.total).toBe(2);
+    expect(body.items).toHaveLength(2);
+    expect(body.state).toBeDefined();
+  });
+
+  it("GET /api/status?status=queued filters and flips `filtered`", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/a" }] },
+    });
+    const res = await app.inject({ method: "GET", url: "/api/status?status=queued" });
+    expect(res.json().filtered).toBe(true);
+    const empty = await app.inject({ method: "GET", url: "/api/status?status=active" });
+    expect(empty.json().items).toEqual([]);
+  });
+});
+
+async function freshAppWithOpenApiYaml(baseDir: string, yamlPath: string) {
+  const env = { ARIAFLOW_DIR: baseDir };
+  const {
+    StorageLock,
+    storageLockPath,
+    StateStore,
+    QueueStore,
+    ArchiveStore,
+    ActionLog,
+    SessionService,
+    DeclarationStore,
+    QueueOps,
+  } = await import("@ariaflow/core");
+  const lock = new StorageLock(storageLockPath(env));
+  const state = new StateStore(lock, env);
+  const queue = new QueueStore(lock, env);
+  const archive = new ArchiveStore(lock, env);
+  const actions = new ActionLog(lock, state, env);
+  const sessions = new SessionService(lock, state, queue, archive, env);
+  const declaration = new DeclarationStore(lock, env);
+  const queueOps = new QueueOps(queue, sessions, declaration, actions);
+  return buildServer({
+    queueOps,
+    queueStore: queue,
+    archiveStore: archive,
+    declarationStore: declaration,
+    stateStore: state,
+    sessionService: sessions,
+    actionLog: actions,
+    openapiYamlPath: yamlPath,
+    cwd: baseDir,
+  });
+}
+
 describe("downloads compat aliases + cleanup", () => {
   it("POST /api/downloads/add behaves like POST /api/downloads", async () => {
     const res = await app.inject({
