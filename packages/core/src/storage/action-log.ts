@@ -49,11 +49,23 @@ async function rotateIfLarge(path: string): Promise<void> {
 }
 
 export class ActionLog {
+  private bus: { publish(event: string, data: unknown): void } | undefined;
+
   constructor(
     private readonly lock: StorageLock,
     private readonly state: StateStore,
     private readonly env: NodeJS.ProcessEnv = process.env,
   ) {}
+
+  /** Attach an event bus so each append() also publishes "action_logged". */
+  setBus(bus: { publish(event: string, data: unknown): void }): void {
+    this.bus = bus;
+  }
+
+  /** Detach any previously-attached event bus. */
+  clearBus(): void {
+    this.bus = undefined;
+  }
 
   /** Low-level append. Stamps timestamp + session_id if not already set. */
   async append(entry: ActionLogEntry): Promise<ActionLogEntry> {
@@ -71,6 +83,9 @@ export class ActionLog {
       }
       await appendFile(path, sortedJsonLine(payload), "utf8");
       await rotateIfLarge(path);
+      // Publish outside the lock-critical fs work but inside the lock-with
+      // callback is fine — the bus is in-memory and synchronous.
+      this.bus?.publish("action_logged", payload);
       return payload;
     });
   }

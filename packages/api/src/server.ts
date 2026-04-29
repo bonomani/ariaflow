@@ -7,6 +7,7 @@ import {
   buildTransferSummary,
   DeclarationStore,
   errorPayload,
+  EventBus,
   evaluatePreflight,
   getActiveProgress,
   parseAddItems,
@@ -28,6 +29,8 @@ export interface ServerDeps {
   stateStore: StateStore;
   sessionService: SessionService;
   actionLog: ActionLog;
+  /** Optional EventBus; if provided, /api/events streams its publish() calls. */
+  eventBus?: EventBus;
   /** aria2 client; if omitted, /api/active and /api/preflight degrade gracefully. */
   aria2?: Aria2Client;
   /** Optional override for the cwd used during output path validation. */
@@ -235,6 +238,39 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const limit = Math.min(Math.max(Number(limitRaw) || 200, 1), 5000);
     const entries = await deps.actionLog.load(limit);
     return { ok: true, limit, entries };
+  });
+
+  app.get("/api/events", async (req, reply) => {
+    const bus = deps.eventBus;
+    if (!bus) {
+      return reply.code(503).send(errorPayload("events_unavailable", "no event bus wired"));
+    }
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+    reply.raw.write(`: connected\n\n`);
+    let alive = true;
+    const writeEvent = (event: string, data: unknown) => {
+      if (!alive) return;
+      reply.raw.write(`event: ${event}\n`);
+      reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+    const unsubscribe = bus.subscribe(writeEvent);
+    const heartbeat = setInterval(() => {
+      if (alive) reply.raw.write(`: ping\n\n`);
+    }, 15_000);
+    const cleanup = () => {
+      alive = false;
+      clearInterval(heartbeat);
+      unsubscribe();
+    };
+    req.raw.on("close", cleanup);
+    reply.raw.on("close", cleanup);
+    // Keep the response open — Fastify will resolve once we return,
+    // but the underlying socket stays alive thanks to the listeners.
+    return reply;
   });
 
   app.get("/api/bandwidth", async () => {

@@ -372,6 +372,45 @@ describe("GET /api/bandwidth", () => {
   });
 });
 
+describe("GET /api/events (SSE)", () => {
+  it("503s when no EventBus is wired", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/events" });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error).toBe("events_unavailable");
+  });
+});
+
+describe("ActionLog -> EventBus bridge", () => {
+  it("publishes 'action_logged' for each appended entry", async () => {
+    const { ActionLog, ArchiveStore, DeclarationStore, EventBus, QueueOps, QueueStore, SessionService, StateStore, StorageLock, storageLockPath } =
+      await import("@ariaflow/core");
+    const { mkdtempSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const local = mkdtempSync(join(tmpdir(), "ariaflow-bus-"));
+    try {
+      const env = { ARIAFLOW_DIR: local };
+      const lock = new StorageLock(storageLockPath(env));
+      const state = new StateStore(lock, env);
+      const queue = new QueueStore(lock, env);
+      const archive = new ArchiveStore(lock, env);
+      const actions = new ActionLog(lock, state, env);
+      const bus = new EventBus();
+      actions.setBus(bus);
+      const sessions = new SessionService(lock, state, queue, archive, env);
+      const decl = new DeclarationStore(lock, env);
+      const ops = new QueueOps(queue, sessions, decl, actions);
+      const seen: Array<[string, unknown]> = [];
+      bus.subscribe((event, data) => seen.push([event, data]));
+      await ops.add({ url: "http://h/x" });
+      const events = seen.map(([e]) => e);
+      expect(events).toContain("action_logged");
+    } finally {
+      rmSync(local, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("404 handler", () => {
   it("returns the canonical not_found shape", async () => {
     const res = await app.inject({ method: "GET", url: "/api/nope" });
