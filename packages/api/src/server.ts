@@ -130,14 +130,26 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     };
   });
 
-  app.delete<{ Params: { id: string } }>("/api/downloads/:id", async (req, reply) => {
-    if (!validateItemId(req.params.id)) {
+  const removeItem = async (
+    id: string,
+    reply: import("fastify").FastifyReply,
+  ): Promise<unknown> => {
+    if (!validateItemId(id)) {
       return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
     }
-    const removed = await deps.queueOps.remove(req.params.id);
+    const removed = await deps.queueOps.remove(id);
     if (!removed) return reply.code(404).send(errorPayload("not_found", "item not found"));
     return { ok: true, id: removed.id };
-  });
+  };
+
+  app.delete<{ Params: { id: string } }>("/api/downloads/:id", (req, reply) =>
+    removeItem(req.params.id, reply),
+  );
+
+  // POST alias for clients that can't issue DELETE; matches openapi.yaml.
+  app.post<{ Params: { id: string } }>("/api/downloads/:id/remove", (req, reply) =>
+    removeItem(req.params.id, reply),
+  );
 
   app.post<{ Params: { id: string } }>("/api/downloads/:id/pause", async (req, reply) => {
     if (!validateItemId(req.params.id)) {
@@ -268,6 +280,19 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (!state.session_id) return { ok: true, session: null };
     const stats = await deps.sessionService.stats();
     return { ok: true, session: state, stats };
+  });
+
+  // Compat aliases: the canonical openapi.yaml documents /api/sessions
+  // (=current) and /api/sessions/stats as separate endpoints — both are
+  // thin views over SessionService that are cheap to keep wired.
+  app.get("/api/sessions", async () => {
+    const state = await deps.stateStore.load();
+    return { ok: true, session: state.session_id ? state : null };
+  });
+
+  app.get("/api/sessions/stats", async () => {
+    const stats = await deps.sessionService.stats();
+    return { ok: true, stats };
   });
 
   app.post("/api/sessions/start", async () => {
@@ -417,6 +442,34 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       safe: [...SAFE_ARIA2_OPTIONS].sort(),
       unsafe_enabled: Boolean(unsafe?.value),
     };
+  });
+
+  app.get("/api/aria2/get_global_option", async (_req, reply) => {
+    if (requireAria2(reply)) return;
+    try {
+      const opts = await aria2.getGlobalOption(deps.aria2!);
+      return { ok: true, options: opts };
+    } catch (err) {
+      return reply
+        .code(502)
+        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+    }
+  });
+
+  app.get<{ Querystring: { gid?: string } }>("/api/aria2/get_option", async (req, reply) => {
+    if (requireAria2(reply)) return;
+    const gid = (req.query?.gid ?? "").trim();
+    if (!gid) {
+      return reply.code(400).send(errorPayload("missing_gid", "gid query parameter required"));
+    }
+    try {
+      const opts = await aria2.getOption(deps.aria2!, gid);
+      return { ok: true, gid, options: opts };
+    } catch (err) {
+      return reply
+        .code(502)
+        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+    }
   });
 
   app.get("/api/aria2/global_option", async (_req, reply) => {

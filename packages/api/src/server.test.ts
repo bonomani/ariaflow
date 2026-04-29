@@ -581,6 +581,60 @@ describe("POST /api/aria2/multicall", () => {
   });
 });
 
+describe("aria2 / sessions / remove compat aliases", () => {
+  it("/api/aria2/get_global_option mirrors /api/aria2/global_option (503 unwired)", async () => {
+    const a = await app.inject({ method: "GET", url: "/api/aria2/get_global_option" });
+    const b = await app.inject({ method: "GET", url: "/api/aria2/global_option" });
+    expect(a.statusCode).toBe(503);
+    expect(b.statusCode).toBe(503);
+  });
+
+  it("/api/aria2/get_option mirrors /api/aria2/option (missing gid -> 503 first)", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/aria2/get_option" });
+    expect(res.statusCode).toBe(503);
+  });
+
+  it("/api/sessions returns the same shape as /api/sessions/current minus stats", async () => {
+    const before = await app.inject({ method: "GET", url: "/api/sessions" });
+    expect(before.json()).toEqual({ ok: true, session: null });
+    await app.inject({ method: "POST", url: "/api/sessions/start" });
+    const after = await app.inject({ method: "GET", url: "/api/sessions" });
+    expect(after.json().session.session_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(after.json().session.stats).toBeUndefined();
+  });
+
+  it("/api/sessions/stats returns the SessionService.stats() payload", async () => {
+    await app.inject({ method: "POST", url: "/api/sessions/start" });
+    const res = await app.inject({ method: "GET", url: "/api/sessions/stats" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().stats.session_id).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("POST /api/downloads/:id/remove behaves identically to DELETE /api/downloads/:id", async () => {
+    const add = await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/x" }] },
+    });
+    const id = add.json().items[0].id;
+    const res = await app.inject({ method: "POST", url: `/api/downloads/${id}/remove` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true, id });
+    const list = await app.inject({ method: "GET", url: "/api/downloads" });
+    expect(list.json().summary.total).toBe(0);
+  });
+
+  it("POST /api/downloads/:id/remove 400 on bad id, 404 on miss", async () => {
+    const bad = await app.inject({ method: "POST", url: "/api/downloads/notuuid/remove" });
+    expect(bad.statusCode).toBe(400);
+    const miss = await app.inject({
+      method: "POST",
+      url: "/api/downloads/00000000-0000-0000-0000-000000000000/remove",
+    });
+    expect(miss.statusCode).toBe(404);
+  });
+});
+
 describe("priority / retry routes", () => {
   it("POST /:id/priority writes the new value and records an action", async () => {
     const add = await app.inject({
