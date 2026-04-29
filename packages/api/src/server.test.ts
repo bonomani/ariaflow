@@ -36,6 +36,7 @@ beforeEach(() => {
     stateStore: state,
     sessionService: sessions,
     actionLog: actions,
+    archiveStore: archive,
     cwd: dir,
   });
 });
@@ -581,6 +582,71 @@ describe("POST /api/aria2/multicall", () => {
   });
 });
 
+describe("downloads compat aliases + cleanup", () => {
+  it("POST /api/downloads/add behaves like POST /api/downloads", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/downloads/add",
+      payload: { items: [{ url: "http://h/x" }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().items[0].url).toBe("http://h/x");
+  });
+
+  it("POST /api/declaration behaves like PUT /api/declaration", async () => {
+    const got = await app.inject({ method: "GET", url: "/api/declaration" });
+    const decl = got.json().declaration;
+    decl.uic.preferences[0].value = "edited-via-post";
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/declaration",
+      payload: { declaration: decl },
+    });
+    expect(res.statusCode).toBe(200);
+    const reloaded = await app.inject({ method: "GET", url: "/api/declaration" });
+    expect(reloaded.json().declaration.uic.preferences[0].value).toBe("edited-via-post");
+  });
+
+  it("GET /api/downloads/archive returns {ok, items} (empty by default)", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/downloads/archive" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true, items: [] });
+  });
+
+  it("POST /api/downloads/cleanup archives stale terminal items + records action", async () => {
+    const { writeFileSync } = await import("node:fs");
+    const oldDate = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+    writeFileSync(
+      `${dir}/queue.json`,
+      JSON.stringify({
+        items: [
+          {
+            id: "11111111-1111-1111-1111-111111111111",
+            url: "http://h/x",
+            status: "complete",
+            completed_at: oldDate,
+          },
+          {
+            id: "22222222-2222-2222-2222-222222222222",
+            url: "http://h/y",
+            status: "active",
+          },
+        ],
+      }),
+    );
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/downloads/cleanup",
+      payload: { max_done_age_days: 7 },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, archived: 1, remaining: 1 });
+    const archive = await app.inject({ method: "GET", url: "/api/downloads/archive" });
+    expect(archive.json().items).toHaveLength(1);
+    expect(archive.json().items[0].id).toBe("11111111-1111-1111-1111-111111111111");
+  });
+});
+
 describe("aria2 / sessions / remove compat aliases", () => {
   it("/api/aria2/get_global_option mirrors /api/aria2/global_option (503 unwired)", async () => {
     const a = await app.inject({ method: "GET", url: "/api/aria2/get_global_option" });
@@ -863,6 +929,7 @@ async function freshAppWithPeerRegistry(
     stateStore: state,
     sessionService: sessions,
     actionLog: actions,
+    archiveStore: archive,
     peerRegistry: registry,
     cwd: baseDir,
   });
@@ -1172,6 +1239,7 @@ async function mockServerWithAria2(
     stateStore: state,
     sessionService: sessions,
     actionLog: actions,
+    archiveStore: archive,
     aria2: client,
     cwd: baseDir,
   });

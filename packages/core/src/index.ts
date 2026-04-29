@@ -83,6 +83,7 @@ export {
 } from "./transfers/progress.js";
 export * as reconcile from "./reconcile/merge.js";
 export { planCleanup } from "./reconcile/cleanup.js";
+export { planAutoCleanup } from "./state/archivable.js";
 export { queueItemForActiveInfo } from "./reconcile/match.js";
 export * as discovery from "./discovery/parse.js";
 export {

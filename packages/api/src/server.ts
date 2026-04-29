@@ -3,7 +3,9 @@ import {
   ActionLog,
   allowedActions,
   aria2,
+  ArchiveStore,
   PeerRegistry,
+  planAutoCleanup,
   Aria2Client,
   bandwidthConfigFrom,
   buildTransferSummary,
@@ -30,6 +32,7 @@ import {
 export interface ServerDeps {
   queueOps: QueueOps;
   queueStore: QueueStore;
+  archiveStore?: ArchiveStore;
   declarationStore: DeclarationStore;
   stateStore: StateStore;
   sessionService: SessionService;
@@ -74,11 +77,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     reply.code(404).send(errorPayload("not_found", "resource not found"));
   });
 
-  app.post("/api/downloads", async (req, reply) => {
-    const parsed = parseAddItems(req.body, deps.cwd ? { cwd: deps.cwd } : {});
-    if ("error" in parsed) {
-      return reply.code(400).send(parsed.error);
-    }
+  const addDownloads = async (
+    body: unknown,
+    reply: import("fastify").FastifyReply,
+  ): Promise<unknown> => {
+    const parsed = parseAddItems(body, deps.cwd ? { cwd: deps.cwd } : {});
+    if ("error" in parsed) return reply.code(400).send(parsed.error);
     const created: Array<{ id: string; url: string; status: string; duplicate: boolean }> = [];
     for (const item of parsed.items as ParsedAddItem[]) {
       const { item: rec, duplicate } = await deps.queueOps.add({
@@ -99,7 +103,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       });
     }
     return reply.code(200).send({ ok: true, items: created });
-  });
+  };
+
+  app.post("/api/downloads", (req, reply) => addDownloads(req.body, reply));
+  // Compat alias from the legacy openapi.yaml.
+  app.post("/api/downloads/add", (req, reply) => addDownloads(req.body, reply));
 
   app.get("/api/downloads", async () => {
     const items = await deps.queueStore.load();
@@ -114,6 +122,64 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         actions: allowedActions(String(i.status ?? "")),
       })),
     };
+  });
+
+  app.get<{ Querystring: { limit?: string } }>("/api/downloads/archive", async (req, reply) => {
+    if (!deps.archiveStore) {
+      return reply
+        .code(503)
+        .send(errorPayload("archive_unavailable", "no archive store wired"));
+    }
+    const limitRaw = req.query?.limit;
+    let limit = 100;
+    const n = Number(limitRaw);
+    if (Number.isFinite(n)) limit = Math.max(1, Math.min(500, Math.trunc(n)));
+    const items = await deps.archiveStore.load();
+    return { ok: true, items: items.slice(-limit) };
+  });
+
+  app.post("/api/downloads/cleanup", async (req, reply) => {
+    if (!deps.archiveStore) {
+      return reply
+        .code(503)
+        .send(errorPayload("archive_unavailable", "no archive store wired"));
+    }
+    const body = (req.body && typeof req.body === "object" && !Array.isArray(req.body)
+      ? (req.body as Record<string, unknown>)
+      : {}) as Record<string, unknown>;
+    const maxAge = Number.isFinite(Number(body.max_done_age_days))
+      ? Number(body.max_done_age_days)
+      : 7;
+    const maxCount = Number.isFinite(Number(body.max_done_count))
+      ? Number(body.max_done_count)
+      : 100;
+    const items = await deps.queueStore.load();
+    const plan = planAutoCleanup(items as never, {
+      maxDoneAgeDays: maxAge,
+      maxDoneCount: maxCount,
+    });
+    if (plan.archive.length > 0) {
+      const archived = await deps.archiveStore.load();
+      const stamped = plan.archive.map((it: Record<string, unknown>) => ({
+        ...it,
+        archived_at: new Date().toISOString(),
+      })) as unknown as Awaited<ReturnType<typeof deps.archiveStore.load>>;
+      await deps.archiveStore.save([...archived, ...stamped]);
+      await deps.queueStore.save(plan.keep as never);
+      await deps.actionLog.record({
+        action: "auto_cleanup",
+        target: "queue",
+        outcome: "changed",
+        reason: "stale_items_archived",
+        before: { total: items.length },
+        after: { total: plan.keep.length, archived: plan.archive.length },
+        detail: {
+          max_done_age_days: maxAge,
+          max_done_count: maxCount,
+        },
+      });
+    }
+    return { ok: true, archived: plan.archive.length, remaining: plan.keep.length };
   });
 
   app.get<{ Params: { id: string } }>("/api/downloads/:id", async (req, reply) => {
@@ -314,14 +380,18 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return { ok: true, history: await deps.sessionService.loadHistory() };
   });
 
-  app.put("/api/declaration", async (req, reply) => {
-    const body = req.body;
+  const saveDeclaration = async (
+    body: unknown,
+    reply: import("fastify").FastifyReply,
+  ): Promise<unknown> => {
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       return reply.code(400).send(errorPayload("invalid_payload", "expected an object"));
     }
     const incoming = (body as { declaration?: unknown }).declaration ?? body;
     if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
-      return reply.code(400).send(errorPayload("invalid_declaration", "declaration must be an object"));
+      return reply
+        .code(400)
+        .send(errorPayload("invalid_declaration", "declaration must be an object"));
     }
     const meta = (incoming as { meta?: unknown }).meta;
     const uic = (incoming as { uic?: unknown }).uic;
@@ -339,7 +409,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
     const saved = await deps.declarationStore.save(incoming as Declaration);
     return { ok: true, declaration: saved };
-  });
+  };
+
+  app.put("/api/declaration", (req, reply) => saveDeclaration(req.body, reply));
+  // POST alias for the canonical openapi.yaml.
+  app.post("/api/declaration", (req, reply) => saveDeclaration(req.body, reply));
 
   app.get<{ Querystring: { limit?: string } }>("/api/actions", async (req) => {
     const limitRaw = req.query?.limit;
