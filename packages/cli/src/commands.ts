@@ -277,3 +277,65 @@ export async function cmdServe(
     },
   };
 }
+
+export async function cmdSetPref(
+  ctx: CliContext,
+  name: string,
+  rawValue: string,
+): Promise<CmdResult> {
+  if (!name) return fail("error: preference name is required\n");
+  const declaration = await ctx.declaration.load();
+  const pref = declaration.uic.preferences.find((p) => p.name === name);
+  if (!pref) return fail(`error: unknown preference: ${name}\n`, 2);
+  let value: unknown = rawValue;
+  if (rawValue === "true") value = true;
+  else if (rawValue === "false") value = false;
+  else if (rawValue === "null") value = null;
+  else if (rawValue !== "" && Number.isFinite(Number(rawValue))) value = Number(rawValue);
+  const before = pref.value;
+  pref.value = value;
+  await ctx.declaration.save(declaration);
+  await ctx.actions.record({
+    action: "patch_preferences",
+    target: "declaration",
+    outcome: "changed",
+    reason: "cli_set_pref",
+    detail: { applied: { [name]: { before, after: value } } },
+  });
+  return ok(json({ name, before, after: value }) + "\n");
+}
+
+export async function cmdSeedStop(
+  ctx: CliContext,
+  infohash: string,
+): Promise<CmdResult> {
+  if (!infohash) return fail("error: infohash is required\n");
+  const items = await ctx.queue.load();
+  const item = items.find(
+    (i) =>
+      (i as Record<string, unknown>).distribute_infohash === infohash &&
+      (i as Record<string, unknown>).distribute_status === "seeding",
+  );
+  if (!item) return fail(`error: no active seed for ${infohash}\n`, 2);
+  const itemRec = item as Record<string, unknown>;
+  const torrentPath = itemRec.distribute_torrent_path;
+  if (typeof torrentPath === "string" && torrentPath) {
+    try {
+      const { existsSync, unlinkSync } = await import("node:fs");
+      if (existsSync(torrentPath)) unlinkSync(torrentPath);
+    } catch {
+      /* best-effort cleanup */
+    }
+  }
+  itemRec.distribute_status = "stopped";
+  delete itemRec.distribute_seed_gid;
+  await ctx.queue.save(items);
+  await ctx.actions.record({
+    action: "seed_stopped",
+    target: "queue_item",
+    outcome: "changed",
+    reason: "cli_stop_seed",
+    detail: { item_id: item.id, infohash },
+  });
+  return ok(json({ infohash, status: "stopped" }) + "\n");
+}

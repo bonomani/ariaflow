@@ -11,7 +11,9 @@ import {
   cmdPause,
   cmdRemove,
   cmdResume,
+  cmdSeedStop,
   cmdServe,
+  cmdSetPref,
   cmdStatus,
   cmdWatch,
 } from "./commands.js";
@@ -197,5 +199,51 @@ describe("cmdServe", () => {
     } finally {
       await handle.close();
     }
+  });
+});
+
+describe("cmdSetPref", () => {
+  it("coerces numeric/boolean strings and persists the value", async () => {
+    const r = await cmdSetPref(ctx, "max_simultaneous_downloads", "3");
+    expect(r.exitCode).toBe(0);
+    expect(JSON.parse(r.stdout)).toEqual({
+      name: "max_simultaneous_downloads",
+      before: 1,
+      after: 3,
+    });
+    const r2 = await cmdSetPref(ctx, "auto_preflight_on_run", "true");
+    expect(JSON.parse(r2.stdout).after).toBe(true);
+  });
+
+  it("exit 2 on an unknown preference", async () => {
+    const r = await cmdSetPref(ctx, "no_such_pref", "1");
+    expect(r.exitCode).toBe(2);
+  });
+});
+
+describe("cmdSeedStop", () => {
+  it("exit 2 when no active seed matches", async () => {
+    const r = await cmdSeedStop(ctx, "nope");
+    expect(r.exitCode).toBe(2);
+  });
+
+  it("flips distribute_status to stopped", async () => {
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(
+      `${dir}/queue.json`,
+      JSON.stringify({
+        items: [
+          {
+            id: "11111111-1111-1111-1111-111111111111",
+            url: "http://h/x",
+            distribute_status: "seeding",
+            distribute_infohash: "abc",
+          },
+        ],
+      }),
+    );
+    const r = await cmdSeedStop(ctx, "abc");
+    expect(r.exitCode).toBe(0);
+    expect(JSON.parse(r.stdout)).toEqual({ infohash: "abc", status: "stopped" });
   });
 });

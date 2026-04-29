@@ -8,7 +8,9 @@ import {
   cmdPause,
   cmdRemove,
   cmdResume,
+  cmdSeedStop,
   cmdServe,
+  cmdSetPref,
   cmdStatus,
   cmdWatch,
 } from "./commands.js";
@@ -131,6 +133,29 @@ program
       signal: ctrl.signal,
     });
     if (!r.ok) process.stdout.write(r.stdout);
+    process.exit(r.exitCode);
+  });
+
+program
+  .command("set-pref")
+  .description("update a single UCC preference")
+  .argument("<name>", "preference name")
+  .argument("<value>", "value (booleans/numbers auto-coerced)")
+  .action(async (name: string, value: string) => {
+    const ctx = makeContext();
+    const r = await cmdSetPref(ctx, name, value);
+    process.stdout.write(r.stdout);
+    process.exit(r.exitCode);
+  });
+
+program
+  .command("seed-stop")
+  .description("stop a distribute-mode seed by infohash")
+  .argument("<infohash>", "torrent infohash")
+  .action(async (infohash: string) => {
+    const ctx = makeContext();
+    const r = await cmdSeedStop(ctx, infohash);
+    process.stdout.write(r.stdout);
     process.exit(r.exitCode);
   });
 
