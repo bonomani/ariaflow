@@ -1,4 +1,4 @@
-.PHONY: test lint check docs install clean help check-drift verify ci
+.PHONY: test lint check docs install clean help check-drift verify ci ts-build ts-test ts-docker
 
 help: ## Show this help
 	@grep -E '^[a-z_-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  %-15s %s\n", $$1, $$2}'
@@ -47,3 +47,14 @@ clean: ## Remove build artifacts and caches
 	rm -rf build/ dist/ *.egg-info .pytest_cache __pycache__
 	find src tests -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 	rm -rf .claude/worktrees/
+
+# ── TypeScript port (packages/) ───────────────────────────────────
+ts-build: ## Typecheck + build all TS workspaces
+	pnpm install --frozen-lockfile=false
+	pnpm typecheck && pnpm build
+
+ts-test: ## Run the TS test suite (vitest)
+	pnpm test
+
+ts-docker: ## Build the TS Docker image (Dockerfile.ts)
+	docker build -f Dockerfile.ts -t ariaflow-server:ts .
