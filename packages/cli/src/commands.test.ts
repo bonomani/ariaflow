@@ -10,6 +10,7 @@ import {
   cmdDashboard,
   cmdDeclaration,
   cmdList,
+  cmdOpenapi,
   cmdPause,
   cmdProbe,
   cmdRemove,
@@ -202,6 +203,17 @@ describe("cmdServe", () => {
     } finally {
       await handle.close();
     }
+  });
+});
+
+describe("cmdOpenapi", () => {
+  it("emits a 3.0.3 doc with the live routes tagged", async () => {
+    const r = await cmdOpenapi(ctx);
+    expect(r.exitCode).toBe(0);
+    const doc = JSON.parse(r.stdout);
+    expect(doc.openapi).toBe("3.0.3");
+    expect(doc.paths["/api/downloads"]).toBeTruthy();
+    expect(doc.paths["/api/downloads"].post.tags).toEqual(["Queue"]);
   });
 });
 

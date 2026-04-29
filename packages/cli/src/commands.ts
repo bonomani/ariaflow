@@ -8,7 +8,7 @@ import {
   runBandwidthProbe,
   summarizeQueue,
 } from "@ariaflow/core";
-import { buildServer } from "@ariaflow/api";
+import { buildServer, generateOpenApi } from "@ariaflow/api";
 import type { CliContext } from "./context.js";
 
 export interface CmdResult {
@@ -420,6 +420,32 @@ export async function cmdDashboard(
       `${declaration.uic?.preferences?.length ?? 0} prefs)`,
   );
   return ok(lines.join("\n") + "\n");
+}
+
+/**
+ * Emit the OpenAPI doc generated from the live Fastify routes.
+ * Spins up a buildServer() instance in-process, awaits ready, runs
+ * generateOpenApi, then closes the server. No network listener — the
+ * onRoute hook fires during registration so introspection works without
+ * a listen call.
+ */
+export async function cmdOpenapi(ctx: CliContext): Promise<CmdResult> {
+  const app = buildServer({
+    queueOps: ctx.queueOps,
+    queueStore: ctx.queue,
+    archiveStore: ctx.archive,
+    declarationStore: ctx.declaration,
+    stateStore: ctx.state,
+    sessionService: ctx.sessions,
+    actionLog: ctx.actions,
+  });
+  await app.ready();
+  try {
+    const doc = generateOpenApi(app);
+    return ok(json(doc) + "\n");
+  } finally {
+    await app.close();
+  }
 }
 
 export async function cmdProbe(ctx: CliContext): Promise<CmdResult> {

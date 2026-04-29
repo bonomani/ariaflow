@@ -7,6 +7,7 @@ import {
   cmdDashboard,
   cmdDeclaration,
   cmdList,
+  cmdOpenapi,
   cmdPause,
   cmdProbe,
   cmdRemove,
@@ -165,6 +166,16 @@ program
   .action(async (opts: { pretty?: boolean }) => {
     const ctx = makeContext();
     const r = await cmdDashboard(ctx, opts);
+    process.stdout.write(r.stdout);
+    process.exit(r.exitCode);
+  });
+
+program
+  .command("openapi")
+  .description("emit the generated OpenAPI 3.0 doc from the live routes")
+  .action(async () => {
+    const ctx = makeContext();
+    const r = await cmdOpenapi(ctx);
     process.stdout.write(r.stdout);
     process.exit(r.exitCode);
   });
