@@ -1,4 +1,4 @@
-import { allowedActions, summarizeQueue } from "@ariaflow/core";
+import { allowedActions, bandwidthConfigFrom, summarizeQueue } from "@ariaflow/core";
 import type { CliContext } from "./context.js";
 
 export interface CmdResult {
@@ -63,6 +63,24 @@ export async function cmdRemove(ctx: CliContext, itemId: string): Promise<CmdRes
   const removed = await ctx.queueOps.remove(itemId);
   if (!removed) return fail(`error: item ${itemId} not found\n`, 2);
   return ok(json({ removed: removed.id }) + "\n");
+}
+
+export async function cmdBandwidth(ctx: CliContext): Promise<CmdResult> {
+  const declaration = await ctx.declaration.load();
+  const state = await ctx.state.load();
+  const config = bandwidthConfigFrom(declaration);
+  return ok(
+    json({
+      config,
+      last_probe: state.last_bandwidth_probe ?? null,
+      last_probe_at: state.last_bandwidth_probe_at ?? null,
+    }) + "\n",
+  );
+}
+
+export async function cmdDeclaration(ctx: CliContext): Promise<CmdResult> {
+  const declaration = await ctx.declaration.load();
+  return ok(json(declaration) + "\n");
 }
 
 export async function cmdStatus(ctx: CliContext): Promise<CmdResult> {

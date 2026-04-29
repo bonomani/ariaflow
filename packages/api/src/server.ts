@@ -3,6 +3,7 @@ import {
   ActionLog,
   allowedActions,
   Aria2Client,
+  bandwidthConfigFrom,
   buildTransferSummary,
   DeclarationStore,
   errorPayload,
@@ -241,40 +242,4 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   });
 
   return app;
-}
-
-interface BandwidthConfig {
-  down_free_percent: number;
-  down_free_absolute_mbps: number;
-  down_use_percent: number;
-  up_free_percent: number;
-  up_free_absolute_mbps: number;
-  up_use_percent: number;
-  probe_interval_seconds: number;
-}
-
-function bandwidthConfigFrom(declaration: Declaration): BandwidthConfig {
-  const clampPct = (v: unknown): number =>
-    Math.max(0, Math.min(100, Math.trunc(Number(v) || 0)));
-  const clampAbs = (v: unknown): number => Math.max(0, Number(v) || 0);
-  const get = (name: string, fallback: unknown): unknown => {
-    for (const p of declaration.uic?.preferences ?? []) {
-      if (p.name === name) return p.value ?? fallback;
-    }
-    return fallback;
-  };
-  const downFreePct = clampPct(get("bandwidth_down_free_percent", 20));
-  const downFreeAbs = clampAbs(get("bandwidth_down_free_absolute_mbps", 0));
-  const upFreePct = clampPct(get("bandwidth_up_free_percent", 50));
-  const upFreeAbs = clampAbs(get("bandwidth_up_free_absolute_mbps", 0));
-  const interval = Math.max(30, Math.trunc(Number(get("bandwidth_probe_interval_seconds", 180)) || 180));
-  return {
-    down_free_percent: downFreePct,
-    down_free_absolute_mbps: downFreeAbs,
-    down_use_percent: 1 - downFreePct / 100,
-    up_free_percent: upFreePct,
-    up_free_absolute_mbps: upFreeAbs,
-    up_use_percent: 1 - upFreePct / 100,
-    probe_interval_seconds: interval,
-  };
 }

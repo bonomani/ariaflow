@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { cmdAdd, cmdList, cmdRemove, cmdStatus } from "./commands.js";
+import {
+  cmdAdd,
+  cmdBandwidth,
+  cmdDeclaration,
+  cmdList,
+  cmdRemove,
+  cmdStatus,
+} from "./commands.js";
 import { makeContext } from "./context.js";
 
 const program = new Command();
@@ -45,6 +52,20 @@ program
 program.command("status").action(async () => {
   const ctx = makeContext();
   const r = await cmdStatus(ctx);
+  process.stdout.write(r.stdout);
+  process.exit(r.exitCode);
+});
+
+program.command("bandwidth").description("show bandwidth config + last probe").action(async () => {
+  const ctx = makeContext();
+  const r = await cmdBandwidth(ctx);
+  process.stdout.write(r.stdout);
+  process.exit(r.exitCode);
+});
+
+program.command("declaration").description("show the UCC declaration").action(async () => {
+  const ctx = makeContext();
+  const r = await cmdDeclaration(ctx);
   process.stdout.write(r.stdout);
   process.exit(r.exitCode);
 });

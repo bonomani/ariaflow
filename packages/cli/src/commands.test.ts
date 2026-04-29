@@ -3,7 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeContext, type CliContext } from "./context.js";
-import { cmdAdd, cmdList, cmdRemove, cmdStatus } from "./commands.js";
+import {
+  cmdAdd,
+  cmdBandwidth,
+  cmdDeclaration,
+  cmdList,
+  cmdRemove,
+  cmdStatus,
+} from "./commands.js";
 
 let dir: string;
 let ctx: CliContext;
@@ -94,5 +101,24 @@ describe("cmdStatus", () => {
     expect(body.running).toBe(false);
     expect(body.summary.total).toBe(1);
     expect(body.summary.queued).toBe(1);
+  });
+});
+
+describe("cmdBandwidth", () => {
+  it("emits config derived from the declaration plus null probe by default", async () => {
+    const r = await cmdBandwidth(ctx);
+    const body = JSON.parse(r.stdout);
+    expect(body.config.down_use_percent).toBeCloseTo(0.8, 5);
+    expect(body.config.up_use_percent).toBeCloseTo(0.5, 5);
+    expect(body.last_probe).toBeNull();
+  });
+});
+
+describe("cmdDeclaration", () => {
+  it("seeds and prints the default declaration on first call", async () => {
+    const r = await cmdDeclaration(ctx);
+    const body = JSON.parse(r.stdout);
+    expect(body.meta.contract).toBe("UCC");
+    expect(Array.isArray(body.uic.preferences)).toBe(true);
   });
 });
