@@ -36,6 +36,8 @@ export interface SessionStats {
 const ASM_CR4_ACTIVE = new Set(["active", "waiting"]);
 
 export class SessionService {
+  private bus: { publish(event: string, data: unknown): void } | undefined;
+
   constructor(
     private readonly lock: StorageLock,
     private readonly state: StateStore,
@@ -45,10 +47,20 @@ export class SessionService {
     private readonly now: () => string = () => new Date().toISOString(),
   ) {}
 
+  /** Attach an event bus so lifecycle transitions are published. */
+  setBus(bus: { publish(event: string, data: unknown): void }): void {
+    this.bus = bus;
+  }
+
+  clearBus(): void {
+    this.bus = undefined;
+  }
+
   /** Open a session if none is active; idempotent within an open session. */
   ensure(): Promise<ServerState> {
-    return this.lock.with(() =>
-      this.state.update((s) => {
+    return this.lock.with(async () => {
+      let opened = false;
+      const next = await this.state.update((s) => {
         if (!s.session_id || s.session_closed_at) {
           s.session_id = randomUUID();
           const now = this.now();
@@ -56,9 +68,17 @@ export class SessionService {
           s.session_last_seen_at = now;
           s.session_closed_at = null;
           s.session_closed_reason = null;
+          opened = true;
         }
-      }),
-    );
+      });
+      if (opened) {
+        this.bus?.publish("session_started", {
+          session_id: next.session_id,
+          started_at: next.session_started_at,
+        });
+      }
+      return next;
+    });
   }
 
   /** Touch session_last_seen_at if a session is open. */
@@ -83,6 +103,7 @@ export class SessionService {
           `ASM CR-4: cannot close session with ${active.length} active/waiting job(s); pause or cancel them first`,
         );
       }
+      const before = await this.state.load();
       const next = await this.state.update((s) => {
         if (s.session_id && !s.session_closed_at) {
           const now = this.now();
@@ -92,6 +113,13 @@ export class SessionService {
         }
       });
       await this.appendSessionHistory(next, items);
+      if (before.session_id && !before.session_closed_at && next.session_closed_at) {
+        this.bus?.publish("session_closed", {
+          session_id: next.session_id,
+          closed_at: next.session_closed_at,
+          reason: next.session_closed_reason,
+        });
+      }
       return next;
     });
   }

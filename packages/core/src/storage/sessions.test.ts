@@ -117,4 +117,16 @@ describe("SessionService", () => {
     expect(stats.items_queued).toBe(1);
     expect(stats.bytes_completed).toBe(150);
   });
+
+  it("publishes session_started / session_closed when a bus is attached", async () => {
+    const { EventBus } = await import("../events/bus.js");
+    const bus = new EventBus();
+    sessions.setBus(bus);
+    const events: string[] = [];
+    bus.subscribe((event) => events.push(event));
+    await sessions.ensure();
+    await sessions.close("done");
+    expect(events).toContain("session_started");
+    expect(events).toContain("session_closed");
+  });
 });

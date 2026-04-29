@@ -46,6 +46,11 @@ export interface ServerDeps {
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger ?? false });
 
+  if (deps.eventBus) {
+    deps.actionLog.setBus(deps.eventBus);
+    deps.sessionService.setBus(deps.eventBus);
+  }
+
   app.setNotFoundHandler((req, reply) => {
     reply.code(404).send(errorPayload("not_found", "resource not found"));
   });
