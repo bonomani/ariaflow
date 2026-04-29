@@ -427,6 +427,128 @@ describe("GET /api/health and /api/version", () => {
   });
 });
 
+describe("aria2 option routes", () => {
+  it("/api/aria2/option_tiers returns managed/safe sets and unsafe flag", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/aria2/option_tiers" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.managed).toContain("max-overall-download-limit");
+    expect(body.safe).toContain("max-concurrent-downloads");
+    expect(body.unsafe_enabled).toBe(false);
+  });
+
+  it("/api/aria2/global_option 503s when no aria2 client is wired", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/aria2/global_option" });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error).toBe("aria2_unavailable");
+  });
+
+  it("change_global_option rejects managed options before any RPC", async () => {
+    const mock = await mockServerWithAria2(dir, () => ({}));
+    try {
+      const res = await mock.inject({
+        method: "POST",
+        url: "/api/aria2/change_global_option",
+        payload: { "max-overall-download-limit": "1000" },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe("managed_options");
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("change_global_option round-trips safe options + records an action", async () => {
+    const calls: Array<{ method: string; params: unknown[] }> = [];
+    const mock = await mockServerWithAria2(dir, ({ method, params }) => {
+      calls.push({ method, params });
+      return method === "aria2.getGlobalOption" ? { x: "y" } : "OK";
+    });
+    try {
+      const res = await mock.inject({
+        method: "POST",
+        url: "/api/aria2/change_global_option",
+        payload: { "max-concurrent-downloads": 4 },
+      });
+      expect(res.statusCode).toBe(200);
+      const change = calls.find((c) => c.method === "aria2.changeGlobalOption");
+      expect(change!.params).toEqual([{ "max-concurrent-downloads": "4" }]);
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("change_option 400s on missing gid/options", async () => {
+    const mock = await mockServerWithAria2(dir, () => "OK");
+    try {
+      const res = await mock.inject({
+        method: "POST",
+        url: "/api/aria2/change_option",
+        payload: { gid: "", options: {} },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe("invalid_payload");
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("option returns aria2.getOption keyed by gid", async () => {
+    const mock = await mockServerWithAria2(dir, () => ({ split: "5" }));
+    try {
+      const res = await mock.inject({ method: "GET", url: "/api/aria2/option?gid=G1" });
+      expect(res.json()).toMatchObject({ ok: true, gid: "G1", options: { split: "5" } });
+    } finally {
+      await mock.close();
+    }
+  });
+});
+
+async function mockServerWithAria2(
+  baseDir: string,
+  reply: (req: { method: string; params: unknown[] }) => unknown,
+) {
+  const fetchImpl = async (_url: string, init?: RequestInit) => {
+    const body = JSON.parse(init!.body as string) as { method: string; params: unknown[] };
+    return new Response(
+      JSON.stringify({ jsonrpc: "2.0", id: "x", result: reply(body) }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+  const {
+    Aria2Client,
+    StorageLock,
+    storageLockPath,
+    StateStore,
+    QueueStore,
+    ArchiveStore,
+    ActionLog,
+    SessionService,
+    DeclarationStore,
+    QueueOps,
+  } = await import("@ariaflow/core");
+  const env = { ARIAFLOW_DIR: baseDir };
+  const lock = new StorageLock(storageLockPath(env));
+  const state = new StateStore(lock, env);
+  const queue = new QueueStore(lock, env);
+  const archive = new ArchiveStore(lock, env);
+  const actions = new ActionLog(lock, state, env);
+  const sessions = new SessionService(lock, state, queue, archive, env);
+  const declaration = new DeclarationStore(lock, env);
+  const queueOps = new QueueOps(queue, sessions, declaration, actions);
+  const client = new Aria2Client({ fetch: fetchImpl as unknown as typeof fetch });
+  return buildServer({
+    queueOps,
+    queueStore: queue,
+    declarationStore: declaration,
+    stateStore: state,
+    sessionService: sessions,
+    actionLog: actions,
+    aria2: client,
+    cwd: baseDir,
+  });
+}
+
 describe("GET /api/openapi", () => {
   it("returns the generated OpenAPI 3.0.3 doc with our routes tagged", async () => {
     const res = await app.inject({ method: "GET", url: "/api/openapi" });

@@ -51,6 +51,12 @@ export { uccEnvelope, uccRecord, type UccEnvelope, type UccResult } from "./cont
 export { Aria2Client, Aria2RpcError, type Aria2ClientOptions } from "./aria2/client.js";
 export * as aria2 from "./aria2/methods.js";
 export { dispatchDownload, dispatchPrefsFrom, type DispatchPrefs } from "./aria2/dispatch.js";
+export {
+  validateChangeOptions,
+  MANAGED_ARIA2_OPTIONS,
+  SAFE_ARIA2_OPTIONS,
+  type ChangeOptionsValidation,
+} from "./aria2/options.js";
 
 // Routes (validators)
 export {

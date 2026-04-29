@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import {
   ActionLog,
   allowedActions,
+  aria2,
   Aria2Client,
   bandwidthConfigFrom,
   buildTransferSummary,
@@ -10,12 +11,15 @@ import {
   EventBus,
   evaluatePreflight,
   getActiveProgress,
+  MANAGED_ARIA2_OPTIONS,
   parseAddItems,
   QueueStore,
   rankActiveInfos,
+  SAFE_ARIA2_OPTIONS,
   SessionService,
   StateStore,
   summarizeQueue,
+  validateChangeOptions,
   validateItemId,
   type Declaration,
   type ParsedAddItem,
@@ -323,6 +327,107 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       cap_bytes_per_sec: probe?.cap_bytes_per_sec ?? null,
       responsiveness_rpm: probe?.responsiveness_rpm ?? null,
     };
+  });
+
+  const requireAria2 = (reply: import("fastify").FastifyReply) => {
+    if (deps.aria2) return null;
+    reply.code(503).send(errorPayload("aria2_unavailable", "no aria2 client wired"));
+    return reply;
+  };
+
+  app.get("/api/aria2/option_tiers", async () => {
+    const declaration = await deps.declarationStore.load();
+    const unsafe = declaration.uic.preferences.find((p) => p.name === "aria2_unsafe_options");
+    return {
+      ok: true,
+      managed: [...MANAGED_ARIA2_OPTIONS].sort(),
+      safe: [...SAFE_ARIA2_OPTIONS].sort(),
+      unsafe_enabled: Boolean(unsafe?.value),
+    };
+  });
+
+  app.get("/api/aria2/global_option", async (_req, reply) => {
+    if (requireAria2(reply)) return;
+    try {
+      const opts = await aria2.getGlobalOption(deps.aria2!);
+      return { ok: true, options: opts };
+    } catch (err) {
+      return reply
+        .code(502)
+        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+    }
+  });
+
+  app.get<{ Querystring: { gid?: string } }>("/api/aria2/option", async (req, reply) => {
+    if (requireAria2(reply)) return;
+    const gid = (req.query?.gid ?? "").trim();
+    if (!gid) {
+      return reply.code(400).send(errorPayload("missing_gid", "gid query parameter required"));
+    }
+    try {
+      const opts = await aria2.getOption(deps.aria2!, gid);
+      return { ok: true, gid, options: opts };
+    } catch (err) {
+      return reply
+        .code(502)
+        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+    }
+  });
+
+  app.post("/api/aria2/change_global_option", async (req, reply) => {
+    if (requireAria2(reply)) return;
+    const declaration = await deps.declarationStore.load();
+    const validated = validateChangeOptions(req.body, declaration);
+    if (!validated.ok) {
+      return reply.code(400).send(errorPayload(validated.error, validated.message));
+    }
+    try {
+      const before = await aria2.getGlobalOption(deps.aria2!);
+      await aria2.changeGlobalOption(deps.aria2!, validated.options);
+      const after = await aria2.getGlobalOption(deps.aria2!);
+      await deps.actionLog.record({
+        action: "change_options",
+        target: "aria2",
+        outcome: "changed",
+        reason: "user_change_options",
+        before: { options: before },
+        after: { options: after },
+      });
+      return { ok: true, applied: validated.options };
+    } catch (err) {
+      return reply
+        .code(502)
+        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+    }
+  });
+
+  app.post("/api/aria2/change_option", async (req, reply) => {
+    if (requireAria2(reply)) return;
+    const body = req.body;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return reply
+        .code(400)
+        .send(errorPayload("invalid_payload", "expected {gid: string, options: {...}}"));
+    }
+    const gid = String((body as { gid?: unknown }).gid ?? "").trim();
+    const rawOptions = (body as { options?: unknown }).options;
+    if (!gid || !rawOptions || typeof rawOptions !== "object" || Array.isArray(rawOptions)) {
+      return reply
+        .code(400)
+        .send(errorPayload("invalid_payload", "expected {gid: string, options: {...}}"));
+    }
+    const options: Record<string, string> = {};
+    for (const [k, v] of Object.entries(rawOptions as Record<string, unknown>)) {
+      options[k] = String(v);
+    }
+    try {
+      await aria2.changeOption(deps.aria2!, gid, options);
+      return { ok: true, gid, applied: options };
+    } catch (err) {
+      return reply
+        .code(502)
+        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+    }
   });
 
   return app;
