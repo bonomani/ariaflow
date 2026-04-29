@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { parse as parseYaml } from "yaml";
 import type { OpenApiDoc } from "./openapi.js";
 
 export interface DriftReport {
@@ -42,4 +44,40 @@ export function diffOpenApi(live: OpenApiDoc, expected: OpenApiDoc): DriftReport
   }
 
   return { added, removed, changed, ok: added.length + removed.length + changed.length === 0 };
+}
+
+/**
+ * Read an OpenAPI document from a YAML file at `path`. Throws when the
+ * file is missing or doesn't parse to an object with a `paths` key.
+ */
+export async function loadOpenApiYaml(path: string): Promise<OpenApiDoc> {
+  const text = await readFile(path, "utf8");
+  const parsed = parseYaml(text);
+  if (!parsed || typeof parsed !== "object" || !("paths" in parsed)) {
+    throw new Error(`expected an OpenAPI document with a 'paths' key at ${path}`);
+  }
+  return parsed as OpenApiDoc;
+}
+
+/**
+ * Render a DriftReport as a human-readable string. Empty when ok=true.
+ */
+export function formatDriftReport(report: DriftReport): string {
+  if (report.ok) return "";
+  const lines: string[] = [];
+  if (report.added.length) {
+    lines.push("Paths in live but not in spec:");
+    for (const p of report.added) lines.push(`  + ${p}`);
+  }
+  if (report.removed.length) {
+    lines.push("Paths in spec but not in live:");
+    for (const p of report.removed) lines.push(`  - ${p}`);
+  }
+  if (report.changed.length) {
+    lines.push("Method-set drift:");
+    for (const c of report.changed) {
+      lines.push(`  ! ${c.path}  live=${c.live.join(",")}  expected=${c.expected.join(",")}`);
+    }
+  }
+  return lines.join("\n") + "\n";
 }
