@@ -423,6 +423,26 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
   });
 
+  app.get("/api/lifecycle", async () => {
+    const core = await import("@ariaflow/core");
+    const state = await deps.stateStore.load();
+    return {
+      ok: true,
+      // Lightweight status_all() equivalent — the install-side checks
+      // (brew, aria2 service) are deferred to a service-layer port.
+      ariaflow_server: {
+        installed: true,
+        version: deps.version ?? "0.0.0",
+      },
+      networkquality: core.install.networkqualityStatus(),
+      session_id: state.session_id,
+      session_started_at: state.session_started_at,
+      session_last_seen_at: state.session_last_seen_at,
+      session_closed_at: state.session_closed_at,
+      session_closed_reason: state.session_closed_reason,
+    };
+  });
+
   app.post("/api/aria2/set_limits", async (req, reply) => {
     if (requireAria2(reply)) return;
     const body = req.body;

@@ -485,6 +485,26 @@ describe("GET /api/downloads/:id/files", () => {
   });
 });
 
+describe("GET /api/lifecycle", () => {
+  it("returns ariaflow_server + networkquality status and session fields", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/lifecycle" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.ok).toBe(true);
+    expect(body.ariaflow_server).toMatchObject({ installed: true, version: "0.0.0" });
+    expect(body.networkquality).toHaveProperty("installed");
+    expect(body.networkquality).toHaveProperty("reason");
+    expect(body.session_id).toBeNull();
+    expect(body.session_closed_at).toBeNull();
+  });
+
+  it("surfaces the open session_id once one exists", async () => {
+    await app.inject({ method: "POST", url: "/api/sessions/start" });
+    const res = await app.inject({ method: "GET", url: "/api/lifecycle" });
+    expect(res.json().session_id).toMatch(/^[0-9a-f-]{36}$/);
+  });
+});
+
 describe("POST /api/aria2/set_limits", () => {
   it("503 when no aria2 client is wired", async () => {
     const res = await app.inject({
