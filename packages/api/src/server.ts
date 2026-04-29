@@ -29,6 +29,8 @@ export interface ServerDeps {
   stateStore: StateStore;
   sessionService: SessionService;
   actionLog: ActionLog;
+  /** Optional version string surfaced at /api/version (default "0.0.0"). */
+  version?: string;
   /** Optional EventBus; if provided, /api/events streams its publish() calls. */
   eventBus?: EventBus;
   /** aria2 client; if omitted, /api/active and /api/preflight degrade gracefully. */
@@ -243,6 +245,14 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const limit = Math.min(Math.max(Number(limitRaw) || 200, 1), 5000);
     const entries = await deps.actionLog.load(limit);
     return { ok: true, limit, entries };
+  });
+
+  app.get("/api/health", async () => {
+    return { ok: true, status: "healthy", uptime_seconds: Math.round(process.uptime()) };
+  });
+
+  app.get("/api/version", async () => {
+    return { ok: true, version: deps.version ?? "0.0.0" };
   });
 
   app.get("/api/openapi", async () => {

@@ -411,6 +411,22 @@ describe("ActionLog -> EventBus bridge", () => {
   });
 });
 
+describe("GET /api/health and /api/version", () => {
+  it("/api/health is reachable with a numeric uptime", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/health" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.ok).toBe(true);
+    expect(body.status).toBe("healthy");
+    expect(typeof body.uptime_seconds).toBe("number");
+  });
+
+  it("/api/version surfaces the configured version, defaulting to 0.0.0", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/version" });
+    expect(res.json()).toEqual({ ok: true, version: "0.0.0" });
+  });
+});
+
 describe("GET /api/openapi", () => {
   it("returns the generated OpenAPI 3.0.3 doc with our routes tagged", async () => {
     const res = await app.inject({ method: "GET", url: "/api/openapi" });
