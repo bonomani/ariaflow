@@ -1,9 +1,3 @@
-__pycache__/
-*.pyc
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.venv/
 dist/
 build/
 *.log
@@ -11,12 +5,9 @@ build/
 .claude/
 !.claude/settings.json
 docs/ALL_VARIABLES.md
-.codexrules
-src/ariaflow_server.egg-info/
 node_modules/
 packages/*/dist/
 packages/*/src/**/*.js
 packages/*/src/**/*.js.map
 packages/*/src/**/*.d.ts
 *.tsbuildinfo
-

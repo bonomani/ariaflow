@@ -273,25 +273,14 @@ function findOpenApiYaml(start: string = process.cwd()): string | null {
  * Resolve the version string the dashboard reads via /api/status,
  * /api/lifecycle, and /api/version (BG-19/20/23).
  *
- * Lookup order:
- *   1. packages/cli/package.json → "version" — the npm-publish workflow
- *      stamps the real semver here on every release tag.
- *   2. <repo>/pyproject.toml → version = "..." — the Python release
- *      workflow keeps this in sync with the project's source-of-truth
- *      version, so during the migration window when both stacks
- *      coexist this is the most reliable signal.
- *   3. <repo>/src/ariaflow_server/__init__.py → __version__ — same
- *      Python release workflow stamps this. Last-resort fallback.
- *   4. undefined → caller's existing default ("0.0.0") still applies.
- *
- * Skips any candidate whose value is "0.0.0" (the placeholder) so
- * a fresh checkout with no stamped version doesn't lock the chip to
- * the placeholder when a real one is available elsewhere.
+ * Source: `packages/cli/package.json` → "version". The release-npm
+ * workflow stamps the real semver here on every `v*` tag push;
+ * `0.0.0` is the placeholder for fresh checkouts and is skipped so
+ * the caller's default applies instead.
  */
 function readPackageVersion(): string | undefined {
   const here = dirname(import.meta.url.replace(/^file:\/\//, ""));
   const repoRoot = (() => {
-    // dist/commands.js -> dist -> cli -> packages -> root
     let dir = here;
     for (let i = 0; i < 5; i++) {
       if (existsSync(join(dir, "pnpm-workspace.yaml"))) return dir;
@@ -304,7 +293,6 @@ function readPackageVersion(): string | undefined {
 
   const isPlaceholder = (v: string): boolean => !v || v === "0.0.0";
 
-  // 1. cli package.json (release-npm.yml stamps this on tag push)
   for (const p of [
     join(here, "..", "package.json"),
     join(repoRoot, "packages/cli/package.json"),
@@ -315,31 +303,6 @@ function readPackageVersion(): string | undefined {
       if (typeof raw.version === "string" && !isPlaceholder(raw.version)) return raw.version;
     } catch {
       /* try next */
-    }
-  }
-
-  // 2. pyproject.toml (Python release workflow stamps this; reliable
-  // during the dual-stack migration window).
-  const pyproject = join(repoRoot, "pyproject.toml");
-  if (existsSync(pyproject)) {
-    try {
-      const text = readFileSync(pyproject, "utf8");
-      const m = /^\s*version\s*=\s*["']([^"']+)["']/m.exec(text);
-      if (m && m[1] && !isPlaceholder(m[1])) return m[1];
-    } catch {
-      /* try next */
-    }
-  }
-
-  // 3. src/ariaflow_server/__init__.py
-  const initPy = join(repoRoot, "src/ariaflow_server/__init__.py");
-  if (existsSync(initPy)) {
-    try {
-      const text = readFileSync(initPy, "utf8");
-      const m = /__version__\s*=\s*["']([^"']+)["']/m.exec(text);
-      if (m && m[1] && !isPlaceholder(m[1])) return m[1];
-    } catch {
-      /* fall through */
     }
   }
 

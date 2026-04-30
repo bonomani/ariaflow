@@ -3,56 +3,49 @@
 ## Quick Release
 
 ```bash
-python3 scripts/publish.py plan    # preview — no side effects
-python3 scripts/publish.py push    # push main + auto-release
+git tag v0.1.X && git push origin v0.1.X
 ```
 
-The helper validates version consistency (`pyproject.toml` vs `__init__.py`), runs tests, pushes `main` with rebase retry, and lets GitHub Actions handle the rest.
+That's it — the rest is GitHub Actions. Pushing to `main` also tags
+automatically via the existing release pipeline (next-patch).
 
 ## What GitHub Actions Does
 
-On push to `main` (or `workflow_dispatch`), `.github/workflows/release.yml`:
+On every `v*` tag push:
 
-1. Runs test suite
-2. Builds source distribution
-3. Creates GitHub release (stable, not draft/prerelease)
-4. Updates `bonomani/homebrew-ariaflow-server/Formula/ariaflow-server.rb`
+| Workflow | Effect |
+|---|---|
+| `release-npm.yml` | Publishes `@ariaflow/{core,api,cli}` to npm |
+| `release-ts-formula.yml` | Renders the Homebrew formula and attaches `ariaflow-server-ts.rb` to the GitHub release |
+| `release-ts-tap.yml` | Mirrors the formula into `bonomani/homebrew-ariaflow-server-ts` |
+| `node.yml` | Typecheck / lint / test / build (CI on every push) |
 
 ## Explicit Version Release
 
 ```bash
-python3 scripts/publish.py release --version X.Y.Z
+gh workflow run release-npm.yml -f tag=v0.1.X
+gh workflow run release-ts-formula.yml -f tag=v0.1.X
+gh workflow run release-ts-tap.yml -f tag=v0.1.X
 ```
 
-Triggers `workflow_dispatch` for a specific stable version.
-
-## Helper Flags
-
-| Flag | Effect |
-|---|---|
-| `plan` | Print release plan without changes |
-| `push` | Push main + auto-release |
-| `release --version X.Y.Z` | Dispatch explicit stable release |
-| `--no-tests` | Skip local test suite |
-| `plan --allow-dirty` | Preview even with uncommitted changes |
+Useful for backfilling missing assets without re-tagging.
 
 ## Verification
 
-After release:
-
 ```bash
-# Check GitHub release is published (not draft)
-# Check PyPI version matches
-pip install ariaflow-server --upgrade
-ariaflow --version
-# Check Homebrew formula version matches
-brew tap bonomani/ariaflow-server
-brew upgrade ariaflow-server
+# npm
+npm view @ariaflow/cli version
+
+# Homebrew
+brew tap bonomani/ariaflow-server-ts
+brew install ariaflow-server
 ariaflow --version
 ```
 
-## Prerequisites
+## Prerequisites (repo secrets)
 
-- `ARIAFLOW_TAP_TOKEN` repo secret with write access to `bonomani/homebrew-ariaflow-server`
-- `PYPI_TOKEN` repo secret — PyPI API token for the `ariaflow-server` package
-- Tools: `git`, Python 3.10+, `gh`
+- `NPM_TOKEN` — automation token with publish access to the `@ariaflow` scope
+- `TAP_PUSH_TOKEN` — fine-scoped PAT or GitHub App token with `contents: write` on `bonomani/homebrew-ariaflow-server-ts`
+
+Missing secrets cause the affected workflow to skip cleanly (logged,
+not errored) so the rest of the pipeline still succeeds.

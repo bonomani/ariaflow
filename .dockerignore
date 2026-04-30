@@ -5,13 +5,5 @@
 .github
 .vscode
 .claude
-.codexrules
-src/ariaflow_server/__pycache__
-src/ariaflow_server.egg-info
-.venv
-.pytest_cache
-.mypy_cache
-.ruff_cache
 docs
-tests
 *.log

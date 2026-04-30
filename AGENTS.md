@@ -2,7 +2,7 @@
 
 ## General rule — external repos and directories
 - On ANY repo or directory other than this one (ariaflow-server), you MAY ONLY run read-only commands: `cat`, `head`, `grep`, `find`, `ls`, `git log`, `git show`, `git diff` (without write flags).
-- NEVER run mutating commands outside this repo: `git add`, `git commit`, `git push`, `git pull`, `git checkout`, `git reset`, `rm`, `mv`, `cp`, `sed`, `pip install`, or any command that modifies files, state, or history.
+- NEVER run mutating commands outside this repo: `git add`, `git commit`, `git push`, `git pull`, `git checkout`, `git reset`, `rm`, `mv`, `cp`, `sed`, `pnpm install`, or any command that modifies files, state, or history.
 
 ## Testing policy
 - Every new feature, bug fix, or behavior change MUST include tests in the same commit.
@@ -15,7 +15,7 @@ When your change affects governed artifacts, update them in the same commit:
 - **New tests** → register in `docs/governance/tic-oracle.md`, update test count in BGS.md + bgs-decision.yaml
 - **New boundary/interaction** → add to `docs/governance/biss-classification.md`, update boundary count in BGS.md + bgs-decision.yaml
 - **State model change** → update `docs/governance/asm-state-model.md`
-- **New preference/gate** → update `src/ariaflow_server/contracts.py` (source of truth for UIC)
+- **New preference/gate** → update `packages/core/src/contracts/` (source of truth for UIC)
 
 ## Cross-repo boundary — ariaflow-dashboard (frontend)
 - The frontend repo is at /home/bc/repos/github/bonomani/ariaflow-dashboard

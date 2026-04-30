@@ -2,17 +2,17 @@
 
 Headless queue driver for `aria2c`.
 
-**Targets:** Linux, WSL, macOS  
-**Python:** >= 3.10, zero dependencies  
-**Version:** 0.1.148
+**Targets:** Linux, WSL, macOS
+**Runtime:** Node.js >= 20
+**Distribution:** Homebrew tap + npm (`@ariaflow/cli`)
 
 **Features:**
 
 - URL enqueueing (HTTP, magnet, torrent, metalink, mirrors)
 - Sequential execution by default, configurable concurrency
 - Adaptive bandwidth control via networkQuality probing (macOS)
-- Full aria2 1.37.0 RPC coverage (36 `aria2_*` wrapper functions)
-- REST API (16 GET + 17 POST endpoints) with SSE real-time events
+- Full aria2 1.37.0 RPC coverage
+- REST API with SSE real-time events; per-endpoint freshness contract (`/api/_meta`)
 - Torrent/metalink file selection via pause-metadata flow
 - UIC pre-flight gates, UCC structured execution output
 - macOS integration (Homebrew, launchd, Bonjour/mDNS)
@@ -20,38 +20,47 @@ Headless queue driver for `aria2c`.
 ## Quick Start
 
 ```bash
-pip install -e .
-ariaflow-server serve              # start HTTP API on 127.0.0.1:8000
-ariaflow-server add <url>          # enqueue a download
-ariaflow-server run                # start the scheduler
-ariaflow-server status             # show queue state
+# Homebrew (recommended on macOS)
+brew tap bonomani/ariaflow-server-ts
+brew install ariaflow-server
+
+# or npm
+npm install -g @ariaflow/cli
+
+ariaflow serve              # start HTTP API on 127.0.0.1:8000
+ariaflow add <url>          # enqueue a download
+ariaflow run                # start the scheduler
+ariaflow status             # show queue state
 ```
 
 ## CLI Commands
 
 | Command | Description | Key flags |
 |---|---|---|
-| `ariaflow-server add <url>` | Enqueue a download | `--output`, `--priority`, `--mirror`, `--torrent-data`, `--metalink-data` |
-| `ariaflow-server run` | Start the scheduler | `--port` (aria2 RPC port, default 6800) |
-| `ariaflow-server serve` | Start HTTP API server | `--host` (default 127.0.0.1), `--port` (default 8000) |
-| `ariaflow-server status` | Show queue and scheduler state | `--json` |
-| `ariaflow-server preflight` | Run UIC pre-flight checks | `--json` |
-| `ariaflow-server ucc` | Run structured UCC execution cycle | `--port`, `--json` |
-| `ariaflow-server install` | Install on macOS | `--dry-run`, `--with-aria2` |
-| `ariaflow-server uninstall` | Remove macOS components | `--dry-run`, `--with-aria2` |
-| `ariaflow-server lifecycle` | Show install and service status | |
-
-Also: `python -m ariaflow_server <command>`
+| `ariaflow add <url>` | Enqueue a download | `--output`, `--priority`, `--mirror`, `--torrent-data`, `--metalink-data` |
+| `ariaflow run` | Start the scheduler | `--port` (aria2 RPC port, default 6800) |
+| `ariaflow serve` | Start HTTP API server | `--host` (default 127.0.0.1), `--port` (default 8000) |
+| `ariaflow status` | Show queue and scheduler state | `--json` |
+| `ariaflow preflight` | Run UIC pre-flight checks | `--json` |
+| `ariaflow ucc` | Run structured UCC execution cycle | `--port`, `--json` |
+| `ariaflow install` | Install on macOS | `--dry-run`, `--with-aria2` |
+| `ariaflow uninstall` | Remove macOS components | `--dry-run`, `--with-aria2` |
+| `ariaflow lifecycle` | Show install and service status | |
 
 ## REST API
 
 Base URL: `http://127.0.0.1:8000`
 
+Each JSON response carries a `meta` block declaring its freshness
+class (`live`, `warm`, `cold`, `bootstrap`, `on-action`, `swr`,
+`derived`). The full registry is at `GET /api/_meta`. See
+[`docs/FRESHNESS.md`](./docs/FRESHNESS.md).
+
 ### GET endpoints
 
 | Endpoint | Description |
 |---|---|
-| `/api/status` | Queue items, scheduler state, summary (2s cache) |
+| `/api/status` | Queue items, scheduler state, summary (live/SSE) |
 | `/api/scheduler` | Scheduler status |
 | `/api/bandwidth` | Current bandwidth status and probe data |
 | `/api/log?limit=120` | Action log |
@@ -63,23 +72,19 @@ Base URL: `http://127.0.0.1:8000`
 | `/api/aria2/get_option?gid=X` | Per-GID aria2 options |
 | `/api/lifecycle` | Install and service status |
 | `/api/downloads/{id}/files` | File list for torrent/metalink item |
-| `/api/events` | SSE event stream (real-time state changes) |
+| `/api/events?topics=...` | SSE event stream (per-topic filtering) |
+| `/api/_meta` | Per-endpoint freshness contract |
 | `/api/openapi.yaml` | OpenAPI specification |
 | `/api/docs` | Swagger UI |
-| `/api/tests` | Run test suite |
 
 ### POST endpoints
 
 | Endpoint | Body | Description |
 |---|---|---|
 | `/api/downloads/add` | `{items: [{url, output?, priority?, mirrors?, torrent_data?, metalink_data?}]}` | Enqueue downloads |
-| `/api/scheduler/start` + `/api/scheduler/stop` | `{action: "start"\|"stop"}` | Start/stop scheduler |
-| `/api/scheduler/pause` | — | Pause all active transfers |
-| `/api/scheduler/resume` | — | Resume all paused transfers |
-| `/api/downloads/{id}/pause` | — | Pause single item |
-| `/api/downloads/{id}/resume` | — | Resume single item |
-| `/api/downloads/{id}/remove` | — | Remove item (archive) |
-| `/api/downloads/{id}/retry` | — | Retry failed item |
+| `/api/scheduler/{start,stop}` | — | Start/stop scheduler loop |
+| `/api/scheduler/{pause,resume}` | — | Pause/resume dispatch |
+| `/api/downloads/{id}/{pause,resume,remove,retry}` | — | Per-item actions |
 | `/api/downloads/{id}/files` | `{select: [1,3,5]}` | Select torrent/metalink files |
 | `/api/scheduler/preflight` | — | Run pre-flight checks |
 | `/api/scheduler/ucc` | — | Execute UCC cycle |
@@ -87,8 +92,7 @@ Base URL: `http://127.0.0.1:8000`
 | `/api/downloads/cleanup` | `{max_done_age_days?, max_done_count?}` | Clean up terminal items |
 | `/api/declaration` | `{...declaration}` | Save UIC declaration |
 | `/api/aria2/change_global_option` | `{options: {...}}` | Change aria2 global options (3-tier safety) |
-| `/api/sessions/new` | `{close_reason?}` | Create new session |
-| `/api/lifecycle/{target}/{action}` | `{action: ...}` | Install/service action |
+| `/api/lifecycle/{target}/{action}` | — | Install/service action |
 
 ## Design Goals
 
@@ -111,78 +115,77 @@ Default state files under `~/.config/ariaflow-server/` (override: `ARIAFLOW_DIR`
 | `declaration.json` | UIC gates, preferences, policies |
 | `actions.jsonl` | Audit log (auto-rotated at 512 KB) |
 | `sessions.jsonl` | Session history |
-| `aria2.log` | aria2 daemon log |
 | `.storage.lock` | File lock for mutual exclusion |
+
+## Workspace layout
+
+| Package | Description |
+|---|---|
+| `packages/core` | Pure logic: storage, scheduler, aria2 client, contracts |
+| `packages/api` | Fastify HTTP/SSE server (`@ariaflow/api`) |
+| `packages/cli` | `ariaflow` CLI binary (`@ariaflow/cli`) |
+
+```bash
+corepack enable
+pnpm install
+pnpm build
+pnpm test
+```
 
 ## Documentation
 
-All documentation lives in [`docs/`](./docs/):
-
 | Document | Description |
 |---|---|
-| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Engine architecture, design principles, source structure |
-| [STATES_AND_INTERACTIONS.md](./docs/STATES_AND_INTERACTIONS.md) | All states, transitions, and aria2 interaction model |
-| [ARIA2_RPC_WRAPPERS.md](./docs/ARIA2_RPC_WRAPPERS.md) | Auto-generated reference of 36 `aria2_*` wrappers |
-| [FRONTEND-GUIDE.md](./docs/FRONTEND-GUIDE.md) | Frontend integration: item fields, states, modes, API usage |
-| [RELEASE.md](./docs/RELEASE.md) | Release process and tooling |
-| [GAPS.md](./docs/GAPS.md) | Feature gap analysis |
-| [governance/](./docs/governance/) | BGS, ASM, BISS, TIC governance framework |
+| [docs/STATE_MACHINE.md](./docs/STATE_MACHINE.md) | Item states + transitions |
+| [docs/FRESHNESS.md](./docs/FRESHNESS.md) | Per-endpoint freshness contract (`/api/_meta`) |
+| [docs/ARIA2_RPC_WRAPPERS.md](./docs/ARIA2_RPC_WRAPPERS.md) | aria2 RPC wrapper reference |
+| [docs/RELEASE.md](./docs/RELEASE.md) | Release process |
+| [docs/GAPS.md](./docs/GAPS.md) | Feature gap analysis |
+| [docs/governance/](./docs/governance/) | BGS, ASM, BISS, TIC governance framework |
+| [packages/api/src/sse.md](./packages/api/src/sse.md) | SSE topic vocabulary |
 
 ## Homebrew (macOS)
 
 ```bash
-brew tap bonomani/ariaflow-server
-brew install ariaflow-dashboard    # installs ariaflow-server + web frontend
+brew tap bonomani/ariaflow-server-ts
+brew install ariaflow-server
 brew services start ariaflow-server
-brew services start ariaflow-dashboard
 ```
 
-- `ariaflow-server` — headless scheduler + REST API
-- `ariaflow-dashboard` — web frontend (separate repo, connects via `ARIAFLOW_API_URL`)
+The tap is at `bonomani/homebrew-ariaflow-server-ts`; the formula is
+re-rendered and pushed automatically on each release tag (see
+`.github/workflows/release-ts-{formula,tap}.yml`).
 
-Tap formulas in `bonomani/homebrew-ariaflow-server` update automatically on each release.
+The web dashboard is a separate repo: `ariaflow-dashboard`.
 
 ## Platform dependencies
 
 | Dependency | macOS | Windows | Linux | WSL2 |
 |---|---|---|---|---|
-| Python ≥3.10 | required | required | required | required |
+| Node.js ≥20 | `brew install node` | [nodejs.org](https://nodejs.org) or `winget install OpenJS.NodeJS` | distro pkg / nvm | distro pkg / nvm |
 | aria2 | `brew install aria2` | [manual](https://aria2.github.io) | `apt install aria2` | `apt install aria2` |
-| portalocker | auto (pip) | auto (pip) | auto (pip) | auto (pip) |
-| Bonjour/mDNS | built-in | [iTunes](https://support.apple.com/kb/DL999) or Bonjour SDK | `apt install avahi-daemon avahi-utils` | `dns-sd.exe` via interop (needs Bonjour on Windows) |
+| Bonjour/mDNS | built-in | [iTunes](https://support.apple.com/kb/DL999) or Bonjour SDK | `apt install avahi-daemon avahi-utils` | `dns-sd.exe` via interop |
 | networkquality | built-in (macOS 12+) | n/a | n/a | n/a |
 
-Bonjour is **optional** — peer discovery is disabled without it. Everything else works.
+Bonjour is **optional** — peer discovery is disabled without it.
 
 ### WSL2 notes
 
 - WSL2 is NATed by default — mDNS advertisements won't reach the host LAN
-- Enable mirrored networking in `%USERPROFILE%\.wslconfig` for LAN visibility:
+- Enable mirrored networking in `%USERPROFILE%\.wslconfig`:
   ```ini
   [wsl2]
   networkingMode=mirrored
   ```
-- Without mirrored networking, ariaflow-server uses `dns-sd.exe` via Windows interop (if Bonjour is installed on Windows)
-- Config dir defaults to `~/.config/ariaflow-server/` (override: `ARIAFLOW_DIR` env var)
-
-## Upgrading from pre-0.1.163
-
-Breaking changes in v0.1.163:
-
-- **Config dir**: auto-migrated from `~/.config/aria-queue/` → `~/.config/ariaflow-server/`
-- **Env var**: `ARIAFLOW_DIR` replaces `ARIA_QUEUE_DIR` (both accepted)
-- **API keys**: `"ariaflow"` → `"ariaflow-server"` in JSON responses (`/api/status`, `/api/lifecycle`, `/api/meta`)
-- **Bonjour**: service type changed to `_ariaflow-server._tcp`
-- **Python module**: `aria_queue` → `ariaflow_server`
+- Config dir defaults to `~/.config/ariaflow-server/` (override `ARIAFLOW_DIR`)
 
 ## Release
 
-See [`docs/RELEASE.md`](./docs/RELEASE.md).
+See [`docs/RELEASE.md`](./docs/RELEASE.md). On every `v*` tag push:
 
-```bash
-python3 scripts/publish.py plan   # preview
-python3 scripts/publish.py push   # push + auto-release
-```
+1. `release-npm.yml` publishes `@ariaflow/{core,api,cli}` to npm.
+2. `release-ts-formula.yml` renders the Homebrew formula and attaches it to the GitHub release.
+3. `release-ts-tap.yml` mirrors the formula into the tap repo.
 
 ## License
 
