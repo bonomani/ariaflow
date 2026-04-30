@@ -269,6 +269,36 @@ function findOpenApiYaml(start: string = process.cwd()): string | null {
   return null;
 }
 
+/**
+ * Read the @ariaflow/cli package version off disk so the dashboard's
+ * "Ariaflow vX.Y.Z" pill (BG-19) reflects the running binary, not a
+ * hard-coded "0.0.0". Falls back to undefined on any read error so
+ * the caller's existing default ("0.0.0") still applies.
+ */
+function readCliPackageVersion(): string | undefined {
+  // Walk up from this file's location: dist/commands.js -> dist -> cli
+  // -> packages -> repo root. Source-mode runs land at packages/cli/src.
+  // Either layout is two levels above the running file.
+  try {
+    // Use require to dodge ESM URL plumbing — package.json reads cleanly.
+    const candidates = [
+      join(dirname(import.meta.url.replace(/^file:\/\//, "")), "..", "package.json"),
+      join(process.cwd(), "packages/cli/package.json"),
+    ];
+    for (const path of candidates) {
+      if (!existsSync(path)) continue;
+      const raw = JSON.parse(
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        (require("node:fs") as typeof import("node:fs")).readFileSync(path, "utf8"),
+      ) as { version?: unknown };
+      if (typeof raw.version === "string" && raw.version) return raw.version;
+    }
+  } catch {
+    /* fall through to undefined */
+  }
+  return undefined;
+}
+
 export interface ServeHandle {
   url: string;
   port: number;
@@ -302,6 +332,13 @@ export async function cmdServe(
           ...(opts.aria2Secret !== undefined ? { secret: opts.aria2Secret } : {}),
         });
 
+  // Resolve the version string the dashboard reads via /api/status
+  // (BG-19). Prefer an explicit override, otherwise pull the cli
+  // package.json sitting next to the running bin so the pill always
+  // matches the actual binary, even on a `node packages/cli/dist/...`
+  // run without npm install.
+  const resolvedVersion = opts.version ?? readCliPackageVersion();
+
   const app = buildServer({
     queueOps: ctx.queueOps,
     queueStore: ctx.queue,
@@ -312,7 +349,7 @@ export async function cmdServe(
     actionLog: ctx.actions,
     eventBus,
     ...(aria2 ? { aria2 } : {}),
-    ...(opts.version !== undefined ? { version: opts.version } : {}),
+    ...(resolvedVersion !== undefined ? { version: resolvedVersion } : {}),
     ...(yamlPath ? { openapiYamlPath: yamlPath } : {}),
   });
   const requestedPort = opts.port ?? 8000;
