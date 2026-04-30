@@ -151,6 +151,104 @@ describe("runSchedulerLoop", () => {
     expect((await state.load()).running).toBe(false);
   });
 
+  it("runs preLoop once before the first iteration and uses its returned cap", async () => {
+    await queueOps.add({ url: "http://h/p" });
+    let preLoopCalls = 0;
+    let observedCap: number | undefined;
+    const aria2 = stagedClient([
+      ({ method, params }) => {
+        if (method === "aria2.addUri") {
+          const optsArg = (params[1] ?? {}) as Record<string, string>;
+          observedCap = Number(optsArg["max-download-limit"]);
+          return "GID-P";
+        }
+        if (method === "aria2.tellActive") return [];
+        if (method === "aria2.tellStatus")
+          return { gid: "GID-P", status: "complete", totalLength: "1", completedLength: "1" };
+        return "OK";
+      },
+    ]);
+    await runSchedulerLoop(
+      {
+        queueStore: queue,
+        stateStore: state,
+        declarationStore: declaration,
+        actionLog: actions,
+        aria2,
+      },
+      {
+        intervalMs: 1,
+        maxIterations: 5,
+        preLoop: async () => {
+          preLoopCalls += 1;
+          return { capBytesPerSec: 250_000 };
+        },
+      },
+    );
+    expect(preLoopCalls).toBe(1);
+    expect(observedCap).toBe(250_000);
+  });
+
+  it("logs scheduler_pre on preLoop error and falls back to opts.capBytesPerSec", async () => {
+    await queueOps.add({ url: "http://h/q2" });
+    const aria2 = stagedClient([
+      ({ method }) => {
+        if (method === "aria2.addUri") return "GID-Q2";
+        if (method === "aria2.tellActive") return [];
+        if (method === "aria2.tellStatus")
+          return { gid: "GID-Q2", status: "complete", totalLength: "1", completedLength: "1" };
+        return "OK";
+      },
+    ]);
+    await runSchedulerLoop(
+      {
+        queueStore: queue,
+        stateStore: state,
+        declarationStore: declaration,
+        actionLog: actions,
+        aria2,
+      },
+      {
+        intervalMs: 1,
+        maxIterations: 3,
+        capBytesPerSec: 100_000,
+        preLoop: async () => {
+          throw new Error("boom");
+        },
+      },
+    );
+    const log = await actions.load();
+    const pre = log.find((e) => e.action === "scheduler_pre");
+    expect(pre).toBeDefined();
+    expect(pre!.outcome).toBe("failed");
+  });
+
+  it("calls aria2.pauseAll on shutdown to honor ASM CR-3", async () => {
+    await queueOps.add({ url: "http://h/cr3" });
+    const seen: string[] = [];
+    const aria2 = stagedClient([
+      ({ method }) => {
+        seen.push(method);
+        if (method === "aria2.addUri") return "GID-CR3";
+        if (method === "aria2.tellActive") return [];
+        if (method === "aria2.tellStatus")
+          return { gid: "GID-CR3", status: "complete", totalLength: "1", completedLength: "1" };
+        return "OK";
+      },
+    ]);
+    await runSchedulerLoop(
+      {
+        queueStore: queue,
+        stateStore: state,
+        declarationStore: declaration,
+        actionLog: actions,
+        aria2,
+      },
+      { intervalMs: 1, maxIterations: 5 },
+    );
+    expect(seen).toContain("aria2.pauseAll");
+  });
+
   it("aborts cleanly via AbortController and records 'scheduler_stopped'", async () => {
     await queueOps.add({ url: "http://h/q" });
     const aria2 = stagedClient([

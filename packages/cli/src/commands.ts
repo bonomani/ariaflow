@@ -308,14 +308,12 @@ export async function cmdServe(
   let schedulerDone: Promise<unknown> = Promise.resolve();
   if (opts.startScheduler && aria2) {
     schedulerCtrl = new AbortController();
-    // Resolve the bandwidth cap from saved state if available, else 0
-    // (no cap). The full pre-loop probe lands in a follow-up.
     const state = await ctx.state.load();
     const probe = state.last_bandwidth_probe as
       | { cap_bytes_per_sec?: number }
       | null
       | undefined;
-    const capBytesPerSec = Number(probe?.cap_bytes_per_sec ?? 0) || 0;
+    const initialCap = Number(probe?.cap_bytes_per_sec ?? 0) || 0;
     schedulerDone = runSchedulerLoop(
       {
         queueStore: ctx.queue,
@@ -325,9 +323,29 @@ export async function cmdServe(
         aria2,
       },
       {
-        capBytesPerSec,
+        capBytesPerSec: initialCap,
         intervalMs: opts.schedulerIntervalMs ?? 2000,
         signal: schedulerCtrl.signal,
+        preLoop: async () => {
+          // Refresh the bandwidth cap before entering the loop so the
+          // first batch of dispatches respects the live network rate.
+          const declaration = await ctx.declaration.load();
+          const config = bandwidthConfigFrom(declaration);
+          const fresh = await runBandwidthProbe({ config });
+          await ctx.state.update((s) => {
+            (s as Record<string, unknown>).last_bandwidth_probe =
+              fresh as unknown as Record<string, unknown>;
+            s.last_bandwidth_probe_at = Date.now() / 1000;
+          });
+          await ctx.actions.record({
+            action: "probe",
+            target: "bandwidth",
+            outcome: fresh.source === "networkquality" ? "changed" : "unchanged",
+            reason: "scheduler_preloop",
+            detail: fresh as unknown as Record<string, unknown>,
+          });
+          return { capBytesPerSec: fresh.cap_bytes_per_sec ?? 0 };
+        },
       },
     ).catch((err) => {
       // Surface scheduler crashes to stderr but don't kill the HTTP

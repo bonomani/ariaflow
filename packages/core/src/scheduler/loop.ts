@@ -1,4 +1,5 @@
 import type { Aria2Client } from "../aria2/client.js";
+import { pauseAll } from "../aria2/methods.js";
 import type { ActionLog } from "../storage/action-log.js";
 import type { DeclarationStore } from "../storage/declaration.js";
 import type { QueueStore } from "../storage/queue.js";
@@ -26,6 +27,13 @@ export interface SchedulerLoopOptions {
   signal?: AbortSignal;
   /** Optional per-iteration callback (testing / live progress). */
   onIteration?: (iteration: number, result: SchedulerLoopIteration) => void | Promise<void>;
+  /**
+   * One-shot work to run before the polling loop starts. Receives the
+   * deps and returns an updated capBytesPerSec (e.g. derived from a
+   * fresh bandwidth probe). Errors are swallowed and a "scheduler_pre"
+   * action is recorded with outcome="failed".
+   */
+  preLoop?: (deps: SchedulerLoopDeps) => Promise<{ capBytesPerSec?: number } | void>;
 }
 
 export interface SchedulerLoopIteration {
@@ -80,11 +88,26 @@ export async function runSchedulerLoop(
   opts: SchedulerLoopOptions = {},
 ): Promise<{ iterations: number; reason: "drained" | "max_iterations" | "aborted" }> {
   const intervalMs = opts.intervalMs ?? 2000;
-  const cap = opts.capBytesPerSec ?? 0;
+  let cap = opts.capBytesPerSec ?? 0;
 
   await deps.stateStore.update((s) => {
     s.running = true;
   });
+
+  if (opts.preLoop) {
+    try {
+      const out = await opts.preLoop(deps);
+      if (out && typeof out.capBytesPerSec === "number") cap = out.capBytesPerSec;
+    } catch (err) {
+      await deps.actionLog.record({
+        action: "scheduler_pre",
+        target: "scheduler",
+        outcome: "failed",
+        reason: "preloop_error",
+        detail: { error: err instanceof Error ? err.message : String(err) },
+      });
+    }
+  }
 
   let iterations = 0;
   let reason: "drained" | "max_iterations" | "aborted" = "drained";
@@ -137,8 +160,19 @@ export async function runSchedulerLoop(
     }
     if (opts.signal?.aborted) reason = "aborted";
   } finally {
+    // ASM CR-3: leaving the run-state means no jobs may stay in the
+    // active tier on aria2's side. Best-effort pauseAll before flipping
+    // running=false; aria2 may already be unreachable on a crash, so
+    // swallow the error and write the state regardless.
+    try {
+      await pauseAll(deps.aria2);
+    } catch {
+      /* daemon unreachable — proceed with state update anyway */
+    }
     await deps.stateStore.update((s) => {
       s.running = false;
+      s.active_gid = null;
+      s.active_url = null;
     });
     if (reason === "aborted") {
       await deps.actionLog.record({
