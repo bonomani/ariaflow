@@ -1562,6 +1562,15 @@ async function mockServerWithAria2(
   });
 }
 
+describe("OpenAPI path-template override", () => {
+  it("emits /api/torrents/{infohash}.torrent (not /{file}) for the .torrent serve route", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/openapi" });
+    const doc = res.json();
+    expect(doc.paths["/api/torrents/{infohash}.torrent"]).toBeDefined();
+    expect(doc.paths["/api/torrents/{file}"]).toBeUndefined();
+  });
+});
+
 describe("GET /api/openapi", () => {
   it("returns the generated OpenAPI 3.0.3 doc with our routes tagged", async () => {
     const res = await app.inject({ method: "GET", url: "/api/openapi" });

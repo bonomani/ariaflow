@@ -69,8 +69,14 @@ export function generateOpenApi(
   type Route = { method: string | string[]; url: string };
   const routes =
     (app as unknown as { _ariaflowRoutes?: Route[] })._ariaflowRoutes ?? collectRoutes(app);
+  // Optional override map for routes whose Fastify path template doesn't
+  // match the canonical OpenAPI shape (e.g. /api/torrents/:file should
+  // emit /api/torrents/{infohash}.torrent).
+  const overrides =
+    (app as unknown as { _ariaflowOpenApiPathOverrides?: Map<string, string> })
+      ._ariaflowOpenApiPathOverrides ?? new Map<string, string>();
   for (const route of routes) {
-    const url = toOpenApiPath(route.url);
+    const url = overrides.get(route.url) ?? toOpenApiPath(route.url);
     const methods = Array.isArray(route.method) ? route.method : [route.method];
     for (const method of methods) {
       const m = method.toLowerCase();

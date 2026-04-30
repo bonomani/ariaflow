@@ -109,6 +109,14 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     recorded.push({ method: route.method, url: route.url });
   });
 
+  // OpenAPI path-template overrides: a few routes use a Fastify catch-all
+  // segment (e.g. `:file`) that should map to a more specific spec path.
+  // The introspector reads this map when emitting `paths`.
+  (app as unknown as { _ariaflowOpenApiPathOverrides: Map<string, string> })
+    ._ariaflowOpenApiPathOverrides = new Map<string, string>([
+    ["/api/torrents/:file", "/api/torrents/{infohash}.torrent"],
+  ]);
+
   if (deps.eventBus) {
     deps.actionLog.setBus(deps.eventBus);
     deps.sessionService.setBus(deps.eventBus);
