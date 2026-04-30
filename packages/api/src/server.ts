@@ -777,19 +777,31 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     };
   });
 
-  app.get("/api/aria2/get_global_option", async (_req, reply) => {
+  // BG-22: the dashboard reads `aria2Options[opt]` straight from the
+  // response body (`this.aria2Options = data`), so the options dict
+  // must be spread at the top level. aria2 option names are kebab-case
+  // ("connect-timeout", "max-tries", ...) so they never collide with
+  // our envelope keys (`ok`, `gid`). Same fix for all four endpoints
+  // (the canonical pair + the legacy `get_*` aliases).
+  const globalOptionsHandler = async (
+    _req: import("fastify").FastifyRequest,
+    reply: import("fastify").FastifyReply,
+  ) => {
     if (requireAria2(reply)) return;
     try {
       const opts = await aria2.getGlobalOption(deps.aria2!);
-      return { ok: true, options: opts };
+      return { ok: true, ...opts };
     } catch (err) {
       return reply
         .code(502)
         .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
     }
-  });
+  };
 
-  app.get<{ Querystring: { gid?: string } }>("/api/aria2/get_option", async (req, reply) => {
+  const itemOptionsHandler = async (
+    req: import("fastify").FastifyRequest<{ Querystring: { gid?: string } }>,
+    reply: import("fastify").FastifyReply,
+  ) => {
     if (requireAria2(reply)) return;
     const gid = (req.query?.gid ?? "").trim();
     if (!gid) {
@@ -797,41 +809,18 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
     try {
       const opts = await aria2.getOption(deps.aria2!, gid);
-      return { ok: true, gid, options: opts };
+      return { ok: true, gid, ...opts };
     } catch (err) {
       return reply
         .code(502)
         .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
     }
-  });
+  };
 
-  app.get("/api/aria2/global_option", async (_req, reply) => {
-    if (requireAria2(reply)) return;
-    try {
-      const opts = await aria2.getGlobalOption(deps.aria2!);
-      return { ok: true, options: opts };
-    } catch (err) {
-      return reply
-        .code(502)
-        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
-    }
-  });
-
-  app.get<{ Querystring: { gid?: string } }>("/api/aria2/option", async (req, reply) => {
-    if (requireAria2(reply)) return;
-    const gid = (req.query?.gid ?? "").trim();
-    if (!gid) {
-      return reply.code(400).send(errorPayload("missing_gid", "gid query parameter required"));
-    }
-    try {
-      const opts = await aria2.getOption(deps.aria2!, gid);
-      return { ok: true, gid, options: opts };
-    } catch (err) {
-      return reply
-        .code(502)
-        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
-    }
-  });
+  app.get("/api/aria2/get_global_option", globalOptionsHandler);
+  app.get("/api/aria2/global_option", globalOptionsHandler);
+  app.get<{ Querystring: { gid?: string } }>("/api/aria2/get_option", itemOptionsHandler);
+  app.get<{ Querystring: { gid?: string } }>("/api/aria2/option", itemOptionsHandler);
 
   app.post("/api/aria2/change_global_option", async (req, reply) => {
     if (requireAria2(reply)) return;

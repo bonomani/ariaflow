@@ -1544,11 +1544,52 @@ describe("aria2 option routes", () => {
     }
   });
 
-  it("option returns aria2.getOption keyed by gid", async () => {
-    const mock = await mockServerWithAria2(dir, () => ({ split: "5" }));
+  it("option returns aria2.getOption keys spread at top level (BG-22)", async () => {
+    const mock = await mockServerWithAria2(dir, () => ({ split: "5", "max-tries": "3" }));
     try {
       const res = await mock.inject({ method: "GET", url: "/api/aria2/option?gid=G1" });
-      expect(res.json()).toMatchObject({ ok: true, gid: "G1", options: { split: "5" } });
+      const body = res.json();
+      // aria2 keys are spread at top level so the dashboard's
+      // aria2Options[opt] lookups resolve.
+      expect(body).toMatchObject({
+        ok: true,
+        gid: "G1",
+        split: "5",
+        "max-tries": "3",
+      });
+      // The legacy `options` wrapper must NOT be present.
+      expect(body.options).toBeUndefined();
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("global_option spreads keys at top level too (BG-22)", async () => {
+    const mock = await mockServerWithAria2(dir, () => ({
+      "connect-timeout": "60",
+      "max-concurrent-downloads": "5",
+    }));
+    try {
+      const res = await mock.inject({ method: "GET", url: "/api/aria2/global_option" });
+      const body = res.json();
+      expect(body).toMatchObject({
+        ok: true,
+        "connect-timeout": "60",
+        "max-concurrent-downloads": "5",
+      });
+      expect(body.options).toBeUndefined();
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("get_global_option (legacy alias) shares the same shape", async () => {
+    const mock = await mockServerWithAria2(dir, () => ({ split: "16" }));
+    try {
+      const res = await mock.inject({ method: "GET", url: "/api/aria2/get_global_option" });
+      const body = res.json();
+      expect(body.split).toBe("16");
+      expect(body.options).toBeUndefined();
     } finally {
       await mock.close();
     }
