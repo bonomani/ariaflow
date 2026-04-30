@@ -1545,6 +1545,33 @@ describe("GET /api/openapi", () => {
   });
 });
 
+describe("CORS", () => {
+  it("echoes the request Origin on /api/* responses by default", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/health",
+      headers: { origin: "http://dashboard.local" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["access-control-allow-origin"]).toBe("http://dashboard.local");
+  });
+
+  it("OPTIONS preflight returns the configured methods + allowed headers", async () => {
+    const res = await app.inject({
+      method: "OPTIONS",
+      url: "/api/downloads",
+      headers: {
+        origin: "http://dashboard.local",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type",
+      },
+    });
+    expect([200, 204]).toContain(res.statusCode);
+    expect(res.headers["access-control-allow-methods"]).toMatch(/POST/);
+    expect(res.headers["access-control-allow-headers"]).toMatch(/Content-Type/);
+  });
+});
+
 describe("404 handler", () => {
   it("returns the canonical not_found shape", async () => {
     const res = await app.inject({ method: "GET", url: "/api/nope" });

@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import fastifyCors from "@fastify/cors";
 import {
   ActionLog,
   allowedActions,
@@ -41,6 +42,12 @@ export interface ServerDeps {
   version?: string;
   /** Path to openapi.yaml on disk; if omitted, /api/openapi.yaml 404s. */
   openapiYamlPath?: string;
+  /**
+   * CORS origin policy. `true` (default) echoes the request's Origin
+   * header; pass `"*"` to send a wildcard, an array of allowed origins
+   * to gate the response, or `false` to disable CORS entirely.
+   */
+  cors?: boolean | string | string[];
   /** Optional EventBus; if provided, /api/events streams its publish() calls. */
   eventBus?: EventBus;
   /** Optional peer registry; if omitted, /api/peers returns an empty list. */
@@ -77,6 +84,20 @@ const SWAGGER_UI_HTML = `<!DOCTYPE html>
  */
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger ?? false });
+
+  // CORS: echo the request Origin by default so the Swagger UI / dashboard
+  // running on a different host or port can hit /api/* without preflight
+  // surprises. Callers can pass a string / array to scope it, or `false`
+  // to disable entirely.
+  if (deps.cors !== false) {
+    const cors = deps.cors ?? true;
+    void app.register(fastifyCors, {
+      origin: cors,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+      allowedHeaders: ["Content-Type", "If-None-Match"],
+      exposedHeaders: ["ETag", "X-Request-Id", "X-Schema-Version"],
+    });
+  }
 
   // Capture full registered URLs for the OpenAPI introspector. Fastify's
   // printRoutes() formats output as a tree with relative leaf segments
