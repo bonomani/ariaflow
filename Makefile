@@ -62,3 +62,11 @@ ts-docker: ## Build the TS Docker image (Dockerfile.ts)
 ts-check-drift: ## Compare live TS routes against openapi.yaml (requires ts-build)
 	pnpm build
 	node scripts/check-openapi-drift.mjs
+
+ts-formula: ## Render the TS Homebrew formula for TAG (default: latest tag). Writes to dist-formula/.
+	@if [ -z "$(TAG)" ]; then TAG=$$(git describe --tags --abbrev=0); else TAG=$(TAG); fi; \
+	mkdir -p dist-formula; \
+	pnpm build && node packages/cli/dist/index.js formula \
+	  --tag "$$TAG" --flavor ts \
+	  --output dist-formula/ariaflow-server-ts.rb; \
+	echo "wrote dist-formula/ariaflow-server-ts.rb for $$TAG"

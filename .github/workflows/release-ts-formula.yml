@@ -1,0 +1,86 @@
+name: release-ts-formula
+
+# Render the TypeScript-flavored Homebrew formula on every release tag
+# and attach it as a release asset. The brew tap repo can pull this asset
+# (or a release workflow there can mirror it) without needing local
+# Node/pnpm tooling.
+#
+# Triggers:
+#   - push of a `v*` tag (the canonical release path)
+#   - manual dispatch (for backfilling missing assets)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to render the formula for (e.g. v0.1.205)"
+        required: true
+        type: string
+
+jobs:
+  render-formula:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install + build
+        run: |
+          pnpm install --frozen-lockfile=false
+          pnpm build
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Render TS formula
+        run: |
+          mkdir -p dist-formula
+          node packages/cli/dist/index.js formula \
+            --tag "${{ steps.tag.outputs.value }}" \
+            --flavor ts \
+            --output "dist-formula/ariaflow-server-ts.rb"
+          echo "--- rendered ariaflow-server-ts.rb ---"
+          head -30 dist-formula/ariaflow-server-ts.rb
+
+      - name: Smoke-check the rendered formula has expected sections
+        run: |
+          test -s dist-formula/ariaflow-server-ts.rb
+          grep -q "class AriaflowServerTs < Formula" dist-formula/ariaflow-server-ts.rb
+          grep -q 'depends_on "node"' dist-formula/ariaflow-server-ts.rb
+          grep -q 'depends_on "aria2"' dist-formula/ariaflow-server-ts.rb
+          grep -q "service do" dist-formula/ariaflow-server-ts.rb
+
+      - name: Upload as release asset
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-formula/ariaflow-server-ts.rb
+          fail_on_unmatched_files: true
+
+      - name: Upload as workflow artifact (for manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ariaflow-server-ts-formula
+          path: dist-formula/ariaflow-server-ts.rb
