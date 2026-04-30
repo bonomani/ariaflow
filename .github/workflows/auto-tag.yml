@@ -1,0 +1,86 @@
+name: auto-tag
+
+# After every successful `node` CI run on main, bump the latest `vX.Y.Z`
+# patch and push the new tag. The tag push fans out to release-npm,
+# release-tap, and release-formula.
+#
+# Why workflow_run (not `push`): we never want to tag a commit whose
+# tests didn't pass. Gating on the green CI run is the contract.
+#
+# Why a PAT (RELEASE_PAT secret), not GITHUB_TOKEN: tags pushed by
+# `GITHUB_TOKEN` from inside a workflow do NOT trigger downstream
+# workflows (a GitHub security feature). To make release-npm /
+# release-tap / release-formula fire, we push the tag with a PAT
+# that has `contents: write` scope. Set the `RELEASE_PAT` repo
+# secret (Settings → Secrets and variables → Actions). If the secret
+# is missing, the job no-ops with a clear log message.
+#
+# Idempotency: if the head commit is already tagged `vX.Y.Z`, no-op.
+
+on:
+  workflow_run:
+    workflows: [node]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify RELEASE_PAT is set
+        env:
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+        run: |
+          if [ -z "${RELEASE_PAT:-}" ]; then
+            echo "::warning::RELEASE_PAT secret is not set. Skipping auto-tag — without a PAT, the tag would not trigger downstream release workflows. See docs/RELEASE.md."
+            exit 0
+          fi
+          echo "RELEASE_PAT present; proceeding."
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT }}
+
+      - name: Compute next tag
+        id: next
+        if: ${{ secrets.RELEASE_PAT != '' }}
+        run: |
+          set -euo pipefail
+          git fetch --tags origin
+
+          sha="${{ github.event.workflow_run.head_sha }}"
+          existing=$(git tag --points-at "$sha" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+          if [ -n "$existing" ]; then
+            echo "Commit $sha is already tagged as $existing; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          latest=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)
+          if [ -z "$latest" ]; then
+            next="v0.1.0"
+          else
+            IFS='.' read -r major minor patch <<<"${latest#v}"
+            next="v${major}.${minor}.$((patch + 1))"
+          fi
+          echo "Latest tag: ${latest:-<none>} → next: $next"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Push tag
+        if: ${{ secrets.RELEASE_PAT != '' && steps.next.outputs.skip == 'false' }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.next.outputs.next }}"
+          sha="${{ github.event.workflow_run.head_sha }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" "$sha" -m "Release $tag"
+          git push origin "$tag"
+          echo "Pushed $tag → $sha"

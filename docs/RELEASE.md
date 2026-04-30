@@ -1,15 +1,32 @@
 # Release Process
 
-## Quick Release
+## Automatic Releases (default)
+
+Every successful `node` CI run on `main` triggers `auto-tag.yml`,
+which bumps the latest `vX.Y.Z` patch and pushes the new tag. The
+tag push fans out to `release-npm`, `release-tap`, and
+`release-formula`.
+
+**Required setup:** the `RELEASE_PAT` repo secret (a Personal Access
+Token with `contents: write` scope on this repo) must be set. Tags
+pushed by the default `GITHUB_TOKEN` from inside a workflow do **not**
+trigger downstream workflows (a GitHub security feature), so the PAT
+is what makes the cascade work. If `RELEASE_PAT` is missing, the
+auto-tag job no-ops with a warning in the workflow log.
+
+## Manual Release (override)
+
+If you want to control the version explicitly (e.g. minor/major bump,
+or to back-fill a release):
 
 ```bash
-git tag v0.1.X && git push origin v0.1.X
+git tag v0.2.0 && git push origin v0.2.0
 ```
 
-That's it — the rest is GitHub Actions. Note: `git push origin v*`
-must be a **real** push from a developer machine; tags created by
-`GITHUB_TOKEN` inside a workflow do not trigger downstream workflows
-(GitHub security feature), which is why there is no auto-tagger.
+A real push from a developer machine triggers the release workflows
+the same way. The auto-tagger only increments patch from the latest
+`vX.Y.Z` — pushing a manual minor/major bump shifts the baseline,
+and the next auto-bump computes from there.
 
 ## What GitHub Actions Does
 
@@ -46,6 +63,7 @@ ariaflow --version
 
 ## Prerequisites (repo secrets)
 
+- `RELEASE_PAT` — PAT with `contents: write` on this repo. Required for `auto-tag.yml` to push tags that trigger the downstream release workflows.
 - `NPM_TOKEN` — automation token with publish access to the `@ariaflow` scope
 - `TAP_PUSH_TOKEN` — fine-scoped PAT or GitHub App token with `contents: write` on `bonomani/homebrew-ariaflow-server`
 
