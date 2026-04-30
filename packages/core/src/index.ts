@@ -84,6 +84,12 @@ export {
 } from "./scheduler/tick.js";
 export { pollActiveItems, type PollDeps, type PollResult } from "./scheduler/poll.js";
 export {
+  runRetryPass,
+  isRetryReady,
+  type RetryDeps,
+  type RetryResult,
+} from "./scheduler/retry.js";
+export {
   runSchedulerLoop,
   type SchedulerLoopDeps,
   type SchedulerLoopIteration,

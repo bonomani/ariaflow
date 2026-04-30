@@ -6,6 +6,7 @@ import type { QueueStore } from "../storage/queue.js";
 import type { StateStore } from "../storage/state.js";
 import { runSchedulerTick, type SchedulerTickResult } from "./tick.js";
 import { pollActiveItems, type PollResult } from "./poll.js";
+import { runRetryPass, type RetryResult } from "./retry.js";
 import { TERMINAL_STATUSES, type ItemStatus } from "../queue/types.js";
 
 export interface SchedulerLoopDeps {
@@ -39,6 +40,7 @@ export interface SchedulerLoopOptions {
 export interface SchedulerLoopIteration {
   tick: SchedulerTickResult;
   poll: PollResult;
+  retry: RetryResult;
   /** True when state.paused was set on this iteration (the tick was skipped). */
   paused: boolean;
   /** Live count of non-terminal rows after the iteration. */
@@ -132,12 +134,23 @@ export async function runSchedulerLoop(
         aria2: deps.aria2,
       });
 
+      // Re-arm retries: any items that just landed in "error" via the
+      // poll pass (or were already errored from a prior run) get
+      // rescheduled here, so the next tick can pick them up once their
+      // backoff expires.
+      const retry = await runRetryPass({
+        queueStore: deps.queueStore,
+        declarationStore: deps.declarationStore,
+        actionLog: deps.actionLog,
+      });
+
       const items = await deps.queueStore.load();
       const inFlight = items.filter((i) => !isTerminal(i.status)).length;
       iterations += 1;
       const iteration: SchedulerLoopIteration = {
         tick,
         poll,
+        retry,
         paused,
         in_flight: inFlight,
       };

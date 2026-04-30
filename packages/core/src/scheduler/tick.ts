@@ -5,6 +5,7 @@ import type { DeclarationStore } from "../storage/declaration.js";
 import type { QueueStore } from "../storage/queue.js";
 import { maxSimultaneousDownloads } from "../transfers/helpers.js";
 import { TERMINAL_STATUSES, type ItemStatus, type QueueItemRecord } from "../queue/types.js";
+import { isRetryReady } from "./retry.js";
 
 export interface SchedulerTickDeps {
   queueStore: QueueStore;
@@ -50,8 +51,9 @@ export async function runSchedulerTick(deps: SchedulerTickDeps): Promise<Schedul
     return { started: [], failed: [], saturated: true };
   }
 
+  const now = Date.now();
   const candidates = items
-    .filter((i) => i.status === "queued" && !i.gid)
+    .filter((i) => i.status === "queued" && !i.gid && isRetryReady(i, now))
     .sort((a, b) => {
       const pa = Number(a.priority ?? 0);
       const pb = Number(b.priority ?? 0);
