@@ -668,14 +668,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       // without first visiting Bandwidth.
       const probe = (state.last_bandwidth_probe ?? null) as Record<string, unknown> | null;
       const bandwidth = probe
-        ? {
-            source: probe.source ?? null,
-            interface_name: probe.interface_name ?? null,
-            cap_mbps: probe.cap_mbps ?? null,
-            cap_bytes_per_sec: probe.cap_bytes_per_sec ?? null,
-            downlink_mbps: probe.downlink_mbps ?? null,
-            last_probe_at: state.last_bandwidth_probe_at ?? null,
-          }
+        ? { ...probe, last_probe_at: state.last_bandwidth_probe_at ?? null }
         : null;
 
       const payload: Record<string, unknown> = {
