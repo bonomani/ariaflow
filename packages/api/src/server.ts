@@ -5,6 +5,7 @@ import {
   registerDefaultFreshness,
   withMeta,
 } from "./freshness.js";
+import { eventMatchesTopics, parseTopics } from "./event-topics.js";
 import {
   ActionLog,
   allowedActions,
@@ -782,11 +783,16 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return generateOpenApi(app);
   });
 
-  app.get("/api/events", async (req, reply) => {
+  app.get<{ Querystring: { topics?: string } }>("/api/events", async (req, reply) => {
     const bus = deps.eventBus;
     if (!bus) {
       return reply.code(503).send(errorPayload("events_unavailable", "no event bus wired"));
     }
+    // BG-32: connect-time topic filter. ?topics=items,scheduler keeps
+    // the stream lean for clients that only watch a subset. Empty/missing
+    // → all topics (back-compat). Unknown topic names produce an empty
+    // subset so a typo doesn't silently widen to a firehose.
+    const topics = parseTopics(req.query?.topics);
     // SSE writes via reply.raw.writeHead, which bypasses Fastify's reply
     // pipeline and the @fastify/cors plugin. Echo the CORS headers
     // directly so EventSource clients on a different origin can connect.
@@ -814,6 +820,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     let alive = true;
     const writeEvent = (event: string, data: unknown) => {
       if (!alive) return;
+      // BG-32: drop events whose topic isn't in the client's filter
+      // set. Unknown event names fall through (eventTopics returns
+      // ALL_TOPICS) so a new emitter is visible until it's classified.
+      if (!eventMatchesTopics(event, topics)) return;
       reply.raw.write(`event: ${event}\n`);
       reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
     };

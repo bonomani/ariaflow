@@ -12,7 +12,11 @@ describe("freshness registry", () => {
   it("registerDefaultFreshness covers the BG-31 #4 endpoints", () => {
     _resetFreshness();
     registerDefaultFreshness();
-    expect(getFreshness("GET", "/api/status")).toEqual({ freshness: "live", transport: "sse" });
+    expect(getFreshness("GET", "/api/status")).toEqual({
+      freshness: "live",
+      transport: "sse",
+      transport_topics: ["items", "scheduler"],
+    });
     expect(getFreshness("GET", "/api/lifecycle")).toMatchObject({ freshness: "warm", ttl_s: 30 });
     expect(getFreshness("GET", "/api/bandwidth")).toMatchObject({
       freshness: "on-action",

@@ -32,6 +32,12 @@ export interface FreshnessMeta {
   revalidate_on?: string[];
   /** Required for `live`. Today only "sse". */
   transport?: "sse";
+  /**
+   * BG-32: SSE topic(s) that carry updates for this endpoint. Surfaces
+   * in /api/_meta so the dashboard's FreshnessRouter knows which
+   * `?topics=` to subscribe with. Only meaningful for `live` entries.
+   */
+  transport_topics?: string[];
 }
 
 /** Frozen lookup: `${METHOD} ${path}` → meta. */
@@ -95,7 +101,11 @@ export function _resetFreshness(): void {
  * call multiple times (idempotent — same key overwrites).
  */
 export function registerDefaultFreshness(): void {
-  registerFreshness("GET", "/api/status", { freshness: "live", transport: "sse" });
+  registerFreshness("GET", "/api/status", {
+    freshness: "live",
+    transport: "sse",
+    transport_topics: ["items", "scheduler"],
+  });
   registerFreshness("GET", "/api/lifecycle", {
     freshness: "warm",
     ttl_s: 30,

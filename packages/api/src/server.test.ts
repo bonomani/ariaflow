@@ -852,9 +852,19 @@ describe("meta routes", () => {
     expect(v.json().meta).toEqual({ freshness: "bootstrap" });
   });
 
-  it("BG-31: GET /api/status carries meta.freshness=live", async () => {
+  it("BG-31/BG-32: GET /api/status carries meta.freshness=live with transport_topics", async () => {
     const res = await app.inject({ method: "GET", url: "/api/status" });
-    expect(res.json().meta).toEqual({ freshness: "live", transport: "sse" });
+    expect(res.json().meta).toEqual({
+      freshness: "live",
+      transport: "sse",
+      transport_topics: ["items", "scheduler"],
+    });
+  });
+
+  it("BG-32: /api/_meta surfaces transport_topics for live endpoints", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/_meta" });
+    const status = res.json().endpoints.find((e: { path: string }) => e.path === "/api/status");
+    expect(status.transport_topics).toEqual(["items", "scheduler"]);
   });
 
   it("BG-30 #4: GET /api/status dual-keys dispatch_paused alongside legacy state.paused", async () => {
