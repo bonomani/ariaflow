@@ -1,0 +1,111 @@
+name: release-ts-tap
+
+# Auto-publish the rendered TypeScript formula into the brew tap repo
+# (bonomani/homebrew-ariaflow-server-ts). Runs after the
+# release-ts-formula workflow attaches the .rb file to the release.
+#
+# Required repo secret:
+#   TAP_PUSH_TOKEN — a fine-scoped PAT or GitHub App token with
+#                    `contents: write` on the tap repo.
+#
+# If the secret is missing the job exits early with a clear message
+# rather than failing the release pipeline.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish into the tap (e.g. v0.1.205)"
+        required: true
+        type: string
+
+env:
+  TAP_OWNER: bonomani
+  TAP_REPO: homebrew-ariaflow-server-ts
+  FORMULA_PATH: Formula/ariaflow-server-ts.rb
+
+jobs:
+  publish-tap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check secret
+        id: secret
+        run: |
+          if [ -z "${{ secrets.TAP_PUSH_TOKEN }}" ]; then
+            echo "TAP_PUSH_TOKEN not set — skipping tap publish (run release-ts-formula's asset upload manually if needed)."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secret.outputs.available == 'true'
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        if: steps.secret.outputs.available == 'true'
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        if: steps.secret.outputs.available == 'true'
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install + build (host repo)
+        if: steps.secret.outputs.available == 'true'
+        run: |
+          pnpm install --frozen-lockfile=false
+          pnpm build
+
+      - name: Render formula
+        if: steps.secret.outputs.available == 'true'
+        run: |
+          mkdir -p dist-formula
+          node packages/cli/dist/index.js formula \
+            --tag "${{ steps.tag.outputs.value }}" \
+            --flavor ts \
+            --output "dist-formula/ariaflow-server-ts.rb"
+
+      - name: Checkout tap repo
+        if: steps.secret.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TAP_OWNER }}/${{ env.TAP_REPO }}
+          token: ${{ secrets.TAP_PUSH_TOKEN }}
+          path: tap-repo
+
+      - name: Stage formula in tap
+        if: steps.secret.outputs.available == 'true'
+        run: |
+          mkdir -p "tap-repo/$(dirname ${{ env.FORMULA_PATH }})"
+          cp dist-formula/ariaflow-server-ts.rb "tap-repo/${{ env.FORMULA_PATH }}"
+
+      - name: Commit + push
+        if: steps.secret.outputs.available == 'true'
+        working-directory: tap-repo
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- "${{ env.FORMULA_PATH }}"; then
+            echo "no formula changes — skipping commit"
+            exit 0
+          fi
+          TAG="${{ steps.tag.outputs.value }}"
+          git add "${{ env.FORMULA_PATH }}"
+          git commit -m "Bump ariaflow-server-ts to ${TAG}"
+          git push
