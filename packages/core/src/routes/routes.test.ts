@@ -34,8 +34,9 @@ describe("validateUrl", () => {
     ["http://h/x", null],
     ["https://h/x", null],
     ["ftp://h/x", null],
+    ["sftp://h/x", null],
     ["magnet:?xt=urn:btih:abc", null],
-    ["file:///etc/passwd", "URL scheme 'file' not allowed (use http, https, ftp, or magnet)"],
+    ["file:///etc/passwd", "URL scheme 'file' not allowed (use http, https, ftp, sftp, or magnet)"],
   ])("validates %s", (url, expected) => {
     expect(validateUrl(url)).toBe(expected);
   });

@@ -1,4 +1,8 @@
-export const ALLOWED_URL_SCHEMES = new Set(["http", "https", "ftp", "magnet"]);
+// Schemes accepted by aria2's addUri / magnet handling. .torrent and
+// .metalink files arrive via base64 modes (torrent_data / metalink_data)
+// or via http(s) URLs to those files, so they don't need their own
+// scheme entry here.
+export const ALLOWED_URL_SCHEMES = new Set(["http", "https", "ftp", "sftp", "magnet"]);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -34,12 +38,15 @@ export function validateUrl(url: string): string | null {
   // "must include scheme" branch when truly empty.
   const scheme = parsed.protocol.replace(/:$/, "").toLowerCase();
   if (!scheme) {
-    return "URL must include a scheme (http://, https://, ftp://, magnet:)";
+    return "URL must include a scheme (http://, https://, ftp://, sftp://, magnet:)";
   }
   if (!ALLOWED_URL_SCHEMES.has(scheme)) {
-    return `URL scheme '${scheme}' not allowed (use http, https, ftp, or magnet)`;
+    return `URL scheme '${scheme}' not allowed (use http, https, ftp, sftp, or magnet)`;
   }
-  if ((scheme === "http" || scheme === "https" || scheme === "ftp") && !parsed.hostname) {
+  if (
+    (scheme === "http" || scheme === "https" || scheme === "ftp" || scheme === "sftp") &&
+    !parsed.hostname
+  ) {
     return "URL must include a hostname";
   }
   return null;
