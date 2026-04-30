@@ -16,7 +16,6 @@ export class EventBus {
       try {
         listener(event, data);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error("EventBus listener threw:", err);
       }
     }

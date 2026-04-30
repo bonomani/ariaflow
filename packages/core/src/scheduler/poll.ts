@@ -28,8 +28,6 @@ export interface PollResult {
   updated: Array<{ id: string; gid: string; status: string }>;
 }
 
-const TERMINAL_LIVE = new Set(["complete", "error", "removed"]);
-
 const stampNow = (): string => new Date().toISOString();
 
 /**

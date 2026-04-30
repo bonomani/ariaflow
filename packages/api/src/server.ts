@@ -1830,39 +1830,3 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   return app;
 }
 
-/**
- * Spawn `argv` and resolve with the stdout buffer joined as utf8.
- * Rejects with Error("timeout") after `timeoutMs` and kills the process
- * (SIGTERM, then SIGKILL after 1s if still alive).
- */
-function runProcess(
-  spawn: typeof import("node:child_process").spawn,
-  argv: string[],
-  timeoutMs: number,
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(argv[0]!, argv.slice(1), { stdio: ["ignore", "pipe", "ignore"] });
-    const chunks: Buffer[] = [];
-    proc.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
-    let settled = false;
-    const timer = setTimeout(() => {
-      settled = true;
-      proc.kill("SIGTERM");
-      setTimeout(() => proc.kill("SIGKILL"), 1000).unref();
-      reject(new Error("timeout"));
-    }, timeoutMs);
-    timer.unref();
-    proc.on("error", (err) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      reject(err);
-    });
-    proc.on("close", () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(Buffer.concat(chunks).toString("utf8"));
-    });
-  });
-}

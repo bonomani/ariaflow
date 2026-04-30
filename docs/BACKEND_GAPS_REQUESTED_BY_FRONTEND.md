@@ -11,9 +11,55 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
 
-_End of open gaps._
+### BG-33: Drop legacy field aliases
+
+**Problem.** During the BG-30 cutover the backend dual-keyed several
+fields so the frontend could migrate without flapping:
+
+- `state.paused` ↔ `state.dispatch_paused` (canonical: `dispatch_paused`)
+- `summary.stopped` ↔ `summary.removed` (canonical: `removed`)
+- `item.status: "stopped"` ↔ `"removed"` (canonical: `removed`)
+
+The frontend has cut over (FE-23, commit cb6b8f8 + 33bae60) and reads
+the canonical names with `?? legacy` fallbacks. Those fallbacks are
+dead branches that age into bit-rot. Frontend wants to drop them, but
+needs the backend to confirm aliases are gone so the cleanup is
+verifiable (not just a hope).
+
+**Required backend changes:**
+
+1. **Drop `state.paused`** from `/api/status` payload. Keep only
+   `state.dispatch_paused` and the top-level `dispatch_paused` mirror
+   shipped in BG-30.
+2. **Drop `summary.stopped`** alias counter from `/api/status.summary`.
+   Keep only `summary.removed`.
+3. **Drop `"stopped"` from `ITEM_STATUSES`** if it lingers as an alias.
+   Items must serialize as `"removed"`. Anything that emits `"stopped"`
+   today is the bug.
+4. **Document the canonical contract** in
+   `packages/api/src/state-machine.md` (or wherever BG-30's diagram
+   lives) — "these names are canonical; older clients must update".
+5. **Test-time validators**: a snapshot test asserts no occurrence of
+   `state.paused`, `summary.stopped`, or `status: "stopped"` in any
+   `/api/status` response across the fixture matrix.
+
+**Frontend code refs (paired update FE-25, blocked by this):**
+- `app.ts` 5 sites of `state.dispatch_paused ?? state.paused` →
+  drop `?? state.paused`
+- `app.ts` `s.removed ?? s.stopped` → drop `?? s.stopped`
+- `app.ts` `itemCanRetry ['error', 'removed', 'stopped']` →
+  drop `'stopped'`
+- `formatters.ts` badgeClass — drop `'stopped'` from bad list
+
+**Sequence:** backend lands #1–5 → frontend ships FE-25 same day with
+the literal `??` removals.
+
+**Priority:** low — cosmetic/hygiene. Today's behaviour is correct;
+this is dead-code removal.
+
+
 
 ## Explicit non-requests (do not implement)
 

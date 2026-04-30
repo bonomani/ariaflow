@@ -424,7 +424,6 @@ export async function cmdServe(
     ).catch((err) => {
       // Surface scheduler crashes to stderr but don't kill the HTTP
       // listener — caller can investigate via /api/log.
-      // eslint-disable-next-line no-console
       console.error("scheduler loop crashed:", err);
     });
     // Wait one event-loop tick so the loop's first state.running=true
