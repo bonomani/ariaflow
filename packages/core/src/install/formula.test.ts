@@ -48,6 +48,29 @@ describe("downloadSha256", () => {
   });
 });
 
+describe("renderFormulaTs", () => {
+  it("emits the TypeScript-flavored class with Node + aria2 deps", async () => {
+    const { renderFormulaTs } = await import("./formula.js");
+    const text = renderFormulaTs({
+      version: "1.2.3",
+      url: "https://example/y.tar.gz",
+      sha256: "deadbeef",
+    });
+    expect(text).toContain("class AriaflowServerTs < Formula");
+    expect(text).toContain('depends_on "node"');
+    expect(text).toContain('depends_on "aria2"');
+    expect(text).toContain('url "https://example/y.tar.gz"');
+    expect(text).toContain('sha256 "deadbeef"');
+    expect(text).toContain('version "1.2.3"');
+    expect(text).toContain('(bin/"ariaflow")');
+    expect(text).toContain("service do");
+    expect(text).toContain("--scheduler");
+    // Must NOT carry the Python flavor's Python-specific bits.
+    expect(text).not.toContain("portalocker");
+    expect(text).not.toContain("python3");
+  });
+});
+
 describe("renderFormula", () => {
   it("interpolates url, sha256, and version into a Ruby class", () => {
     const text = renderFormula({

@@ -16,6 +16,7 @@ import {
   cmdRemove,
   cmdResume,
   cmdDoctor,
+  cmdFormula,
   cmdInstallService,
   cmdSeedStop,
   cmdServe,
@@ -365,6 +366,34 @@ describe("cmdSetPref", () => {
   it("exit 2 on an unknown preference", async () => {
     const r = await cmdSetPref(ctx, "no_such_pref", "1");
     expect(r.exitCode).toBe(2);
+  });
+});
+
+describe("cmdFormula", () => {
+  it("rejects non-vX.Y.Z tags", async () => {
+    const r = await cmdFormula({ tag: "1.2.3", sha256: "deadbeef" });
+    expect(r.exitCode).toBe(1);
+    expect(r.stdout).toMatch(/vX\.Y\.Z/);
+  });
+
+  it("renders the TS flavor by default with the requested version + sha256", async () => {
+    const r = await cmdFormula({ tag: "v1.2.3", sha256: "deadbeef" });
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("class AriaflowServerTs < Formula");
+    expect(r.stdout).toContain('version "1.2.3"');
+    expect(r.stdout).toContain('sha256 "deadbeef"');
+    expect(r.stdout).toContain('depends_on "node"');
+  });
+
+  it("renders the python flavor on request", async () => {
+    const r = await cmdFormula({
+      tag: "v1.2.3",
+      flavor: "python",
+      sha256: "deadbeef",
+    });
+    expect(r.stdout).toContain("class AriaflowServer < Formula");
+    expect(r.stdout).not.toContain("AriaflowServerTs");
+    expect(r.stdout).toContain("portalocker");
   });
 });
 

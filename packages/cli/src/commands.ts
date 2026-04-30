@@ -6,16 +6,22 @@ import {
   bandwidthConfigFrom,
   deduplicateActiveTransfers,
   detectServiceTarget,
+  downloadSha256,
   EventBus,
   findAria2c,
   install,
   installAria2Service,
   planAutoCleanup,
   reconcileLiveQueue,
+  renderFormula,
+  renderFormulaTs,
   runBandwidthProbe,
   runSchedulerLoop,
   summarizeQueue,
+  tarballUrl,
   uninstallAria2Service,
+  versionFromTag,
+  writeFormula,
 } from "@ariaflow/core";
 import { buildServer, generateOpenApi } from "@ariaflow/api";
 import type { CliContext } from "./context.js";
@@ -714,6 +720,47 @@ export async function cmdDoctor(
   );
   lines.push(`\n${allOk ? "All checks passed." : "One or more checks failed."}`);
   return allOk ? ok(lines.join("\n") + "\n") : fail(lines.join("\n") + "\n", 1);
+}
+
+export interface FormulaOptions {
+  tag: string;
+  flavor?: "ts" | "python";
+  sha256?: string;
+  output?: string;
+}
+
+/**
+ * Render the Homebrew formula for a release tag. Defaults to the
+ * TypeScript flavor; pass flavor:"python" for the legacy Python build.
+ *
+ * The sha256 is fetched by streaming the GitHub release tarball when
+ * not provided. Pass --sha256 to skip the network round-trip.
+ */
+export async function cmdFormula(opts: FormulaOptions): Promise<CmdResult> {
+  let version: string;
+  try {
+    version = versionFromTag(opts.tag);
+  } catch (err) {
+    return fail(`error: ${(err as Error).message}\n`);
+  }
+  const url = tarballUrl(opts.tag);
+  let sha256 = opts.sha256;
+  if (!sha256) {
+    try {
+      sha256 = await downloadSha256(url);
+    } catch (err) {
+      return fail(`error: failed to fetch ${url}: ${(err as Error).message}\n`, 1);
+    }
+  }
+  const flavor = opts.flavor ?? "ts";
+  const formula =
+    flavor === "ts"
+      ? renderFormulaTs({ version, url, sha256 })
+      : renderFormula({ version, url, sha256 });
+  if (opts.output) {
+    await writeFormula(opts.output, formula);
+  }
+  return ok(formula);
 }
 
 export interface InstallServiceOpts {

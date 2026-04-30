@@ -106,3 +106,67 @@ export async function writeFormula(path: string, content: string): Promise<void>
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, content, "utf8");
 }
+
+/**
+ * Render the TypeScript-port Homebrew formula. Different shape from
+ * renderFormula(): depends on Node + aria2 (no Python), builds the
+ * workspace from source via Corepack-pinned pnpm, flattens the cli
+ * package into libexec via `pnpm deploy --prod`, then writes a thin
+ * bin shim that execs `node <libexec>/dist/index.js`.
+ *
+ * The brew service stanza launches `ariaflow serve --scheduler` on
+ * 127.0.0.1:8000 so the user gets a working downloader once aria2 is
+ * also installed (depends_on "aria2"). openapi.yaml is vendored
+ * alongside the dist tree so /api/docs + /api/openapi.yaml resolve.
+ */
+export function renderFormulaTs({ version, url, sha256 }: RenderFormulaInput): string {
+  return `class AriaflowServerTs < Formula
+  desc "Sequential aria2 queue driver with adaptive bandwidth control (TypeScript)"
+  homepage "https://github.com/bonomani/ariaflow-server"
+  url "${url}"
+  sha256 "${sha256}"
+  version "${version}"
+  license "MIT"
+  depends_on "node"
+  depends_on "aria2"
+  depends_on "corepack" => :build
+  head "https://github.com/bonomani/ariaflow-server.git", branch: "main"
+
+  def install
+    ENV["COREPACK_ENABLE_DOWNLOAD_PROMPT"] = "0"
+    system "corepack", "enable"
+    system "corepack", "prepare", "pnpm@9", "--activate"
+    system "pnpm", "install", "--frozen-lockfile=false"
+    system "pnpm", "build"
+    system "pnpm", "--filter", "@ariaflow/cli", "deploy", "--prod", "--legacy",
+           "#{libexec}/cli"
+    libexec.install "openapi.yaml"
+
+    (bin/"ariaflow").write <<~EOS
+      #!/bin/bash
+      exec "\${HOMEBREW_PREFIX}/bin/node" "#{libexec}/cli/dist/index.js" "$@"
+    EOS
+    chmod 0755, bin/"ariaflow"
+  end
+
+  service do
+    run [
+      opt_bin/"ariaflow", "serve",
+      "--host", "127.0.0.1",
+      "--port", "8000",
+      "--scheduler",
+      "--openapi-yaml", "#{opt_libexec}/openapi.yaml"
+    ]
+    keep_alive true
+    working_dir var
+    log_path var/"log/ariaflow-server-ts.log"
+    error_log_path var/"log/ariaflow-server-ts.err.log"
+  end
+
+  test do
+    assert_match "ariaflow", shell_output("#{bin}/ariaflow --version")
+    system bin/"ariaflow", "doctor", "--pretty"
+  end
+end
+`;
+}

@@ -7,6 +7,7 @@ import {
   cmdDashboard,
   cmdDeclaration,
   cmdDoctor,
+  cmdFormula,
   cmdInstallService,
   cmdList,
   cmdOpenapi,
@@ -229,6 +230,27 @@ program
         aria2Host: opts.aria2Host,
         aria2Port: opts.aria2Port,
         ...(opts.aria2Secret ? { aria2Secret: opts.aria2Secret } : {}),
+      });
+      process.stdout.write(r.stdout);
+      process.exit(r.exitCode);
+    },
+  );
+
+program
+  .command("formula")
+  .description("render the Homebrew formula for a release tag")
+  .requiredOption("--tag <vX.Y.Z>", "stable release tag")
+  .option("--flavor <ts|python>", "which formula to emit", "ts")
+  .option("--sha256 <hex>", "precomputed sha256 (skips the network fetch)")
+  .option("--output <path>", "write the formula to this path in addition to stdout")
+  .action(
+    async (opts: { tag: string; flavor: string; sha256?: string; output?: string }) => {
+      const flavor = opts.flavor === "python" ? "python" : "ts";
+      const r = await cmdFormula({
+        tag: opts.tag,
+        flavor,
+        ...(opts.sha256 ? { sha256: opts.sha256 } : {}),
+        ...(opts.output ? { output: opts.output } : {}),
       });
       process.stdout.write(r.stdout);
       process.exit(r.exitCode);

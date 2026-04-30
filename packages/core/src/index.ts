@@ -137,6 +137,7 @@ export {
   tarballUrl,
   downloadSha256,
   renderFormula,
+  renderFormulaTs,
   writeFormula,
 } from "./install/formula.js";
 export {
