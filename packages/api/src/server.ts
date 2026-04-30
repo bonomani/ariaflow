@@ -1377,6 +1377,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         installed: true,
         current: true,
         running: true,
+        // BG-29: not on-demand and not externally managed; null = "no opinion".
+        expected_running: null,
+        managed_by: null,
         reason: "match",
         outcome: "installed · current",
         message: null,
@@ -1406,10 +1409,38 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       }
     }
     const aria2Current = aria2Installed ? (aria2Running ? true : null) : null;
+
+    // BG-29(a): aria2 is on-demand. expected_running = "would the
+    // scheduler want aria2 up right now?" — true while there's work
+    // pending or a tick is mid-dispatch. The dashboard's verdict
+    // truth-table reads this against `running` to distinguish a
+    // healthy idle from a genuine fault.
+    const queueItems = await deps.queueStore.load();
+    const PENDING = new Set(["queued", "waiting", "active"]);
+    const workPending = queueItems.some((i) => PENDING.has(String(i.status ?? "")));
+    const aria2ExpectedRunning =
+      Boolean(state.running) || Boolean(state.active_gid) || workPending;
+
+    // BG-29(b): managed_by = "who actually spawned the running aria2".
+    // We never fork aria2 ourselves today, so the "ariaflow" branch is
+    // unreachable in current code; a launchd plist on disk is the only
+    // signal we have for "auto-start (launchd)" — anything else is
+    // attributed to "external". null when not running.
+    const launchdPath =
+      `${(await import("node:os")).homedir()}/Library/LaunchAgents/com.ariaflow-server.aria2.plist`;
+    const launchdInstalled = existsSync(launchdPath);
+    const aria2ManagedBy: "ariaflow" | "launchd" | "external" | null = aria2Running
+      ? launchdInstalled
+        ? "launchd"
+        : "external"
+      : null;
+
     const aria2Result: Record<string, unknown> = {
       installed: aria2Installed,
       current: aria2Current,
       running: aria2Running,
+      expected_running: aria2ExpectedRunning,
+      managed_by: aria2ManagedBy,
       reason: aria2Running ? "match" : aria2Installed ? "stopped" : "missing",
       outcome: aria2Running
         ? "installed · current"
@@ -1439,6 +1470,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         installed: Boolean(nq.installed),
         current: null,
         running: nqRunning,
+        // BG-29: on-demand probe, not a daemon — null on both axes.
+        expected_running: null,
+        managed_by: null,
         reason: nq.reason, // "ready" | "missing"
         outcome: nq.installed && nq.usable ? "installed · usable" : "unavailable",
         observation: nq.installed && nq.usable ? "ok" : "failed",
@@ -1466,6 +1500,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         installed: null,
         current: null,
         running: launchdRunning,
+        // BG-29: informational row — keep `expected_running` null so
+        // the dashboard's verdict table treats it as "no opinion"
+        // instead of flagging an idle plist as faulty.
+        expected_running: null,
+        managed_by: installedHere ? "launchd" : null,
         reason: installedHere ? (aria2Running ? "match" : "stopped") : "missing",
         outcome: installedHere
           ? aria2Running

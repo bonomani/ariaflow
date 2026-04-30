@@ -1508,6 +1508,32 @@ describe("GET /api/lifecycle", () => {
     expect(body.session_closed_at).toBeNull();
   });
 
+  it("BG-29: aria2 record carries expected_running + managed_by; idle queue → expected_running:false", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/lifecycle" });
+    const body = res.json();
+    // No items, no running scheduler → aria2 isn't expected to run.
+    expect(body.aria2.result).toMatchObject({
+      expected_running: false,
+      managed_by: null, // not running in tests
+    });
+    // ariaflow-server / networkquality / aria2-launchd: opinion-free
+    // on expected_running so the dashboard treats them as always-on
+    // (or informational, in launchd's case).
+    expect(body["ariaflow-server"].result.expected_running).toBeNull();
+    expect(body.networkquality.result.expected_running).toBeNull();
+    expect(body["aria2-launchd"].result.expected_running).toBeNull();
+  });
+
+  it("BG-29: queued work flips aria2.expected_running to true", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/big.iso" }] },
+    });
+    const res = await app.inject({ method: "GET", url: "/api/lifecycle" });
+    expect(res.json().aria2.result.expected_running).toBe(true);
+  });
+
   it("BG-27: exposes installed/current/running axes on every component", async () => {
     const res = await app.inject({ method: "GET", url: "/api/lifecycle" });
     const body = res.json();
