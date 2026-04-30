@@ -7,11 +7,11 @@ name: auto-tag
 # Why workflow_run (not `push`): we never want to tag a commit whose
 # tests didn't pass. Gating on the green CI run is the contract.
 #
-# Why a PAT (RELEASE_PAT secret), not GITHUB_TOKEN: tags pushed by
+# Why a PAT (TAP_PUSH_TOKEN secret), not GITHUB_TOKEN: tags pushed by
 # `GITHUB_TOKEN` from inside a workflow do NOT trigger downstream
 # workflows (a GitHub security feature). To make release-npm /
 # release-tap / release-formula fire, we push the tag with a PAT
-# that has `contents: write` scope. Set the `RELEASE_PAT` repo
+# that has `contents: write` scope. Set the `TAP_PUSH_TOKEN` repo
 # secret. If the secret is missing the job no-ops with a warning.
 #
 # Idempotency: if the head commit is already tagged `vX.Y.Z`, no-op.
@@ -30,14 +30,14 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
     env:
-      HAS_PAT: ${{ secrets.RELEASE_PAT != '' && 'true' || 'false' }}
+      HAS_PAT: ${{ secrets.TAP_PUSH_TOKEN != '' && 'true' || 'false' }}
     steps:
-      - name: Verify RELEASE_PAT is set
+      - name: Verify TAP_PUSH_TOKEN is set
         run: |
           if [ "$HAS_PAT" != "true" ]; then
-            echo "::warning::RELEASE_PAT secret is not set. Skipping auto-tag — without a PAT, the tag would not trigger downstream release workflows. See docs/RELEASE.md."
+            echo "::warning::TAP_PUSH_TOKEN secret is not set. Skipping auto-tag — without a PAT, the tag would not trigger downstream release workflows. See docs/RELEASE.md."
           else
-            echo "RELEASE_PAT present; proceeding."
+            echo "TAP_PUSH_TOKEN present; proceeding."
           fi
 
       - uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PAT }}
+          token: ${{ secrets.TAP_PUSH_TOKEN }}
 
       - name: Compute next tag
         id: next

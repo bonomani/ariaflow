@@ -7,11 +7,11 @@ which bumps the latest `vX.Y.Z` patch and pushes the new tag. The
 tag push fans out to `release-npm`, `release-tap`, and
 `release-formula`.
 
-**Required setup:** the `RELEASE_PAT` repo secret (a Personal Access
+**Required setup:** the `TAP_PUSH_TOKEN` repo secret (a Personal Access
 Token with `contents: write` scope on this repo) must be set. Tags
 pushed by the default `GITHUB_TOKEN` from inside a workflow do **not**
 trigger downstream workflows (a GitHub security feature), so the PAT
-is what makes the cascade work. If `RELEASE_PAT` is missing, the
+is what makes the cascade work. If `TAP_PUSH_TOKEN` is missing, the
 auto-tag job no-ops with a warning in the workflow log.
 
 ## Manual Release (override)
@@ -63,9 +63,8 @@ ariaflow --version
 
 ## Prerequisites (repo secrets)
 
-- `RELEASE_PAT` — PAT with `contents: write` on this repo. Required for `auto-tag.yml` to push tags that trigger the downstream release workflows.
+- `TAP_PUSH_TOKEN` — PAT with `contents: write` on **both** `bonomani/ariaflow-server` (so `auto-tag.yml` can push tags that trigger the downstream release workflows) and `bonomani/homebrew-ariaflow-server` (so `release-tap.yml` can mirror the formula).
 - `NPM_TOKEN` — automation token with publish access to the `@ariaflow` scope
-- `TAP_PUSH_TOKEN` — fine-scoped PAT or GitHub App token with `contents: write` on `bonomani/homebrew-ariaflow-server`
 
 Missing secrets cause the affected workflow to skip cleanly (logged,
 not errored) so the rest of the pipeline still succeeds.
