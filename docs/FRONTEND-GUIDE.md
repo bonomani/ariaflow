@@ -27,7 +27,6 @@ Every download is a **queue item** with these fields:
 | `completed_at` | ISO 8601 \| null | When download finished |
 | `error_at` | ISO 8601 \| null | When error occurred |
 | `removed_at` | ISO 8601 \| null | When removed from queue |
-| `cancelled_at` | ISO 8601 \| null | When user cancelled |
 | `error_code` | string \| null | aria2 error code or `rpc_unreachable` |
 | `error_message` | string \| null | Human-readable error description |
 | `live_status` | string \| null | Raw aria2 status (`active`, `waiting`, `paused`) |
@@ -57,14 +56,18 @@ Every download is a **queue item** with these fields:
     └──────┬───┘   └──────────┘  aria2 complete    │
            │                                       ▼
      resume│                    ┌──────────┐  ┌─────────┐
-           └───────────────────►│  error   │  │ stopped │
+           └───────────────────►│  error   │  │ removed │
               (re-queue)        └────┬─────┘  └─────────┘
                                      │ retry
                                      ▼
                                 (back to queued)
-
-    Any state ──── user removes ────► cancelled (archived)
 ```
+
+Canonical vocabulary (BG-30, BG-33): aria2-native names where possible
+(`active`/`waiting`/`paused`/`error`/`complete`/`removed`); two
+backend-only staging states (`discovering`/`queued`). The legacy
+`stopped` and `cancelled` statuses were retired — frontends still
+emitting them must update.
 
 | Status | Terminal? | User actions available |
 |---|---|---|
@@ -75,15 +78,14 @@ Every download is a **queue item** with these fields:
 | `paused` | No | resume, remove |
 | `complete` | Yes | remove (archive) |
 | `error` | Yes | retry, remove |
-| `stopped` | Yes | retry, remove |
-| `cancelled` | Yes | — (already archived) |
+| `removed` | Yes | retry, remove |
 
 **Frontend tips:**
-- Show retry button only for `error` and `stopped`
+- Show retry button for `error` and `removed`
 - Show pause button only for `waiting` and `active`
 - Show resume button only for `paused`
-- Show remove button for all non-cancelled states
-- Items in `complete`/`error`/`stopped` stay in queue until user removes or auto-cleanup runs
+- Show remove button for all non-terminal states
+- Items in `complete`/`error`/`removed` stay in queue until user removes or auto-cleanup runs
 
 ### 1.3 Download Modes
 
@@ -165,7 +167,7 @@ The response always includes:
 {
   "items": [...],
   "state": { "running": false, "paused": false, "session_id": "..." },
-  "summary": { "total": 5, "queued": 2, "waiting": 0, "active": 1, "paused": 0, "complete": 1, "error": 1, "stopped": 0, "cancelled": 0, "discovering": 0 },
+  "summary": { "total": 5, "discovering": 0, "queued": 2, "waiting": 0, "active": 1, "paused": 0, "complete": 1, "error": 1, "removed": 0 },
   "ariaflow": { "version": "0.1.58", "schema_version": "1" },
   "_rev": 42,
   "_schema": "1",
@@ -235,7 +237,7 @@ Every item tracks its full lifecycle:
 | `resumed_at` | User resumes |
 | `completed_at` | Download finishes successfully |
 | `error_at` | Download fails |
-| `cancelled_at` | User removes (item archived) |
+| `removed_at` | User removes (item archived) |
 
 Use these for:
 - "Added 5 minutes ago" relative times

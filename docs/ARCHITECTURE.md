@@ -107,13 +107,31 @@ These are the configurable preferences stored in `declaration.json`:
 
 ## Source Structure
 
-| Module | Role |
+The codebase is a pnpm workspace with three packages.
+
+| Package | Role |
 |---|---|
-| `core.py` | Engine: scheduler loop, aria2 RPC wrappers, queue/state management |
-| `webapp.py` | HTTP server: REST API endpoints, SSE, web UI |
-| `api.py` | Public API surface: re-exports from core |
-| `contracts.py` | Declaration/policy: UIC gates, preflight checks |
-| `cli.py` | CLI entry point (`ariaflow-server` command) |
-| `install.py` | System install helpers (Homebrew, service setup) |
-| `bonjour.py` | mDNS/Bonjour service advertisement |
-| `platform/launchd.py` | macOS launchd service management |
+| `@ariaflow/core` (`packages/core/`) | Engine + libraries: scheduler loop, aria2 JSON-RPC client, queue/state stores, policy, contracts, discovery, install helpers |
+| `@ariaflow/api` (`packages/api/`) | Fastify HTTP server: REST endpoints, SSE, freshness registry (`/api/_meta`), error envelope |
+| `@ariaflow/cli` (`packages/cli/`) | `ariaflow` command: serve, doctor, queue ops |
+
+Inside `packages/core/src/`:
+
+| Subdir | Role |
+|---|---|
+| `aria2/` | JSON-RPC client, dispatch, option safety tiers |
+| `bandwidth/` | networkQuality probe, units, config |
+| `bonjour/` | mDNS service advertisement |
+| `contracts/` | UIC gates + preferences (single source for declaration shape) |
+| `discovery/` | Peer discovery via Bonjour browse |
+| `events/` | In-process event bus consumed by SSE and the action log |
+| `install/` | Homebrew formula generation, service installers |
+| `platform/` | macOS launchd helpers |
+| `queue/` | Item record types, policy, ops, summary |
+| `reconcile/` | Item ↔ aria2 reconciliation |
+| `routes/` | Path resolution and routing helpers |
+| `scheduler/` | Loop, tick, poll, retry, dedup, post-action |
+| `state/` | Archivable terminal-status logic |
+| `storage/` | JSON stores with file-locking, paths |
+| `torrent/` | Bencode + .torrent build/parse |
+| `transfers/` | aria2 transfer status helpers |

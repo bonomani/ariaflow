@@ -249,8 +249,7 @@ The scheduler auto-starts with `ariaflow serve` and runs continuously until shut
 | `paused` | Stable | aria2 | Transfer suspended |
 | `complete` | Terminal | ariaflow-server | Completed — post-action runs (aria2 `complete`) |
 | `error` | Terminal | ariaflow-server | Failed (retryable via retry) |
-| `stopped` | Terminal | ariaflow-server | Stopped by scheduler shutdown or aria2 `removed` |
-| `cancelled` | Terminal | ariaflow-server | Cancelled by user, archived |
+| `removed` | Terminal | ariaflow-server | Removed via aria2 `removed` or `POST /api/downloads/{id}/remove` |
 
 ### 2.4 State Transitions
 
@@ -264,10 +263,10 @@ The scheduler auto-starts with `ariaflow serve` and runs continuously until shut
 | `active` → `complete` | aria2 reports `complete` | _(poll via `aria2_tell_status`)_ | post-completion |
 | `active` → `error` | aria2 reports `error` or 5× RPC failures | _(poll via `aria2_tell_status`)_ | aria2-owned |
 | `active` → `paused` | `POST /api/downloads/{id}/pause` | `aria2_pause(gid)` | aria2-owned |
-| `active` → `stopped` | aria2 reports `removed` | _(poll via `aria2_tell_status`)_ | aria2-owned |
+| `active` → `removed` | aria2 reports `removed` | _(poll via `aria2_tell_status`)_ | aria2-owned |
 | `paused` → `active` | `POST /api/downloads/{id}/resume` (has GID) | `aria2_unpause(gid)` | aria2-owned |
 | `paused` → `queued` | `POST /api/downloads/{id}/resume` (no GID) | _(eager re-submission attempted)_ | fallback |
-| `queued`/`paused` → `cancelled` | `POST /api/downloads/{id}/remove` | `aria2_remove(gid)` + `aria2_remove_download_result(gid)` | removal |
+| `queued`/`paused` → `removed` | `POST /api/downloads/{id}/remove` | `aria2_remove(gid)` + `aria2_remove_download_result(gid)` | removal |
 | `error` → `queued` | `POST /api/downloads/{id}/retry` | _(eager re-submission attempted)_ | fallback |
 
 ### 2.5 Session States (3)
@@ -323,7 +322,7 @@ Close reasons: `queue_complete`, `closed`, `manual_new_session`.
 │  │           paused   → item.status = paused            │
 │  │           complete → item.status = complete          │
 │  │           error    → item.status = error             │
-│  │           removed  → item.status = stopped           │
+│  │           removed  → item.status = removed           │
 │  │           RPC fail ×5 → item.status = error          │
 │  │                                                       │
 │  ├── _apply_bandwidth_probe()                           │
@@ -414,7 +413,7 @@ All files under `~/.config/ariaflow-server/` (override: `ARIAFLOW_DIR`), accesse
 |---|---|
 | `state.json` | `running`, `paused`, `session_id`, `session_started_at`, `session_last_seen_at`, `session_closed_at`, `session_closed_reason`, `active_gid`, `active_url`, `last_bandwidth_probe`, `last_bandwidth_probe_at`, `_rev` |
 | `queue.json` | `{items: [...]}` — each item has: id, url, status, mode, priority, gid, output, mirrors, torrent_data, metalink_data, session_id, timestamps, error fields, live_status, progress fields |
-| `archive.json` | Soft-deleted items (cancelled, cleaned up) |
+| `archive.json` | Soft-deleted items (removed, cleaned up) |
 | `declaration.json` | UIC gates, preferences (concurrency, bandwidth, dedup policy), policies |
 | `actions.jsonl` | Audit log of all operations (auto-rotated at 512 KB) |
 | `sessions.jsonl` | Session history (appended on session close) |
