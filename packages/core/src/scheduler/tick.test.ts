@@ -169,4 +169,22 @@ describe("runSchedulerTick", () => {
     });
     expect(dispatched[0]).toBe("http://h/high");
   });
+
+  it("BG-28(a): stamps state.active_gid / active_url on the dispatched item", async () => {
+    await queueOps.add({ url: "http://h/foo.iso" });
+    const lock = new StorageLock(storageLockPath(env));
+    const state = new StateStore(lock, env);
+    const { client } = fakeClient(({ method }) => (method === "aria2.addUri" ? "GID-A" : "OK"));
+    await runSchedulerTick({
+      queueStore: queue,
+      declarationStore: declaration,
+      actionLog: actions,
+      aria2: client,
+      capBytesPerSec: 0,
+      stateStore: state,
+    });
+    const s = await state.load();
+    expect(s.active_gid).toBe("GID-A");
+    expect(s.active_url).toBe("http://h/foo.iso");
+  });
 });

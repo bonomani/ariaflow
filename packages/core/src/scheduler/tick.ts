@@ -14,6 +14,13 @@ export interface SchedulerTickDeps {
   aria2: Aria2Client;
   /** Bytes/sec cap to apply on dispatch (passed straight to dispatchDownload). */
   capBytesPerSec: number;
+  /**
+   * BG-28(a): when supplied, the tick stamps state.active_gid /
+   * active_url with the most recently dispatched item so the dashboard's
+   * TRANSFER chip can spotlight it. Optional — pure tests can leave it
+   * out and the active state stays untouched.
+   */
+  stateStore?: import("../storage/state.js").StateStore;
 }
 
 export interface SchedulerTickResult {
@@ -98,6 +105,21 @@ export async function runSchedulerTick(deps: SchedulerTickDeps): Promise<Schedul
 
   if (started.length > 0 || failed.length > 0) {
     await deps.queueStore.save(items);
+  }
+
+  // BG-28(a): point state.active_gid / active_url at the most recently
+  // dispatched item so the dashboard knows which row to spotlight. If
+  // nothing started this tick we leave the existing values alone — poll
+  // is responsible for clearing them when the active item terminates.
+  if (started.length > 0 && deps.stateStore) {
+    const last = started[started.length - 1]!;
+    const lastItem = items.find((i) => i.id === last.id);
+    if (lastItem) {
+      await deps.stateStore.update((s) => {
+        s.active_gid = last.gid;
+        s.active_url = lastItem.url ?? null;
+      });
+    }
   }
 
   return { started, failed, saturated: false };

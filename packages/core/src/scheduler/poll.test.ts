@@ -149,6 +149,72 @@ describe("pollActiveItems", () => {
     expect(id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  it("BG-28(b): mirrors aria2 camelCase progress keys onto the row", async () => {
+    await seedActiveItem("GID-CAM");
+    await pollActiveItems({
+      queueStore: queue,
+      actionLog: actions,
+      aria2: client(({ method }) => {
+        if (method === "aria2.tellActive")
+          return [
+            {
+              gid: "GID-CAM",
+              status: "active",
+              totalLength: "1000",
+              completedLength: "300",
+              downloadSpeed: "100",
+              uploadSpeed: "5",
+              connections: "8",
+            },
+          ];
+        return "OK";
+      }),
+    });
+    const items = await queue.load();
+    const row = items[0] as Record<string, unknown>;
+    expect(row.downloadSpeed).toBe("100");
+    expect(row.uploadSpeed).toBe("5");
+    expect(row.completedLength).toBe("300");
+    expect(row.totalLength).toBe("1000");
+    expect(row.connections).toBe("8");
+  });
+
+  it("BG-28(a): keeps state.active_gid pointed at the live active item then clears on terminal", async () => {
+    const env = { ARIAFLOW_DIR: dir };
+    const lock = new StorageLock(storageLockPath(env));
+    const state = new StateStore(lock, env);
+    await seedActiveItem("GID-A");
+    // Active in aria2 → state should track it.
+    await pollActiveItems({
+      queueStore: queue,
+      actionLog: actions,
+      stateStore: state,
+      aria2: client(({ method }) =>
+        method === "aria2.tellActive"
+          ? [{ gid: "GID-A", status: "active", totalLength: "10", completedLength: "1" }]
+          : "OK",
+      ),
+    });
+    let s = await state.load();
+    expect(s.active_gid).toBe("GID-A");
+    expect(s.active_url).toBe("http://h/x");
+    // Now aria2 says complete → state clears.
+    await pollActiveItems({
+      queueStore: queue,
+      actionLog: actions,
+      stateStore: state,
+      aria2: client(({ method }) => {
+        if (method === "aria2.tellActive") return [];
+        if (method === "aria2.tellStatus")
+          return { gid: "GID-A", status: "complete", totalLength: "10", completedLength: "10" };
+        return "OK";
+      }),
+    });
+    s = await state.load();
+    expect(s.active_gid).toBeNull();
+    expect(s.active_url).toBeNull();
+  });
+
   it("appends a 'transition' action per terminal switch", async () => {
     await seedActiveItem("GID-DONE");
     await pollActiveItems({

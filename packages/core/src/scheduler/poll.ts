@@ -9,6 +9,12 @@ export interface PollDeps {
   queueStore: QueueStore;
   actionLog: ActionLog;
   aria2: Aria2Client;
+  /**
+   * BG-28(a): when supplied, poll keeps state.active_gid / active_url
+   * coherent — points it at the still-running active item, or clears
+   * both when nothing is in flight.
+   */
+  stateStore?: import("../storage/state.js").StateStore;
 }
 
 export interface PollResult {
@@ -72,13 +78,28 @@ export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
     const live = mergeActiveStatus(info.status ?? null);
     const before: QueueItemRecord = { ...item };
 
-    // Always refresh the live progress fields so /api/active sees fresh data.
-    if (typeof info.downloadSpeed === "string")
-      (item as Record<string, unknown>).download_speed = info.downloadSpeed;
-    if (typeof info.completedLength === "string")
-      (item as Record<string, unknown>).completed_length = info.completedLength;
-    if (typeof info.totalLength === "string")
-      (item as Record<string, unknown>).total_length = info.totalLength;
+    // BG-28(b): mirror aria2's tellStatus camelCase keys onto the row
+    // (the dashboard reads `item.downloadSpeed` etc directly from
+    // /api/status.items[]). Snake-case aliases stay for any internal
+    // caller that depended on them. Mutations here mark the row dirty
+    // so the queue store actually persists the refresh.
+    const obj = item as Record<string, unknown>;
+    const setField = (key: string, value: unknown): void => {
+      if (value === undefined) return;
+      if (obj[key] !== value) {
+        obj[key] = value;
+        dirty = true;
+      }
+    };
+    setField("downloadSpeed", info.downloadSpeed);
+    setField("uploadSpeed", info.uploadSpeed);
+    setField("completedLength", info.completedLength);
+    setField("totalLength", info.totalLength);
+    setField("connections", (info as Record<string, unknown>).connections);
+    setField("numSeeders", (info as Record<string, unknown>).numSeeders);
+    setField("download_speed", info.downloadSpeed);
+    setField("completed_length", info.completedLength);
+    setField("total_length", info.totalLength);
     item.live_status = live;
 
     if (live === "complete") {
@@ -148,6 +169,28 @@ export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
   }
 
   if (dirty) await deps.queueStore.save(items);
+
+  // BG-28(a): keep state.active_gid / active_url honest. Prefer an
+  // item still in aria2's active tier; otherwise clear both so the
+  // dashboard doesn't keep spotlighting a dead gid.
+  if (deps.stateStore) {
+    const liveActive = items.find(
+      (i) =>
+        typeof i.gid === "string" &&
+        i.gid &&
+        i.status === "active" &&
+        byGid.has(i.gid as string),
+    );
+    const cur = await deps.stateStore.load();
+    const nextGid = liveActive ? (liveActive.gid as string) : null;
+    const nextUrl = liveActive ? liveActive.url ?? null : null;
+    if (cur.active_gid !== nextGid || cur.active_url !== nextUrl) {
+      await deps.stateStore.update((s) => {
+        s.active_gid = nextGid;
+        s.active_url = nextUrl;
+      });
+    }
+  }
 
   return { active, completed, errored, updated };
 }

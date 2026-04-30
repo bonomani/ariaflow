@@ -128,12 +128,14 @@ export async function runSchedulerLoop(
           actionLog: deps.actionLog,
           aria2: deps.aria2,
           capBytesPerSec: cap,
+          stateStore: deps.stateStore,
         });
       }
       const poll = await pollActiveItems({
         queueStore: deps.queueStore,
         actionLog: deps.actionLog,
         aria2: deps.aria2,
+        stateStore: deps.stateStore,
       });
 
       // Run post-action policy on items the poll just transitioned to
