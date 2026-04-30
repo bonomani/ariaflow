@@ -1,6 +1,11 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyCors from "@fastify/cors";
 import {
+  listFreshness,
+  registerDefaultFreshness,
+  withMeta,
+} from "./freshness.js";
+import {
   ActionLog,
   allowedActions,
   aria2,
@@ -93,6 +98,10 @@ const SWAGGER_UI_HTML = `<!DOCTYPE html>
  */
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger ?? false });
+
+  // BG-31: per-endpoint freshness contract. Stamps `meta` on a curated
+  // subset of GETs and exposes the registry at /api/_meta. Idempotent.
+  registerDefaultFreshness();
 
   // CORS: echo the request Origin by default so the Swagger UI / dashboard
   // running on a different host or port can hit /api/* without preflight
@@ -572,15 +581,26 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const n = Number(limitRaw);
     if (Number.isFinite(n)) limit = Math.max(1, Math.min(500, Math.trunc(n)));
     const items = await deps.actionLog.load(limit);
-    return { ok: true, items };
+    return withMeta("GET", "/api/log", { ok: true, items });
   });
 
   app.get("/api/health", async () => {
-    return { ok: true, status: "healthy", uptime_seconds: Math.round(process.uptime()) };
+    return withMeta("GET", "/api/health", {
+      ok: true,
+      status: "healthy",
+      uptime_seconds: Math.round(process.uptime()),
+    });
   });
 
   app.get("/api/version", async () => {
-    return { ok: true, version: deps.version ?? "0.0.0" };
+    return withMeta("GET", "/api/version", { ok: true, version: deps.version ?? "0.0.0" });
+  });
+
+  // BG-31 #3: machine-readable freshness index for the dashboard's
+  // FreshnessRouter. Self-classified `bootstrap` (cache for the
+  // session). Generated from the registry — never hand-maintained.
+  app.get("/api/_meta", async () => {
+    return withMeta("GET", "/api/_meta", { ok: true, endpoints: listFreshness() });
   });
 
   app.get("/api", async () => ({
@@ -731,7 +751,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         _rev: Number(state._rev ?? 0),
       };
       if (statusFilter || sessionFilter) payload.filtered = true;
-      return payload;
+      return withMeta("GET", "/api/status", payload);
     },
   );
 
@@ -880,7 +900,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const state = await deps.stateStore.load();
     const config = bandwidthConfigFrom(declaration);
     const probe = (state.last_bandwidth_probe ?? null) as Record<string, unknown> | null;
-    return {
+    return withMeta("GET", "/api/bandwidth", {
       ok: true,
       config,
       last_probe: probe,
@@ -901,7 +921,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       up_cap_mbps: probe?.up_cap_mbps ?? null,
       cap_bytes_per_sec: probe?.cap_bytes_per_sec ?? null,
       responsiveness_rpm: probe?.responsiveness_rpm ?? null,
-    };
+    });
   });
 
   const requireAria2 = (reply: import("fastify").FastifyReply) => {
@@ -934,7 +954,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (requireAria2(reply)) return;
     try {
       const opts = await aria2.getGlobalOption(deps.aria2!);
-      return { ok: true, ...opts };
+      return withMeta("GET", "/api/aria2/get_global_option", { ok: true, ...opts });
     } catch (err) {
       return reply
         .code(502)
@@ -1565,7 +1585,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       },
     };
 
-    return {
+    return withMeta("GET", "/api/lifecycle", {
       ok: true,
       "ariaflow-server": ariaflowServer,
       aria2: { result: aria2Result },
@@ -1576,7 +1596,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       session_last_seen_at: state.session_last_seen_at,
       session_closed_at: state.session_closed_at,
       session_closed_reason: state.session_closed_reason,
-    };
+    });
   });
 
   app.post<{ Params: { target: string; action: string }; Querystring: { dry_run?: string } }>(

@@ -494,7 +494,7 @@ describe("GET /api/health and /api/version", () => {
 
   it("/api/version surfaces the configured version, defaulting to 0.0.0", async () => {
     const res = await app.inject({ method: "GET", url: "/api/version" });
-    expect(res.json()).toEqual({ ok: true, version: "0.0.0" });
+    expect(res.json()).toMatchObject({ ok: true, version: "0.0.0" });
   });
 });
 
@@ -810,6 +810,51 @@ describe("meta routes", () => {
     expect(typeof body.health.bytes_received_total).toBe("number");
     expect(typeof body.health.bytes_sent_total).toBe("number");
     expect(typeof body.health.disk_ok).toBe("boolean");
+  });
+
+  it("BG-31: GET /api/_meta lists registered endpoints; revalidate_on references real routes", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/_meta" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.ok).toBe(true);
+    expect(body.meta).toEqual({ freshness: "bootstrap" });
+    expect(Array.isArray(body.endpoints)).toBe(true);
+    const paths = body.endpoints.map((e: { path: string }) => e.path);
+    expect(paths).toContain("/api/status");
+    expect(paths).toContain("/api/_meta");
+
+    const recorded = (app as unknown as { _ariaflowRoutes: Array<{ method: string | string[]; url: string }> })
+      ._ariaflowRoutes;
+    const known = new Set<string>();
+    for (const r of recorded) {
+      const methods = Array.isArray(r.method) ? r.method : [r.method];
+      for (const m of methods) known.add(`${m} ${r.url}`);
+    }
+    for (const ep of body.endpoints) {
+      for (const trigger of ep.revalidate_on ?? []) {
+        expect(known.has(trigger)).toBe(true);
+      }
+    }
+  });
+
+  it("BG-31: GET /api/health and /api/version are classified bootstrap with stable bodies", async () => {
+    const a = await app.inject({ method: "GET", url: "/api/health" });
+    const b = await app.inject({ method: "GET", url: "/api/health" });
+    const ja = a.json();
+    const jb = b.json();
+    expect(ja.meta).toEqual({ freshness: "bootstrap" });
+    // uptime_seconds is rounded; bodies should match across rapid calls
+    expect(ja).toEqual(jb);
+
+    const v = await app.inject({ method: "GET", url: "/api/version" });
+    const v2 = await app.inject({ method: "GET", url: "/api/version" });
+    expect(v.json()).toEqual(v2.json());
+    expect(v.json().meta).toEqual({ freshness: "bootstrap" });
+  });
+
+  it("BG-31: GET /api/status carries meta.freshness=live", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/status" });
+    expect(res.json().meta).toEqual({ freshness: "live", transport: "sse" });
   });
 
   it("BG-30 #4: GET /api/status dual-keys dispatch_paused alongside legacy state.paused", async () => {
