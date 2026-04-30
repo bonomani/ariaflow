@@ -97,6 +97,12 @@ export {
   type PostActionResult,
 } from "./scheduler/post-action.js";
 export {
+  reconcileLiveQueue,
+  type ReconcileLiveDeps,
+  type ReconcileLiveOptions,
+  type ReconcileLiveResult,
+} from "./scheduler/reconcile.js";
+export {
   runSchedulerLoop,
   type SchedulerLoopDeps,
   type SchedulerLoopIteration,

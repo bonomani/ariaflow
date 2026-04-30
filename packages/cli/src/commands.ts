@@ -6,6 +6,7 @@ import {
   bandwidthConfigFrom,
   EventBus,
   planAutoCleanup,
+  reconcileLiveQueue,
   runBandwidthProbe,
   runSchedulerLoop,
   summarizeQueue,
@@ -327,6 +328,18 @@ export async function cmdServe(
         intervalMs: opts.schedulerIntervalMs ?? 2000,
         signal: schedulerCtrl.signal,
         preLoop: async () => {
+          // Adopt orphan GIDs from a previous run before the loop starts
+          // pushing new ones. Composes Phase 8's matcher to avoid double-
+          // dispatching items aria2 is already running.
+          await reconcileLiveQueue(
+            {
+              queueStore: ctx.queue,
+              stateStore: ctx.state,
+              actionLog: ctx.actions,
+              aria2: aria2!,
+            },
+            { adoptMissing: true },
+          );
           // Refresh the bandwidth cap before entering the loop so the
           // first batch of dispatches respects the live network rate.
           const declaration = await ctx.declaration.load();
