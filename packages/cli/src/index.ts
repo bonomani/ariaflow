@@ -242,15 +242,12 @@ program
   .command("formula")
   .description("render the Homebrew formula for a release tag")
   .requiredOption("--tag <vX.Y.Z>", "stable release tag")
-  .option("--flavor <ts|python>", "which formula to emit", "ts")
   .option("--sha256 <hex>", "precomputed sha256 (skips the network fetch)")
   .option("--output <path>", "write the formula to this path in addition to stdout")
   .action(
-    async (opts: { tag: string; flavor: string; sha256?: string; output?: string }) => {
-      const flavor = opts.flavor === "python" ? "python" : "ts";
+    async (opts: { tag: string; sha256?: string; output?: string }) => {
       const r = await cmdFormula({
         tag: opts.tag,
-        flavor,
         ...(opts.sha256 ? { sha256: opts.sha256 } : {}),
         ...(opts.output ? { output: opts.output } : {}),
       });

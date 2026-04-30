@@ -15,7 +15,6 @@ import {
   planAutoCleanup,
   reconcileLiveQueue,
   renderFormula,
-  renderFormulaTs,
   runBandwidthProbe,
   runSchedulerLoop,
   summarizeQueue,
@@ -826,17 +825,14 @@ export async function cmdDoctor(
 
 export interface FormulaOptions {
   tag: string;
-  flavor?: "ts" | "python";
   sha256?: string;
   output?: string;
 }
 
 /**
- * Render the Homebrew formula for a release tag. Defaults to the
- * TypeScript flavor; pass flavor:"python" for the legacy Python build.
- *
- * The sha256 is fetched by streaming the GitHub release tarball when
- * not provided. Pass --sha256 to skip the network round-trip.
+ * Render the Homebrew formula for a release tag. The sha256 is
+ * fetched by streaming the GitHub release tarball when not provided;
+ * pass --sha256 to skip the network round-trip.
  */
 export async function cmdFormula(opts: FormulaOptions): Promise<CmdResult> {
   let version: string;
@@ -854,11 +850,7 @@ export async function cmdFormula(opts: FormulaOptions): Promise<CmdResult> {
       return fail(`error: failed to fetch ${url}: ${(err as Error).message}\n`, 1);
     }
   }
-  const flavor = opts.flavor ?? "ts";
-  const formula =
-    flavor === "ts"
-      ? renderFormulaTs({ version, url, sha256 })
-      : renderFormula({ version, url, sha256 });
+  const formula = renderFormula({ version, url, sha256 });
   if (opts.output) {
     await writeFormula(opts.output, formula);
   }

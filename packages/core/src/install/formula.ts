@@ -47,81 +47,20 @@ export interface RenderFormulaInput {
 }
 
 /**
- * Render the Homebrew formula text for ariaflow-server. Mirrors
- * scripts/homebrew_formula.py::render_formula byte-for-byte (modulo
- * whitespace normalization) so the generated output is interchangeable.
+ * Render the Homebrew formula for ariaflow-server. Depends on
+ * Node + aria2, builds the workspace via Corepack-pinned pnpm,
+ * flattens @ariaflow/cli into libexec, then writes thin bin shims
+ * for both `ariaflow` (canonical) and `ariaflow-server` (back-compat
+ * with users who scripted against the legacy Python binary name).
+ *
+ * The brew service stanza launches `ariaflow serve --scheduler` on
+ * 127.0.0.1:8000 so the user gets a working downloader once aria2 is
+ * also installed. openapi.yaml is vendored alongside the dist tree
+ * so /api/docs + /api/openapi.yaml resolve.
  */
 export function renderFormula({ version, url, sha256 }: RenderFormulaInput): string {
   return `class AriaflowServer < Formula
   desc "Sequential aria2 queue driver with adaptive bandwidth control"
-  homepage "https://github.com/bonomani/ariaflow-server"
-  url "${url}"
-  sha256 "${sha256}"
-  version "${version}"
-  license "MIT"
-  depends_on "python"
-  depends_on "aria2"
-  head "https://github.com/bonomani/ariaflow-server.git", branch: "main"
-
-  resource "portalocker" do
-    url "https://files.pythonhosted.org/packages/source/p/portalocker/portalocker-3.2.0.tar.gz"
-    sha256 "1f3002956a54a8c3730586c5c77bf18fae4149e07eaf1c29fc3faf4d5a3f89ac"
-  end
-
-  def install
-    python3 = "python3"
-    venv = libexec/"venv"
-    system python3, "-m", "venv", venv
-    venv_pip = venv/"bin/pip"
-    resource("portalocker").stage { system venv_pip, "install", "." }
-
-    libexec.install "src"
-
-    (bin/"ariaflow-server").write <<~EOS
-      #!/bin/bash
-      VENV="#{libexec}/venv"
-      SITE=$(find "$VENV/lib" -maxdepth 1 -name 'python3.*' -print -quit)/site-packages
-      exec env PYTHONPATH="#{libexec}/src:$SITE:\${PYTHONPATH}" "$VENV/bin/python3" -m ariaflow_server "$@"
-    EOS
-    chmod 0755, bin/"ariaflow-server"
-  end
-
-  service do
-    run [opt_bin/"ariaflow-server", "serve", "--host", "127.0.0.1", "--port", "8000"]
-    keep_alive true
-    working_dir var
-    log_path var/"log/ariaflow-server.log"
-    error_log_path var/"log/ariaflow-server.err.log"
-  end
-
-  test do
-    system bin/"ariaflow-server", "--help"
-  end
-end
-`;
-}
-
-/** Write the rendered formula to disk, creating parent dirs as needed. */
-export async function writeFormula(path: string, content: string): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, content, "utf8");
-}
-
-/**
- * Render the TypeScript-port Homebrew formula. Different shape from
- * renderFormula(): depends on Node + aria2 (no Python), builds the
- * workspace from source via Corepack-pinned pnpm, flattens the cli
- * package into libexec via `pnpm deploy --prod`, then writes a thin
- * bin shim that execs `node <libexec>/dist/index.js`.
- *
- * The brew service stanza launches `ariaflow serve --scheduler` on
- * 127.0.0.1:8000 so the user gets a working downloader once aria2 is
- * also installed (depends_on "aria2"). openapi.yaml is vendored
- * alongside the dist tree so /api/docs + /api/openapi.yaml resolve.
- */
-export function renderFormulaTs({ version, url, sha256 }: RenderFormulaInput): string {
-  return `class AriaflowServerTs < Formula
-  desc "Sequential aria2 queue driver with adaptive bandwidth control (TypeScript)"
   homepage "https://github.com/bonomani/ariaflow-server"
   url "${url}"
   sha256 "${sha256}"
@@ -147,6 +86,13 @@ export function renderFormulaTs({ version, url, sha256 }: RenderFormulaInput): s
       exec "\${HOMEBREW_PREFIX}/bin/node" "#{libexec}/cli/dist/index.js" "$@"
     EOS
     chmod 0755, bin/"ariaflow"
+
+    # Back-compat shim: pre-TS users scripted against \`ariaflow-server\`.
+    (bin/"ariaflow-server").write <<~EOS
+      #!/bin/bash
+      exec "\${HOMEBREW_PREFIX}/bin/ariaflow" "$@"
+    EOS
+    chmod 0755, bin/"ariaflow-server"
   end
 
   service do
@@ -159,8 +105,8 @@ export function renderFormulaTs({ version, url, sha256 }: RenderFormulaInput): s
     ]
     keep_alive true
     working_dir var
-    log_path var/"log/ariaflow-server-ts.log"
-    error_log_path var/"log/ariaflow-server-ts.err.log"
+    log_path var/"log/ariaflow-server.log"
+    error_log_path var/"log/ariaflow-server.err.log"
   end
 
   test do
@@ -169,4 +115,10 @@ export function renderFormulaTs({ version, url, sha256 }: RenderFormulaInput): s
   end
 end
 `;
+}
+
+/** Write the rendered formula to disk, creating parent dirs as needed. */
+export async function writeFormula(path: string, content: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, content, "utf8");
 }

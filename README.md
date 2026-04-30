@@ -21,7 +21,7 @@ Headless queue driver for `aria2c`.
 
 ```bash
 # Homebrew (recommended on macOS)
-brew tap bonomani/ariaflow-server-ts
+brew tap bonomani/ariaflow-server
 brew install ariaflow-server
 
 # or npm
@@ -147,14 +147,14 @@ pnpm test
 ## Homebrew (macOS)
 
 ```bash
-brew tap bonomani/ariaflow-server-ts
+brew tap bonomani/ariaflow-server
 brew install ariaflow-server
 brew services start ariaflow-server
 ```
 
-The tap is at `bonomani/homebrew-ariaflow-server-ts`; the formula is
+The tap is at `bonomani/homebrew-ariaflow-server`; the formula is
 re-rendered and pushed automatically on each release tag (see
-`.github/workflows/release-ts-{formula,tap}.yml`).
+`.github/workflows/release-{formula,tap}.yml`).
 
 The web dashboard is a separate repo: `ariaflow-dashboard`.
 
@@ -184,8 +184,8 @@ Bonjour is **optional** — peer discovery is disabled without it.
 See [`docs/RELEASE.md`](./docs/RELEASE.md). On every `v*` tag push:
 
 1. `release-npm.yml` publishes `@ariaflow/{core,api,cli}` to npm.
-2. `release-ts-formula.yml` renders the Homebrew formula and attaches it to the GitHub release.
-3. `release-ts-tap.yml` mirrors the formula into the tap repo.
+2. `release-formula.yml` renders the Homebrew formula and attaches it to the GitHub release.
+3. `release-tap.yml` mirrors the formula into the tap repo.
 
 ## License
 

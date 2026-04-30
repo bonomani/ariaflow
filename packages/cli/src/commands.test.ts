@@ -391,24 +391,19 @@ describe("cmdFormula", () => {
     expect(r.stdout).toMatch(/vX\.Y\.Z/);
   });
 
-  it("renders the TS flavor by default with the requested version + sha256", async () => {
+  it("renders the formula with the requested version + sha256", async () => {
     const r = await cmdFormula({ tag: "v1.2.3", sha256: "deadbeef" });
     expect(r.exitCode).toBe(0);
-    expect(r.stdout).toContain("class AriaflowServerTs < Formula");
+    expect(r.stdout).toContain("class AriaflowServer < Formula");
     expect(r.stdout).toContain('version "1.2.3"');
     expect(r.stdout).toContain('sha256 "deadbeef"');
     expect(r.stdout).toContain('depends_on "node"');
-  });
-
-  it("renders the python flavor on request", async () => {
-    const r = await cmdFormula({
-      tag: "v1.2.3",
-      flavor: "python",
-      sha256: "deadbeef",
-    });
-    expect(r.stdout).toContain("class AriaflowServer < Formula");
-    expect(r.stdout).not.toContain("AriaflowServerTs");
-    expect(r.stdout).toContain("portalocker");
+    expect(r.stdout).toContain('depends_on "aria2"');
+    // Both bin shims present — back-compat for users scripting against
+    // the legacy `ariaflow-server` binary name.
+    expect(r.stdout).toContain('(bin/"ariaflow")');
+    expect(r.stdout).toContain('(bin/"ariaflow-server")');
+    expect(r.stdout).not.toContain("portalocker");
   });
 });
 
