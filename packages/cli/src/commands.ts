@@ -4,6 +4,7 @@ import {
   allowedActions,
   Aria2Client,
   bandwidthConfigFrom,
+  deduplicateActiveTransfers,
   EventBus,
   planAutoCleanup,
   reconcileLiveQueue,
@@ -340,6 +341,13 @@ export async function cmdServe(
             },
             { adoptMissing: true },
           );
+          // Drop duplicate active transfers so the scheduler doesn't
+          // double-bill bandwidth to the same URL on startup.
+          await deduplicateActiveTransfers({
+            declarationStore: ctx.declaration,
+            actionLog: ctx.actions,
+            aria2: aria2!,
+          });
           // Refresh the bandwidth cap before entering the loop so the
           // first batch of dispatches respects the live network rate.
           const declaration = await ctx.declaration.load();

@@ -103,6 +103,11 @@ export {
   type ReconcileLiveResult,
 } from "./scheduler/reconcile.js";
 export {
+  deduplicateActiveTransfers,
+  type DeduplicateDeps,
+  type DeduplicateResult,
+} from "./scheduler/dedup.js";
+export {
   runSchedulerLoop,
   type SchedulerLoopDeps,
   type SchedulerLoopIteration,
