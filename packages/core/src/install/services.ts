@@ -1,4 +1,5 @@
 import { spawn as nodeSpawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { isLinux, isMacOS } from "../platform/detect.js";
@@ -174,19 +175,23 @@ export function detectServiceTarget(): ServiceTarget {
  * Homebrew/Linux-default location). Returns null when nothing is found.
  */
 export function findAria2c(env: NodeJS.ProcessEnv = process.env): string | null {
-  const onPath = which("aria2c", env);
+  // Augment PATH with the typical brew/system locations before
+  // running `which`. launchd's default PATH is /usr/bin:/bin:/usr/sbin:/sbin
+  // which would otherwise miss aria2c installed via Homebrew.
+  const augmented = {
+    ...env,
+    PATH: [env.PATH, "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"]
+      .filter(Boolean)
+      .join(":"),
+  };
+  const onPath = which("aria2c", augmented);
   if (onPath) return onPath;
   for (const candidate of [
     "/opt/homebrew/bin/aria2c",
     "/usr/local/bin/aria2c",
     "/usr/bin/aria2c",
   ]) {
-    try {
-      const { existsSync } = require("node:fs") as typeof import("node:fs");
-      if (existsSync(candidate)) return candidate;
-    } catch {
-      /* ignore */
-    }
+    if (existsSync(candidate)) return candidate;
   }
   return null;
 }
