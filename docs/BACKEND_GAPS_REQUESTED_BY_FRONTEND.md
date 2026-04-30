@@ -11,9 +11,68 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
 
-_End of open gaps._
+### BG-31: Per-endpoint freshness contract + `/api/_meta` index
+
+**Problem.** Every JSON endpoint today has the same effective refresh
+strategy on the client (SSE tick → refetch everything). Hot data
+(item progress) and cold data (lifecycle versions, options) ride the
+same channel at the same rate. The client has to guess cadence per
+endpoint; new mutations don't surface to the client. Design rationale,
+prior-art comparison, and seven-class taxonomy in
+`ariaflow-dashboard/docs/FRESHNESS_AXIS.md`.
+
+**Required backend changes:**
+
+1. **Add a `meta` block to every JSON endpoint:**
+   ```json
+   "meta": {
+     "freshness": "bootstrap" | "live" | "warm" | "cold" | "on-action" | "swr" | "derived",
+     "ttl_s": 30,
+     "revalidate_on": ["POST /api/lifecycle/install"],
+     "transport": "sse"
+   }
+   ```
+   `ttl_s` required for `warm` / `swr`. `revalidate_on` required for `on-action`. `transport` required for `live`.
+
+2. **Single server-side registry.** One helper (e.g. `withMeta(endpointKey, body)`) reads from a per-endpoint registration so the same source feeds both inline `meta` blocks and the index. No two declarations of the same fact.
+
+3. **`GET /api/_meta`** — returns
+   ```json
+   { "endpoints": [{ "method": "GET", "path": "/api/lifecycle", "freshness": "warm", "ttl_s": 30, "revalidate_on": ["POST /api/lifecycle/install","POST /api/lifecycle/uninstall"] }, ...] }
+   ```
+   Itself classified `bootstrap` (cached for the session). Generated from the registry — never hand-maintained.
+
+4. **Initial coverage targets** (where the first wins live):
+   - `/api/status` → `live` (SSE-pushed)
+   - `/api/lifecycle` → `warm`, `ttl_s: 30`, `revalidate_on: ["POST /api/lifecycle/install","POST /api/lifecycle/uninstall"]`
+   - `/api/bandwidth` → `on-action`, `revalidate_on: ["POST /api/bandwidth/probe"]`
+   - `/api/options` → `cold`
+   - `/api/log` → `swr`, `ttl_s: 10`
+   - `/api/health`, `/api/version` → `bootstrap`
+
+5. **Test-time validators:**
+   - Every route handler must be registered (no implicit endpoints in `_meta`).
+   - `bootstrap` endpoints return byte-identical bodies across calls in tests.
+   - `live` endpoints declare a `transport`.
+   - `on-action` endpoints' `revalidate_on` references existing routes.
+
+6. **Document the vocabulary** in `ariaflow-server/docs/FRESHNESS.md` (server-side mirror) so the contract is co-located with the code that emits it. Reference `ariaflow-dashboard/docs/FRESHNESS_AXIS.md` as the design rationale.
+
+**Frontend code refs (paired update FE-24, blocked by this):**
+- `ariaflow-dashboard/src/ariaflow_dashboard/static/ts/` — new `FreshnessRouter` module
+- `ariaflow-dashboard/src/ariaflow_dashboard/static/ts/app.ts` — replace eager SSE-tick refetch
+- `ariaflow-dashboard/src/ariaflow_dashboard/static/_fragments/tab_dev.html` — Freshness map panel
+- `ariaflow-dashboard/package.json` — `npm run freshness:snapshot` script
+
+**Sequence:** backend lands #1–6 with initial coverage (#4) → frontend ships `FreshnessRouter` + Dev panel (FE-24) → expand backend coverage to remaining endpoints.
+
+**Priority:** medium — current behavior works but wastes bandwidth/battery on hidden tabs and on cold endpoints, and there's no observability on which endpoint the dashboard is hammering.
+
+**Anti-goals:** not a cache implementation, not a transport, not enforcement (server lying about class is a bug, not a security issue). Schema is advisory.
+
+
 
 ## Explicit non-requests (do not implement)
 
