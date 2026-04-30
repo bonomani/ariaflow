@@ -1,9 +1,20 @@
 {
   "name": "@ariaflow/core",
   "version": "0.0.0",
+  "description": "Storage, aria2 RPC, scheduler, and shared helpers for ariaflow-server",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": ["dist", "README.md", "LICENSE"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bonomani/ariaflow-server.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/bonomani/ariaflow-server",
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=20" },
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc --noEmit"
