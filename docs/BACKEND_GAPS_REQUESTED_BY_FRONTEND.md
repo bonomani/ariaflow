@@ -11,7 +11,44 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-34: Register remaining tab endpoints in `/api/_meta`
+
+BG-31 shipped freshness coverage for `/api/status`, `/api/lifecycle`,
+`/api/bandwidth`, `/api/aria2/{get_global_option,global_option,get_option,option}`,
+`/api/log`, `/api/health`, `/api/version`, `/api/_meta`. Five GET endpoints
+the frontend's per-tab loaders depend on are still unregistered, so the
+`FreshnessRouter` cannot drive them and the LOADERS-manifest replacement
+(FE-26) is blocked:
+
+| Endpoint | Used by tab(s) | Suggested class | Notes |
+|---|---|---|---|
+| `GET /api/torrents` | Options | `warm`, `ttl_s: 30` | aria2 torrent listing |
+| `GET /api/peers` | Options | `warm`, `ttl_s: 30` | local mDNS peers (also ties into FE-22) |
+| `GET /api/downloads/archive` | Archive | `swr`, `ttl_s: 60` | accepts `?limit=` |
+| `GET /api/sessions` | Log | `swr`, `ttl_s: 30` | accepts `?limit=` |
+| `GET /api/declaration` | Dashboard, Bandwidth, Options, Log | `cold` or `warm` | static-ish; `loadDeclaration` is in every tab's LOADERS list at `k=12` today |
+
+Also relevant for `revalidate_on` wiring:
+
+- `POST /api/declaration` — should appear in `revalidate_on` of `GET /api/declaration`.
+- `POST /api/declaration/preferences` — same.
+
+**Desired:** Wrap each handler through `withMeta(method, path, body)` with
+the per-endpoint freshness registration so they appear in `/api/_meta`
+alongside the BG-31 set. Class choice is not load-bearing — the frontend
+just needs *some* declared class so the router can pick a strategy. If
+the backend prefers different classes than the suggestions above, that's
+fine; please document the choice in `packages/api/src/freshness.ts`.
+
+**Blocks frontend gap:** FE-26 (LOADERS replacement). Without
+registration, those tabs would fall back to the legacy manifest while
+the rest move to subscriptions — worst of both worlds.
+
+**Priority:** medium. Frontend can ship FE-26 partially against the
+registered subset, but the value (one consistent refresh model across
+tabs) only lands when all loaders go through the router.
 
 _End of open gaps._
 
