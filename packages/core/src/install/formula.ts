@@ -74,7 +74,7 @@ export function renderFormula({ version, url, sha256 }: RenderFormulaInput): str
   def install
     system "pnpm", "install", "--frozen-lockfile=false"
     system "pnpm", "build"
-    system "pnpm", "--filter", "@ariaflow/cli", "deploy", "--prod", "--legacy",
+    system "pnpm", "--filter", "@ariaflow/cli", "deploy", "--prod",
            "#{libexec}/cli"
     libexec.install "openapi.yaml"
 
