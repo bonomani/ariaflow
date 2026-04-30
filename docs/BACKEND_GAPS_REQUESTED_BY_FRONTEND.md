@@ -11,44 +11,7 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
-
-### BG-34: Register remaining tab endpoints in `/api/_meta`
-
-BG-31 shipped freshness coverage for `/api/status`, `/api/lifecycle`,
-`/api/bandwidth`, `/api/aria2/{get_global_option,global_option,get_option,option}`,
-`/api/log`, `/api/health`, `/api/version`, `/api/_meta`. Five GET endpoints
-the frontend's per-tab loaders depend on are still unregistered, so the
-`FreshnessRouter` cannot drive them and the LOADERS-manifest replacement
-(FE-26) is blocked:
-
-| Endpoint | Used by tab(s) | Suggested class | Notes |
-|---|---|---|---|
-| `GET /api/torrents` | Options | `warm`, `ttl_s: 30` | aria2 torrent listing |
-| `GET /api/peers` | Options | `warm`, `ttl_s: 30` | local mDNS peers (also ties into FE-22) |
-| `GET /api/downloads/archive` | Archive | `swr`, `ttl_s: 60` | accepts `?limit=` |
-| `GET /api/sessions` | Log | `swr`, `ttl_s: 30` | accepts `?limit=` |
-| `GET /api/declaration` | Dashboard, Bandwidth, Options, Log | `cold` or `warm` | static-ish; `loadDeclaration` is in every tab's LOADERS list at `k=12` today |
-
-Also relevant for `revalidate_on` wiring:
-
-- `POST /api/declaration` — should appear in `revalidate_on` of `GET /api/declaration`.
-- `POST /api/declaration/preferences` — same.
-
-**Desired:** Wrap each handler through `withMeta(method, path, body)` with
-the per-endpoint freshness registration so they appear in `/api/_meta`
-alongside the BG-31 set. Class choice is not load-bearing — the frontend
-just needs *some* declared class so the router can pick a strategy. If
-the backend prefers different classes than the suggestions above, that's
-fine; please document the choice in `packages/api/src/freshness.ts`.
-
-**Blocks frontend gap:** FE-26 (LOADERS replacement). Without
-registration, those tabs would fall back to the legacy manifest while
-the rest move to subscriptions — worst of both worlds.
-
-**Priority:** medium. Frontend can ship FE-26 partially against the
-registered subset, but the value (one consistent refresh model across
-tabs) only lands when all loaders go through the router.
+## Open (0)
 
 _End of open gaps._
 
@@ -63,6 +26,7 @@ _End of open gaps._
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-34 | Per-tab loader endpoints registered in `/api/_meta` via `withMeta`. `packages/api/src/freshness.ts` adds: `GET /api/torrents` (warm 30s), `GET /api/peers` (warm 30s), `GET /api/downloads/archive` (swr 60s), `GET /api/sessions` (swr 30s), `GET /api/declaration` (cold; `revalidate_on` references the four POST/PUT/PATCH declaration mutators). All five handlers in `server.ts` now stamp meta via `withMeta`. BG-31 `_meta` route-reference test covers the new triggers | 2026-04-30 |
 | BG-33 | Legacy field aliases dropped from `/api/status`. `state.paused` removed from payload (kept as internal storage field only); `summary.stopped` mirror removed; `"stopped"` removed from `ITEM_STATUSES` and `TERMINAL_STATUSES` (in both `packages/core/src/queue/types.ts` and `packages/core/src/state/archivable.ts`). Canonical names are `dispatch_paused` (top-level + on `state`) and `removed`. Three negative-snapshot tests in `server.test.ts` assert no occurrence of `state.paused`, `summary.stopped`, or `status:"stopped"` in `/api/status` responses. Out-of-scope `"stopped"` strings (scheduler-loop reason, torrent `distribute_status`) intentionally left — they belong to other domains. `docs/STATE_MACHINE.md` updated | 2026-04-30 |
 | BG-32 | Per-topic SSE subscriptions (v1: connect-time filter only). `GET /api/events?topics=items,scheduler` filters the stream; missing/empty → all topics (back-compat); unknown names → empty subset (typo ≠ firehose). `packages/api/src/event-topics.ts` is the single source for the 5 topics (items/scheduler/log/lifecycle/bandwidth) and the event→topic map (action_logged→log, session_*→scheduler, state_changed→items+scheduler, lifecycle_changed→lifecycle, bandwidth_probed→bandwidth); unknown event names fall through to all topics so a new emitter is visible until classified. `FreshnessMeta` extended with `transport_topics`; `/api/status` declares `["items","scheduler"]`, surfaces verbatim in `/api/_meta`. Mid-stream subscribe/unsubscribe deferred (reconnect with different `?topics=` is the v1 path). `packages/api/src/sse.md` documents the vocabulary | 2026-04-30 |
 | BG-31 | Per-endpoint freshness contract. `packages/api/src/freshness.ts` is the single registry; `withMeta(method, path, body)` stamps the registered block and throws on unregistered keys. Initial coverage: `/api/status` (live, sse), `/api/lifecycle` (warm 30s, revalidate on `POST /api/lifecycle/:target/:action`), `/api/bandwidth` (on-action, revalidate on `POST /api/bandwidth/probe`), `/api/aria2/get_global_option` + `/api/aria2/global_option` (cold), `/api/log` (swr 10s), `/api/health`, `/api/version`, `/api/_meta` (all bootstrap). New `GET /api/_meta` returns the registry sorted by path. Validators: warm/swr require `ttl_s`, on-action requires `revalidate_on`, live requires `transport`; server test confirms `revalidate_on` triggers reference routes Fastify actually registered. `docs/FRESHNESS.md` mirrors the dashboard's design rationale | 2026-04-30 |

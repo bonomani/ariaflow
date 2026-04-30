@@ -973,7 +973,7 @@ describe("downloads compat aliases + cleanup", () => {
   it("GET /api/downloads/archive returns {ok, items} (empty by default)", async () => {
     const res = await app.inject({ method: "GET", url: "/api/downloads/archive" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true, items: [] });
+    expect(res.json()).toMatchObject({ ok: true, items: [] });
   });
 
   it("POST /api/downloads/cleanup archives stale terminal items + records action", async () => {
@@ -1025,7 +1025,7 @@ describe("aria2 / sessions / remove compat aliases", () => {
 
   it("/api/sessions returns the same shape as /api/sessions/current minus stats", async () => {
     const before = await app.inject({ method: "GET", url: "/api/sessions" });
-    expect(before.json()).toEqual({ ok: true, session: null });
+    expect(before.json()).toMatchObject({ ok: true, session: null });
     await app.inject({ method: "POST", url: "/api/sessions/start" });
     const after = await app.inject({ method: "GET", url: "/api/sessions" });
     expect(after.json().session.session_id).toMatch(/^[0-9a-f-]{36}$/);
@@ -1266,7 +1266,7 @@ describe("GET /api/peers", () => {
   it("returns an empty list when no registry is wired", async () => {
     const res = await app.inject({ method: "GET", url: "/api/peers" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true, peers: [] });
+    expect(res.json()).toMatchObject({ ok: true, peers: [] });
   });
 
   it("surfaces upserted peers when a registry is wired", async () => {

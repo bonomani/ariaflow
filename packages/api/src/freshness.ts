@@ -120,6 +120,22 @@ export function registerDefaultFreshness(): void {
   registerFreshness("GET", "/api/aria2/get_global_option", { freshness: "cold" });
   registerFreshness("GET", "/api/aria2/global_option", { freshness: "cold" });
   registerFreshness("GET", "/api/log", { freshness: "swr", ttl_s: 10 });
+  // BG-34: per-tab loader endpoints. Classes follow the frontend's
+  // suggestions (see docs/BACKEND_GAPS_REQUESTED_BY_FRONTEND.md). Choice
+  // isn't load-bearing — the FreshnessRouter just needs *some* class.
+  registerFreshness("GET", "/api/torrents", { freshness: "warm", ttl_s: 30 });
+  registerFreshness("GET", "/api/peers", { freshness: "warm", ttl_s: 30 });
+  registerFreshness("GET", "/api/downloads/archive", { freshness: "swr", ttl_s: 60 });
+  registerFreshness("GET", "/api/sessions", { freshness: "swr", ttl_s: 30 });
+  registerFreshness("GET", "/api/declaration", {
+    freshness: "cold",
+    revalidate_on: [
+      "POST /api/declaration",
+      "PUT /api/declaration",
+      "POST /api/declaration/preferences",
+      "PATCH /api/declaration/preferences",
+    ],
+  });
   registerFreshness("GET", "/api/health", { freshness: "bootstrap" });
   registerFreshness("GET", "/api/version", { freshness: "bootstrap" });
   registerFreshness("GET", "/api/_meta", { freshness: "bootstrap" });

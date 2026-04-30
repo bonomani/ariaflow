@@ -225,7 +225,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const n = Number(limitRaw);
     if (Number.isFinite(n)) limit = Math.max(1, Math.min(500, Math.trunc(n)));
     const items = await deps.archiveStore.load();
-    return { ok: true, items: items.slice(-limit) };
+    return withMeta("GET", "/api/downloads/archive", { ok: true, items: items.slice(-limit) });
   });
 
   app.post("/api/downloads/cleanup", async (req, reply) => {
@@ -386,7 +386,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   app.get("/api/declaration", async () => {
     const declaration = await deps.declarationStore.load();
-    return { ok: true, declaration };
+    return withMeta("GET", "/api/declaration", { ok: true, declaration });
   });
 
   app.get("/api/preflight", async () => {
@@ -443,7 +443,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // thin views over SessionService that are cheap to keep wired.
   app.get("/api/sessions", async () => {
     const state = await deps.stateStore.load();
-    return { ok: true, session: state.session_id ? state : null };
+    return withMeta("GET", "/api/sessions", {
+      ok: true,
+      session: state.session_id ? state : null,
+    });
   });
 
   app.get("/api/sessions/stats", async () => {
@@ -1111,7 +1114,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         });
       }
     }
-    return { torrents: seeds, count: seeds.length };
+    return withMeta("GET", "/api/torrents", { torrents: seeds, count: seeds.length });
   });
 
   app.post<{ Params: { infohash: string } }>(
@@ -1190,7 +1193,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   app.get("/api/peers", async () => {
     const peers = deps.peerRegistry?.list() ?? [];
-    return { ok: true, peers };
+    return withMeta("GET", "/api/peers", { ok: true, peers });
   });
 
   app.get("/api/scheduler", async () => {
