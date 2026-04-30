@@ -117,6 +117,28 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     ["/api/torrents/:file", "/api/torrents/{infohash}.torrent"],
   ]);
 
+  // BG-24: in-memory metrics powering /api/status.health (Developer
+  // tab chips). Counters are best-effort — restart resets them; we
+  // don't try to persist across server lifetimes.
+  const metrics = {
+    startedAt: Date.now(),
+    requestsTotal: 0,
+    errorsTotal: 0,
+    sseClients: 0,
+    bytesReceivedTotal: 0,
+    bytesSentTotal: 0,
+  };
+  app.addHook("onRequest", async (req) => {
+    metrics.requestsTotal += 1;
+    const len = Number(req.headers["content-length"] ?? 0);
+    if (Number.isFinite(len) && len > 0) metrics.bytesReceivedTotal += len;
+  });
+  app.addHook("onResponse", async (_req, reply) => {
+    if (reply.statusCode >= 400) metrics.errorsTotal += 1;
+    const sent = Number(reply.getHeader("content-length") ?? 0);
+    if (Number.isFinite(sent) && sent > 0) metrics.bytesSentTotal += sent;
+  });
+
   if (deps.eventBus) {
     deps.actionLog.setBus(deps.eventBus);
     deps.sessionService.setBus(deps.eventBus);
@@ -531,13 +553,17 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   // /api/log mirrors the Python route's {items} shape — a clamped tail
   // of actions.jsonl. Default limit 120, max 500 (matches Python).
+  // BG-24 cosmetic nit: emit `ok: true` so the response is consistent
+  // with every other backend endpoint (frontend gate is
+  // `data?.ok !== false` so the missing-key form was working, but the
+  // shape was inconsistent).
   app.get<{ Querystring: { limit?: string } }>("/api/log", async (req) => {
     const limitRaw = req.query?.limit;
     let limit = 120;
     const n = Number(limitRaw);
     if (Number.isFinite(n)) limit = Math.max(1, Math.min(500, Math.trunc(n)));
     const items = await deps.actionLog.load(limit);
-    return { items };
+    return { ok: true, items };
   });
 
   app.get("/api/health", async () => {
@@ -583,9 +609,53 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         version: deps.version ?? "0.0.0",
         error: null,
       };
+
+      // BG-24: server metrics for the Developer-tab chips. disk_ok is
+      // resolved from the configured max_disk_usage_percent pref +
+      // checkDiskSpace() so a low-disk warning surfaces here too.
+      let diskOk = true;
+      try {
+        const core = await import("@ariaflow/core");
+        const declaration = await deps.declarationStore.load();
+        const max = core.scheduler.maxDiskPercent(declaration);
+        const downloadDirPref = String(
+          core.prefValue(declaration, "download_dir", "") ?? "",
+        );
+        const probePath = downloadDirPref || process.cwd();
+        const { statfsSync } = await import("node:fs");
+        diskOk = core.scheduler.checkDiskSpace({
+          maxPercent: max,
+          probe: () => {
+            if (typeof statfsSync !== "function") return null;
+            try {
+              const fs = statfsSync(probePath);
+              const total = Number(fs.blocks) * Number(fs.bsize);
+              const free = Number(fs.bavail) * Number(fs.bsize);
+              return { used: Math.max(0, total - free), total };
+            } catch {
+              return null;
+            }
+          },
+        }).ok;
+      } catch {
+        // Best-effort — unknown disk state shouldn't poison the chip.
+        diskOk = true;
+      }
+
+      const health = {
+        uptime_seconds: process.uptime(),
+        requests_total: metrics.requestsTotal,
+        errors_total: metrics.errorsTotal,
+        sse_clients: metrics.sseClients,
+        bytes_received_total: metrics.bytesReceivedTotal,
+        bytes_sent_total: metrics.bytesSentTotal,
+        disk_ok: diskOk,
+      };
+
       const payload: Record<string, unknown> = {
         ok: true,
         "ariaflow-server": identity,
+        health,
         items: filtered,
         summary: summarizeQueue(filtered),
         state,
@@ -659,13 +729,18 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
     };
     const unsubscribe = bus.subscribe(writeEvent);
+    metrics.sseClients += 1;
     const heartbeat = setInterval(() => {
       if (alive) reply.raw.write(`: ping\n\n`);
     }, 15_000);
+    let cleanedUp = false;
     const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
       alive = false;
       clearInterval(heartbeat);
       unsubscribe();
+      metrics.sseClients = Math.max(0, metrics.sseClients - 1);
     };
     req.raw.on("close", cleanup);
     reply.raw.on("close", cleanup);

@@ -452,7 +452,7 @@ describe("ActionLog -> EventBus bridge", () => {
 });
 
 describe("GET /api/log", () => {
-  it("returns {items: [...]} matching the Python route shape", async () => {
+  it("returns {ok: true, items: [...]} matching the canonical envelope", async () => {
     await app.inject({
       method: "POST",
       url: "/api/downloads",
@@ -461,10 +461,10 @@ describe("GET /api/log", () => {
     const res = await app.inject({ method: "GET", url: "/api/log" });
     expect(res.statusCode).toBe(200);
     const body = res.json();
+    expect(body.ok).toBe(true); // BG-24 cosmetic nit: was undefined.
     expect(Array.isArray(body.items)).toBe(true);
     expect(body.items.some((e: { action: string }) => e.action === "add")).toBe(true);
-    // No `ok` / `limit` fields — that's /api/actions, not /api/log.
-    expect(body.ok).toBeUndefined();
+    // /api/log doesn't carry the `limit` echo — that's /api/actions.
     expect(body.limit).toBeUndefined();
   });
 
@@ -798,6 +798,18 @@ describe("meta routes", () => {
     });
     expect(body.ok).toBe(true);
     expect(typeof body._rev).toBe("number");
+
+    // BG-24: Developer-tab health chips. uptime is a non-negative
+    // float, the four counters are non-negative integers, sse_clients
+    // is 0 (no /api/events open in this test), disk_ok is a boolean.
+    expect(typeof body.health.uptime_seconds).toBe("number");
+    expect(body.health.uptime_seconds).toBeGreaterThanOrEqual(0);
+    expect(typeof body.health.requests_total).toBe("number");
+    expect(typeof body.health.errors_total).toBe("number");
+    expect(body.health.sse_clients).toBe(0);
+    expect(typeof body.health.bytes_received_total).toBe("number");
+    expect(typeof body.health.bytes_sent_total).toBe("number");
+    expect(typeof body.health.disk_ok).toBe("boolean");
   });
 
   it("GET /api/status?status=queued filters and flips `filtered`", async () => {
