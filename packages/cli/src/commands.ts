@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   advertiseHttpService,
@@ -270,32 +270,79 @@ function findOpenApiYaml(start: string = process.cwd()): string | null {
 }
 
 /**
- * Read the @ariaflow/cli package version off disk so the dashboard's
- * "Ariaflow vX.Y.Z" pill (BG-19) reflects the running binary, not a
- * hard-coded "0.0.0". Falls back to undefined on any read error so
- * the caller's existing default ("0.0.0") still applies.
+ * Resolve the version string the dashboard reads via /api/status,
+ * /api/lifecycle, and /api/version (BG-19/20/23).
+ *
+ * Lookup order:
+ *   1. packages/cli/package.json → "version" — the npm-publish workflow
+ *      stamps the real semver here on every release tag.
+ *   2. <repo>/pyproject.toml → version = "..." — the Python release
+ *      workflow keeps this in sync with the project's source-of-truth
+ *      version, so during the migration window when both stacks
+ *      coexist this is the most reliable signal.
+ *   3. <repo>/src/ariaflow_server/__init__.py → __version__ — same
+ *      Python release workflow stamps this. Last-resort fallback.
+ *   4. undefined → caller's existing default ("0.0.0") still applies.
+ *
+ * Skips any candidate whose value is "0.0.0" (the placeholder) so
+ * a fresh checkout with no stamped version doesn't lock the chip to
+ * the placeholder when a real one is available elsewhere.
  */
-function readCliPackageVersion(): string | undefined {
-  // Walk up from this file's location: dist/commands.js -> dist -> cli
-  // -> packages -> repo root. Source-mode runs land at packages/cli/src.
-  // Either layout is two levels above the running file.
-  try {
-    // Use require to dodge ESM URL plumbing — package.json reads cleanly.
-    const candidates = [
-      join(dirname(import.meta.url.replace(/^file:\/\//, "")), "..", "package.json"),
-      join(process.cwd(), "packages/cli/package.json"),
-    ];
-    for (const path of candidates) {
-      if (!existsSync(path)) continue;
-      const raw = JSON.parse(
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        (require("node:fs") as typeof import("node:fs")).readFileSync(path, "utf8"),
-      ) as { version?: unknown };
-      if (typeof raw.version === "string" && raw.version) return raw.version;
+function readPackageVersion(): string | undefined {
+  const here = dirname(import.meta.url.replace(/^file:\/\//, ""));
+  const repoRoot = (() => {
+    // dist/commands.js -> dist -> cli -> packages -> root
+    let dir = here;
+    for (let i = 0; i < 5; i++) {
+      if (existsSync(join(dir, "pnpm-workspace.yaml"))) return dir;
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
     }
-  } catch {
-    /* fall through to undefined */
+    return process.cwd();
+  })();
+
+  const isPlaceholder = (v: string): boolean => !v || v === "0.0.0";
+
+  // 1. cli package.json (release-npm.yml stamps this on tag push)
+  for (const p of [
+    join(here, "..", "package.json"),
+    join(repoRoot, "packages/cli/package.json"),
+  ]) {
+    if (!existsSync(p)) continue;
+    try {
+      const raw = JSON.parse(readFileSync(p, "utf8")) as { version?: unknown };
+      if (typeof raw.version === "string" && !isPlaceholder(raw.version)) return raw.version;
+    } catch {
+      /* try next */
+    }
   }
+
+  // 2. pyproject.toml (Python release workflow stamps this; reliable
+  // during the dual-stack migration window).
+  const pyproject = join(repoRoot, "pyproject.toml");
+  if (existsSync(pyproject)) {
+    try {
+      const text = readFileSync(pyproject, "utf8");
+      const m = /^\s*version\s*=\s*["']([^"']+)["']/m.exec(text);
+      if (m && m[1] && !isPlaceholder(m[1])) return m[1];
+    } catch {
+      /* try next */
+    }
+  }
+
+  // 3. src/ariaflow_server/__init__.py
+  const initPy = join(repoRoot, "src/ariaflow_server/__init__.py");
+  if (existsSync(initPy)) {
+    try {
+      const text = readFileSync(initPy, "utf8");
+      const m = /__version__\s*=\s*["']([^"']+)["']/m.exec(text);
+      if (m && m[1] && !isPlaceholder(m[1])) return m[1];
+    } catch {
+      /* fall through */
+    }
+  }
+
   return undefined;
 }
 
@@ -337,7 +384,7 @@ export async function cmdServe(
   // package.json sitting next to the running bin so the pill always
   // matches the actual binary, even on a `node packages/cli/dist/...`
   // run without npm install.
-  const resolvedVersion = opts.version ?? readCliPackageVersion();
+  const resolvedVersion = opts.version ?? readPackageVersion();
 
   const app = buildServer({
     queueOps: ctx.queueOps,

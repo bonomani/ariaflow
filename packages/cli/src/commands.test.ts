@@ -253,6 +253,22 @@ describe("cmdServe", () => {
       await handle.close();
     }
   });
+
+  it("BG-23: auto-resolves a real version when none is passed (pyproject.toml fallback)", async () => {
+    // No `version` opt -> readPackageVersion() falls through cli
+    // package.json (placeholder 0.0.0, skipped) -> pyproject.toml
+    // (real release version) -> __init__.py.
+    const handle = await cmdServe(ctx, { host: "127.0.0.1", port: 0 });
+    try {
+      const res = await fetch(`${handle.url}/api/version`);
+      const body = (await res.json()) as { version: string };
+      // Must NOT be the placeholder. Must look like a real semver.
+      expect(body.version).not.toBe("0.0.0");
+      expect(body.version).toMatch(/^\d+\.\d+\.\d+([-.+][\w.]+)?$/);
+    } finally {
+      await handle.close();
+    }
+  });
 });
 
 describe("cmdOpenapi", () => {
