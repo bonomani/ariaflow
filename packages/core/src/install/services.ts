@@ -1,5 +1,8 @@
+import { spawn as nodeSpawn } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { isLinux, isMacOS } from "../platform/detect.js";
+import { which } from "../bonjour/bonjour.js";
 
 export const ARIA2_LAUNCHD_LABEL = "com.ariaflow-server.aria2";
 export const ARIA2_SYSTEMD_UNIT = "ariaflow-server-aria2.service";
@@ -153,3 +156,156 @@ export const paths = {
   systemdSessionDir,
   defaultDownloadDir,
 };
+
+export type ServiceTarget = "aria2-launchd" | "aria2-systemd" | null;
+
+/**
+ * Pick the right service-management target for the current platform.
+ * Returns null on Windows / unsupported platforms.
+ */
+export function detectServiceTarget(): ServiceTarget {
+  if (isMacOS()) return "aria2-launchd";
+  if (isLinux()) return "aria2-systemd";
+  return null;
+}
+
+/**
+ * Resolve the aria2c binary on PATH (or fall back to the first
+ * Homebrew/Linux-default location). Returns null when nothing is found.
+ */
+export function findAria2c(env: NodeJS.ProcessEnv = process.env): string | null {
+  const onPath = which("aria2c", env);
+  if (onPath) return onPath;
+  for (const candidate of [
+    "/opt/homebrew/bin/aria2c",
+    "/usr/local/bin/aria2c",
+    "/usr/bin/aria2c",
+  ]) {
+    try {
+      const { existsSync } = require("node:fs") as typeof import("node:fs");
+      if (existsSync(candidate)) return candidate;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
+export interface ShellExecResult {
+  command: string;
+  ok: boolean;
+  exitCode: number | null;
+  stderr: string;
+}
+
+/**
+ * Execute a list of shell commands sequentially. Each runs through
+ * `sh -c` so the heredoc / pipe forms in the install plans work
+ * unchanged. Stops on the first non-zero exit by default; pass
+ * stopOnError=false to drain the whole list (used for uninstall, where
+ * a partial cleanup is still better than an early abort).
+ */
+export async function runShellPlan(
+  commands: readonly string[],
+  opts: {
+    stopOnError?: boolean;
+    spawn?: typeof nodeSpawn;
+    cwd?: string;
+  } = {},
+): Promise<ShellExecResult[]> {
+  const spawn = opts.spawn ?? nodeSpawn;
+  const stopOnError = opts.stopOnError ?? true;
+  const out: ShellExecResult[] = [];
+  for (const command of commands) {
+    const res = await runOne(spawn, command, opts.cwd);
+    out.push(res);
+    if (stopOnError && !res.ok) break;
+  }
+  return out;
+}
+
+function runOne(
+  spawn: typeof nodeSpawn,
+  command: string,
+  cwd?: string,
+): Promise<ShellExecResult> {
+  return new Promise((resolve) => {
+    const proc = spawn("sh", ["-c", command], {
+      stdio: ["ignore", "ignore", "pipe"],
+      ...(cwd ? { cwd } : {}),
+    });
+    const errChunks: Buffer[] = [];
+    proc.stderr?.on("data", (chunk: Buffer) => errChunks.push(chunk));
+    proc.on("error", (err) =>
+      resolve({
+        command,
+        ok: false,
+        exitCode: null,
+        stderr: err.message,
+      }),
+    );
+    proc.on("close", (code) =>
+      resolve({
+        command,
+        ok: code === 0,
+        exitCode: code,
+        stderr: Buffer.concat(errChunks).toString("utf8"),
+      }),
+    );
+  });
+}
+
+export interface InstallServiceResult {
+  target: Exclude<ServiceTarget, null>;
+  commands: string[];
+  /** Per-command exec result; absent when dryRun=true. */
+  results?: ShellExecResult[];
+  /** True when dryRun=true OR every command exited 0. */
+  ok: boolean;
+}
+
+/**
+ * Plan + (optionally) execute the platform-appropriate aria2 service
+ * install. Pass dryRun=true to get the plan back without running it.
+ */
+export async function installAria2Service(opts: {
+  dryRun?: boolean;
+  binPath?: string;
+  spawn?: typeof nodeSpawn;
+} = {}): Promise<InstallServiceResult> {
+  const target = detectServiceTarget();
+  if (!target) {
+    throw new Error("aria2 service install not supported on this platform");
+  }
+  const binPath = opts.binPath ?? findAria2c() ?? "aria2c";
+  const commands =
+    target === "aria2-launchd"
+      ? planLaunchdInstall(binPath)
+      : planSystemdInstall(binPath);
+  if (opts.dryRun) return { target, commands, ok: true };
+  const results = await runShellPlan(commands, {
+    stopOnError: true,
+    ...(opts.spawn ? { spawn: opts.spawn } : {}),
+  });
+  return { target, commands, results, ok: results.every((r) => r.ok) };
+}
+
+export async function uninstallAria2Service(opts: {
+  dryRun?: boolean;
+  spawn?: typeof nodeSpawn;
+} = {}): Promise<InstallServiceResult> {
+  const target = detectServiceTarget();
+  if (!target) {
+    throw new Error("aria2 service uninstall not supported on this platform");
+  }
+  const commands =
+    target === "aria2-launchd" ? planLaunchdUninstall() : planSystemdUninstall();
+  if (opts.dryRun) return { target, commands, ok: true };
+  // Uninstall: drain the whole plan even if a step fails (the unit may
+  // already be disabled; the plist may already be removed).
+  const results = await runShellPlan(commands, {
+    stopOnError: false,
+    ...(opts.spawn ? { spawn: opts.spawn } : {}),
+  });
+  return { target, commands, results, ok: results.every((r) => r.ok) };
+}

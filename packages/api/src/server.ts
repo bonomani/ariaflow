@@ -1182,6 +1182,76 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     };
   });
 
+  app.post<{ Params: { target: string; action: string }; Querystring: { dry_run?: string } }>(
+    "/api/lifecycle/:target/:action",
+    async (req, reply) => {
+      const core = await import("@ariaflow/core");
+      const target = req.params.target;
+      const action = req.params.action;
+      const dryRun = req.query?.dry_run === "1" || req.query?.dry_run === "true";
+
+      const ARIA2_SERVICE_TARGETS = new Set([
+        "aria2-launchd",
+        "aria2-systemd",
+        "aria2-service",
+      ]);
+      const beforeState = await deps.stateStore.load();
+      const before = { lifecycle: { state: beforeState } };
+      try {
+        let result: Record<string, unknown>;
+        if (ARIA2_SERVICE_TARGETS.has(target) && action === "install") {
+          const out = await core.installAria2Service({ dryRun });
+          result = {
+            [out.target]: {
+              ok: out.ok,
+              commands: out.commands,
+              ...(out.results ? { results: out.results } : { dry_run: true }),
+            },
+          };
+        } else if (ARIA2_SERVICE_TARGETS.has(target) && action === "uninstall") {
+          const out = await core.uninstallAria2Service({ dryRun });
+          result = {
+            [out.target]: {
+              ok: out.ok,
+              commands: out.commands,
+              ...(out.results ? { results: out.results } : { dry_run: true }),
+            },
+          };
+        } else {
+          return reply.code(400).send({
+            error: "unsupported_action",
+            target,
+            action,
+          });
+        }
+
+        await deps.actionLog.record({
+          action: "lifecycle_action",
+          target: target || "system",
+          outcome: "changed",
+          reason: action || "lifecycle_action",
+          before,
+          after: { target, action, result },
+          detail: { target, action, dry_run: dryRun, result },
+        });
+        return { ok: true, target, action, dry_run: dryRun, result };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await deps.actionLog.record({
+          action: "lifecycle_action",
+          target: target || "system",
+          outcome: "failed",
+          reason: "exception",
+          before,
+          detail: { error: message, target, action, dry_run: dryRun },
+        });
+        return reply
+          .code(500)
+          .send(errorPayload("lifecycle_action_failed", message));
+      }
+    },
+  );
+
   app.post("/api/aria2/multicall", async (req, reply) => {
     if (requireAria2(reply)) return;
     const body = req.body;

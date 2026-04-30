@@ -1291,6 +1291,36 @@ describe("scheduler routes", () => {
   });
 });
 
+describe("POST /api/lifecycle/:target/:action", () => {
+  it("400 unsupported_action on an unknown target/action pair", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/lifecycle/random/explode",
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("unsupported_action");
+  });
+
+  it("dry-run install returns the generated plan without spawning", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/lifecycle/aria2-service/install?dry_run=1",
+    });
+    if (res.statusCode === 200) {
+      const body = res.json();
+      expect(body.dry_run).toBe(true);
+      const target = Object.keys(body.result)[0]!;
+      expect(["aria2-launchd", "aria2-systemd"]).toContain(target);
+      expect(body.result[target].ok).toBe(true);
+      expect(Array.isArray(body.result[target].commands)).toBe(true);
+    } else {
+      // Unsupported platform — route surfaces a structured 500.
+      expect(res.statusCode).toBe(500);
+      expect(res.json().error).toBe("lifecycle_action_failed");
+    }
+  });
+});
+
 describe("GET /api/lifecycle", () => {
   it("returns ariaflow_server + networkquality status and session fields", async () => {
     const res = await app.inject({ method: "GET", url: "/api/lifecycle" });

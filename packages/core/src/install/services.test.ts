@@ -55,6 +55,47 @@ describe("buildAria2SystemdUnit", () => {
   });
 });
 
+describe("runShellPlan", () => {
+  it("runs each command via sh -c and reports ok=true on exit 0", async () => {
+    const { runShellPlan } = await import("./services.js");
+    const r = await runShellPlan(["true", "echo hi > /dev/null"]);
+    expect(r).toHaveLength(2);
+    expect(r.every((x) => x.ok)).toBe(true);
+  });
+
+  it("stops on the first non-zero exit by default", async () => {
+    const { runShellPlan } = await import("./services.js");
+    const r = await runShellPlan(["false", "true"]);
+    expect(r).toHaveLength(1);
+    expect(r[0]!.ok).toBe(false);
+  });
+
+  it("stopOnError=false drains the whole list", async () => {
+    const { runShellPlan } = await import("./services.js");
+    const r = await runShellPlan(["false", "true"], { stopOnError: false });
+    expect(r).toHaveLength(2);
+    expect(r[0]!.ok).toBe(false);
+    expect(r[1]!.ok).toBe(true);
+  });
+});
+
+describe("installAria2Service / uninstallAria2Service (dry-run)", () => {
+  it("dry-run returns the platform-appropriate plan without spawning", async () => {
+    const { installAria2Service, detectServiceTarget } = await import("./services.js");
+    const target = detectServiceTarget();
+    if (!target) {
+      // Unsupported platform — installAria2Service should throw.
+      await expect(installAria2Service({ dryRun: true })).rejects.toThrow(/not supported/);
+      return;
+    }
+    const r = await installAria2Service({ dryRun: true, binPath: "aria2c" });
+    expect(r.ok).toBe(true);
+    expect(r.target).toBe(target);
+    expect(r.commands.length).toBeGreaterThan(0);
+    expect(r.results).toBeUndefined();
+  });
+});
+
 describe("plan helpers", () => {
   it("planLaunchdInstall produces a 4-step shell plan", () => {
     const plan = planLaunchdInstall("/usr/local/bin/aria2c");
