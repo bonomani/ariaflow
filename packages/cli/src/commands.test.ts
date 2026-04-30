@@ -168,8 +168,9 @@ describe("cmdWatch", () => {
     const watch = cmdWatch({
       url: `${handle.url}/api/events`,
       out,
-      // cmdAdd emits session_started THEN action_logged, so wait for both.
-      limit: 2,
+      // /api/events emits a "connected" handshake first, then cmdAdd
+      // produces session_started + action_logged — wait for all three.
+      limit: 3,
     });
     await new Promise((r) => setTimeout(r, 50));
     await cmdAdd(ctx, "http://h/x");
@@ -188,8 +189,8 @@ describe("cmdWatch", () => {
   });
 });
 
-describe("cmdServe SSE CORS", () => {
-  it("echoes the request Origin on /api/events", async () => {
+describe("cmdServe SSE", () => {
+  it("echoes the request Origin on /api/events (CORS)", async () => {
     const handle = await cmdServe(ctx, { host: "127.0.0.1", port: 0, aria2Host: "" });
     try {
       const res = await fetch(`${handle.url}/api/events`, {
@@ -197,6 +198,36 @@ describe("cmdServe SSE CORS", () => {
       });
       expect(res.headers.get("access-control-allow-origin")).toBe("http://dashboard.local");
       await res.body?.cancel();
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("emits a real named 'connected' event as the first frame", async () => {
+    const handle = await cmdServe(ctx, { host: "127.0.0.1", port: 0, aria2Host: "" });
+    try {
+      const res = await fetch(`${handle.url}/api/events`, {
+        headers: { Accept: "text/event-stream" },
+      });
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const deadline = Date.now() + 1000;
+      while (Date.now() < deadline) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        if (buffer.includes("\n\n")) break;
+      }
+      await reader.cancel();
+      // First SSE frame must be a real named event ("event: connected"
+      // followed by a data: line and a blank line) so EventSource clients
+      // using addEventListener("connected", ...) actually fire.
+      expect(buffer).toMatch(/event:\s*connected/);
+      expect(buffer).toMatch(/data:\s*\{\}/);
+      // And it must not be the SSE comment shape (": connected") which
+      // browsers strip during parsing.
+      expect(buffer.startsWith(":")).toBe(false);
     } finally {
       await handle.close();
     }

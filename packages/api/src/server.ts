@@ -624,7 +624,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       }
     }
     reply.raw.writeHead(200, headers);
-    reply.raw.write(`: connected\n\n`);
+    // Emit a real named "connected" event (not an SSE comment) so
+    // consumers using addEventListener("connected", ...) get a
+    // deliberate server-says-it's-ready handshake. EventSource onopen
+    // fires on header arrival, which doesn't prove the server has
+    // accepted the stream past headers — this frame does.
+    reply.raw.write(`event: connected\ndata: {}\n\n`);
     let alive = true;
     const writeEvent = (event: string, data: unknown) => {
       if (!alive) return;
