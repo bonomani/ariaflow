@@ -12,8 +12,7 @@ name: auto-tag
 # workflows (a GitHub security feature). To make release-npm /
 # release-tap / release-formula fire, we push the tag with a PAT
 # that has `contents: write` scope. Set the `RELEASE_PAT` repo
-# secret (Settings → Secrets and variables → Actions). If the secret
-# is missing, the job no-ops with a clear log message.
+# secret. If the secret is missing the job no-ops with a warning.
 #
 # Idempotency: if the head commit is already tagged `vX.Y.Z`, no-op.
 
@@ -30,18 +29,19 @@ jobs:
   tag:
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
+    env:
+      HAS_PAT: ${{ secrets.RELEASE_PAT != '' && 'true' || 'false' }}
     steps:
       - name: Verify RELEASE_PAT is set
-        env:
-          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
         run: |
-          if [ -z "${RELEASE_PAT:-}" ]; then
+          if [ "$HAS_PAT" != "true" ]; then
             echo "::warning::RELEASE_PAT secret is not set. Skipping auto-tag — without a PAT, the tag would not trigger downstream release workflows. See docs/RELEASE.md."
-            exit 0
+          else
+            echo "RELEASE_PAT present; proceeding."
           fi
-          echo "RELEASE_PAT present; proceeding."
 
       - uses: actions/checkout@v4
+        if: env.HAS_PAT == 'true'
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
@@ -49,7 +49,7 @@ jobs:
 
       - name: Compute next tag
         id: next
-        if: ${{ secrets.RELEASE_PAT != '' }}
+        if: env.HAS_PAT == 'true'
         run: |
           set -euo pipefail
           git fetch --tags origin
@@ -74,7 +74,7 @@ jobs:
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Push tag
-        if: ${{ secrets.RELEASE_PAT != '' && steps.next.outputs.skip == 'false' }}
+        if: env.HAS_PAT == 'true' && steps.next.outputs.skip == 'false'
         run: |
           set -euo pipefail
           tag="${{ steps.next.outputs.next }}"
