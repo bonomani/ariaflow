@@ -142,8 +142,8 @@ export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
         });
       }
     } else if (live === "removed") {
-      // BG-30 #2: emit canonical "removed" (aria2-native vocabulary).
-      if (item.status !== "removed" && item.status !== "stopped") {
+      // BG-30/BG-33: canonical "removed" (aria2-native vocabulary).
+      if (item.status !== "removed") {
         item.status = "removed" as ItemStatus;
         item.removed_at = stampNow();
         dirty = true;

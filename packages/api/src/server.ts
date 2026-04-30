@@ -718,23 +718,17 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         }
       }
 
-      // BG-30 #4: dual-key the scheduler-pause field. `dispatch_paused`
-      // is the canonical name (disambiguates from item-level `paused`);
-      // legacy `paused` stays for one release while the dashboard cuts
-      // over.
+      // BG-33: `dispatch_paused` is the canonical scheduler-pause field
+      // (disambiguates from item-level `paused`). Internal storage keeps
+      // `state.paused` as the field name; we do not surface it.
       const dispatchPaused = Boolean(state.paused);
 
-      // BG-30 #2: mirror summary.removed alongside summary.stopped
-      // (both counted, callers can pick either while the rename rolls
-      // out).
       const summary = summarizeQueue(filtered);
-      const removedCount = Number(summary.removed ?? 0);
-      const stoppedCount = Number(summary.stopped ?? 0);
-      summary.removed = removedCount + stoppedCount;
-      summary.stopped = summary.removed;
 
+      const { paused: _legacyPaused, ...stateRest } = state;
+      void _legacyPaused;
       const stateOut: Record<string, unknown> = {
-        ...state,
+        ...stateRest,
         active_gid: liveActiveGid,
         active_url: liveActiveUrl,
         dispatch_paused: dispatchPaused,

@@ -2,11 +2,10 @@ export const TERMINAL_STATUSES = new Set([
   "complete",
   "error",
   "failed",
-  "stopped",
   "removed",
 ]);
 
-export const NON_COMPLETE_TERMINAL = new Set(["error", "failed", "stopped", "removed"]);
+export const NON_COMPLETE_TERMINAL = new Set(["error", "failed", "removed"]);
 
 export interface QueueItem {
   status?: string | null;

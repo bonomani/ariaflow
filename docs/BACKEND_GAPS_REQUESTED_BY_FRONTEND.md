@@ -11,55 +11,9 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
 
-### BG-33: Drop legacy field aliases
-
-**Problem.** During the BG-30 cutover the backend dual-keyed several
-fields so the frontend could migrate without flapping:
-
-- `state.paused` ↔ `state.dispatch_paused` (canonical: `dispatch_paused`)
-- `summary.stopped` ↔ `summary.removed` (canonical: `removed`)
-- `item.status: "stopped"` ↔ `"removed"` (canonical: `removed`)
-
-The frontend has cut over (FE-23, commit cb6b8f8 + 33bae60) and reads
-the canonical names with `?? legacy` fallbacks. Those fallbacks are
-dead branches that age into bit-rot. Frontend wants to drop them, but
-needs the backend to confirm aliases are gone so the cleanup is
-verifiable (not just a hope).
-
-**Required backend changes:**
-
-1. **Drop `state.paused`** from `/api/status` payload. Keep only
-   `state.dispatch_paused` and the top-level `dispatch_paused` mirror
-   shipped in BG-30.
-2. **Drop `summary.stopped`** alias counter from `/api/status.summary`.
-   Keep only `summary.removed`.
-3. **Drop `"stopped"` from `ITEM_STATUSES`** if it lingers as an alias.
-   Items must serialize as `"removed"`. Anything that emits `"stopped"`
-   today is the bug.
-4. **Document the canonical contract** in
-   `packages/api/src/state-machine.md` (or wherever BG-30's diagram
-   lives) — "these names are canonical; older clients must update".
-5. **Test-time validators**: a snapshot test asserts no occurrence of
-   `state.paused`, `summary.stopped`, or `status: "stopped"` in any
-   `/api/status` response across the fixture matrix.
-
-**Frontend code refs (paired update FE-25, blocked by this):**
-- `app.ts` 5 sites of `state.dispatch_paused ?? state.paused` →
-  drop `?? state.paused`
-- `app.ts` `s.removed ?? s.stopped` → drop `?? s.stopped`
-- `app.ts` `itemCanRetry ['error', 'removed', 'stopped']` →
-  drop `'stopped'`
-- `formatters.ts` badgeClass — drop `'stopped'` from bad list
-
-**Sequence:** backend lands #1–5 → frontend ships FE-25 same day with
-the literal `??` removals.
-
-**Priority:** low — cosmetic/hygiene. Today's behaviour is correct;
-this is dead-code removal.
-
-
+_End of open gaps._
 
 ## Explicit non-requests (do not implement)
 
@@ -72,6 +26,7 @@ this is dead-code removal.
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-33 | Legacy field aliases dropped from `/api/status`. `state.paused` removed from payload (kept as internal storage field only); `summary.stopped` mirror removed; `"stopped"` removed from `ITEM_STATUSES` and `TERMINAL_STATUSES` (in both `packages/core/src/queue/types.ts` and `packages/core/src/state/archivable.ts`). Canonical names are `dispatch_paused` (top-level + on `state`) and `removed`. Three negative-snapshot tests in `server.test.ts` assert no occurrence of `state.paused`, `summary.stopped`, or `status:"stopped"` in `/api/status` responses. Out-of-scope `"stopped"` strings (scheduler-loop reason, torrent `distribute_status`) intentionally left — they belong to other domains. `docs/STATE_MACHINE.md` updated | 2026-04-30 |
 | BG-32 | Per-topic SSE subscriptions (v1: connect-time filter only). `GET /api/events?topics=items,scheduler` filters the stream; missing/empty → all topics (back-compat); unknown names → empty subset (typo ≠ firehose). `packages/api/src/event-topics.ts` is the single source for the 5 topics (items/scheduler/log/lifecycle/bandwidth) and the event→topic map (action_logged→log, session_*→scheduler, state_changed→items+scheduler, lifecycle_changed→lifecycle, bandwidth_probed→bandwidth); unknown event names fall through to all topics so a new emitter is visible until classified. `FreshnessMeta` extended with `transport_topics`; `/api/status` declares `["items","scheduler"]`, surfaces verbatim in `/api/_meta`. Mid-stream subscribe/unsubscribe deferred (reconnect with different `?topics=` is the v1 path). `packages/api/src/sse.md` documents the vocabulary | 2026-04-30 |
 | BG-31 | Per-endpoint freshness contract. `packages/api/src/freshness.ts` is the single registry; `withMeta(method, path, body)` stamps the registered block and throws on unregistered keys. Initial coverage: `/api/status` (live, sse), `/api/lifecycle` (warm 30s, revalidate on `POST /api/lifecycle/:target/:action`), `/api/bandwidth` (on-action, revalidate on `POST /api/bandwidth/probe`), `/api/aria2/get_global_option` + `/api/aria2/global_option` (cold), `/api/log` (swr 10s), `/api/health`, `/api/version`, `/api/_meta` (all bootstrap). New `GET /api/_meta` returns the registry sorted by path. Validators: warm/swr require `ttl_s`, on-action requires `revalidate_on`, live requires `transport`; server test confirms `revalidate_on` triggers reference routes Fastify actually registered. `docs/FRESHNESS.md` mirrors the dashboard's design rationale | 2026-04-30 |
 | BG-30 | Download state machine aligned on aria2's vocabulary. (1) `pollActiveItems` now persists `item.status="waiting"` (was only `live_status`). (2) `removed` added to `ITEM_STATUSES`/`TERMINAL_STATUSES`; poll emits canonical `removed` (was `stopped`); `/api/status.summary` mirrors `removed`/`stopped` as aliases. (3) `cancelled` removed from types/policy/`ITEM_STATUSES` — unreachable. (4) `/api/status` dual-keys `dispatch_paused` (top-level + on `state`) alongside legacy `state.paused`. (5) `state.active_gid`/`active_url` derived from `aria2.tellActive()` at `/api/status` read time, with stamped state as fallback when daemon unreachable. (6) `docs/STATE_MACHINE.md` documents the 8 states + transitions | 2026-04-30 |

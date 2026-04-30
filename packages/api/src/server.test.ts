@@ -867,20 +867,35 @@ describe("meta routes", () => {
     expect(status.transport_topics).toEqual(["items", "scheduler"]);
   });
 
-  it("BG-30 #4: GET /api/status dual-keys dispatch_paused alongside legacy state.paused", async () => {
+  it("BG-33: GET /api/status surfaces canonical dispatch_paused only (no legacy state.paused)", async () => {
     const res = await app.inject({ method: "GET", url: "/api/status" });
     const body = res.json();
     expect(body.dispatch_paused).toBe(false);
     expect(body.state.dispatch_paused).toBe(false);
-    expect(body.state.paused).toBe(false);
+    expect(body.state).not.toHaveProperty("paused");
   });
 
-  it("BG-30 #2: GET /api/status mirrors summary.removed alongside summary.stopped", async () => {
+  it("BG-33: GET /api/status summary uses canonical removed (no legacy summary.stopped)", async () => {
     const res = await app.inject({ method: "GET", url: "/api/status" });
     const body = res.json();
     expect(body.summary).toHaveProperty("removed");
-    expect(body.summary).toHaveProperty("stopped");
-    expect(body.summary.removed).toBe(body.summary.stopped);
+    expect(body.summary).not.toHaveProperty("stopped");
+  });
+
+  it("BG-33: /api/status payload contains no legacy aliases (state.paused, summary.stopped, status:'stopped')", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/api/downloads",
+      payload: { items: [{ url: "http://h/a" }, { url: "http://h/b" }] },
+    });
+    const res = await app.inject({ method: "GET", url: "/api/status" });
+    const json = res.payload;
+    expect(json).not.toMatch(/"paused"\s*:\s*(true|false)/);
+    expect(json).not.toMatch(/"stopped"\s*:/);
+    const body = res.json();
+    for (const item of body.items ?? []) {
+      expect(item.status).not.toBe("stopped");
+    }
   });
 
   it("GET /api/status?status=queued filters and flips `filtered`", async () => {

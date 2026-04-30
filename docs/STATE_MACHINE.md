@@ -16,8 +16,7 @@ pre-aria2 hand-off.
 | `paused`      | aria2    | no       | User paused this single item via aria2.pause |
 | `complete`    | aria2    | yes      | Download finished successfully |
 | `error`       | aria2    | yes      | Download failed (aria2 reported error) |
-| `removed`     | aria2    | yes      | User removed the item via aria2.remove (canonical) |
-| `stopped`     | alias    | yes      | Legacy alias of `removed`, retained for one release (BG-30) |
+| `removed`     | aria2    | yes      | User removed the item via aria2.remove |
 
 ## Transitions
 
@@ -46,11 +45,12 @@ discovering ─→ queued ─→ active ⇄ waiting ⇄ paused
 
 ## Scheduler-level state (separate axis)
 
-`state.dispatch_paused` (canonical, BG-30 #4) — when true, the loop
-stops dispatching new items but still polls aria2 for transitions.
+`state.dispatch_paused` (canonical) — when true, the loop stops
+dispatching new items but still polls aria2 for transitions.
 Item-level `paused` is unrelated: a single download paused by the
-user. The legacy `state.paused` JSON key is dual-keyed for one
-release.
+user. The legacy `state.paused` and `summary.stopped` aliases were
+removed in BG-33; `dispatch_paused` and `removed` are the only names
+on the wire.
 
 | Endpoint                 | Effect                                  |
 |--------------------------|-----------------------------------------|
