@@ -1,13 +1,12 @@
 name: release-tap
 
-# Auto-publish the rendered formula into both brew tap repos
-# (bonomani/homebrew-ariaflow-server and bonomani/homebrew-ariaflow).
-# Runs in parallel with the release-formula workflow that attaches
-# the .rb file to the release.
+# Auto-publish the rendered formula into the brew tap repo
+# (bonomani/homebrew-ariaflow-server). Runs in parallel with the
+# release-formula workflow that attaches the .rb file to the release.
 #
 # Required repo secret:
 #   TAP_PUSH_TOKEN — a fine-scoped PAT or GitHub App token with
-#                    `contents: write` on both tap repos.
+#                    `contents: write` on the tap repo.
 #
 # If the secret is missing the job exits early with a clear message
 # rather than failing the release pipeline.
@@ -83,7 +82,7 @@ jobs:
         if: steps.secret.outputs.available == 'true'
         run: |
           TAG="${{ steps.tag.outputs.value }}"
-          for REPO in homebrew-ariaflow-server homebrew-ariaflow; do
+          for REPO in homebrew-ariaflow-server; do
             echo "--- Updating ${{ env.TAP_OWNER }}/${REPO} ---"
             rm -rf tap-repo
             git clone --depth 1 \
