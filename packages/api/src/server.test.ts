@@ -386,6 +386,7 @@ describe("GET /api/bandwidth", () => {
           uplink_mbps: 25,
           down_cap_mbps: 80,
           up_cap_mbps: 12.5,
+          cap_mbps: 80,
           cap_bytes_per_sec: 10_000_000,
           interface_name: "en0",
           responsiveness_rpm: 740.4,
@@ -398,8 +399,16 @@ describe("GET /api/bandwidth", () => {
     expect(body.downlink_mbps).toBe(100);
     expect(body.up_cap_mbps).toBe(12.5);
     expect(body.cap_bytes_per_sec).toBe(10_000_000);
-    expect(body.interface).toBe("en0");
     expect(body.last_probe_at).toBe(1_700_000_000);
+
+    // BG-21: dashboard reads bw.interface_name / bw.source /
+    // bw.current_limit / bw.cap_mbps at the top level. Legacy
+    // interface / cap_bytes_per_sec aliases are still emitted.
+    expect(body.interface_name).toBe("en0");
+    expect(body.interface).toBe("en0");
+    expect(body.source).toBe("networkquality");
+    expect(body.cap_mbps).toBe(80);
+    expect(body.current_limit).toBe(10_000_000);
   });
 });
 

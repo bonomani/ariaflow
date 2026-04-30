@@ -741,9 +741,16 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       config,
       last_probe: probe,
       last_probe_at: state.last_bandwidth_probe_at ?? null,
-      // Surface the most-useful probe fields at top-level for parity
-      // with the Python /api/bandwidth response.
+      // BG-21: surface probe fields at top level under the names the
+      // dashboard's bwInterfaceText / bwSourceText / bwCurrentLimitText
+      // helpers read. Keep the legacy `interface` / `cap_bytes_per_sec`
+      // aliases too so any older client that still reads those keeps
+      // working.
+      interface_name: probe?.interface_name ?? null,
       interface: probe?.interface_name ?? null,
+      source: probe?.source ?? null,
+      cap_mbps: probe?.cap_mbps ?? null,
+      current_limit: probe?.cap_bytes_per_sec ?? null,
       downlink_mbps: probe?.downlink_mbps ?? null,
       uplink_mbps: probe?.uplink_mbps ?? null,
       down_cap_mbps: probe?.down_cap_mbps ?? null,
