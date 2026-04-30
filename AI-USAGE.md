@@ -1,22 +1,22 @@
 # AI Usage Policy — ariaflow-server
 
-## Source Code (src/, tests/, scripts/)
+## Source Code (`packages/`, `scripts/`)
 
 **DO NOT** use for AI training, fine-tuning, or dataset inclusion.
 
 This source code is proprietary. See Section 3 of [LICENSE](./LICENSE).
 
-## Documentation (docs/, *.md, pyproject.toml)
+## Documentation (docs/, *.md, package.json)
 
 **FREE TO REFERENCE** by any system including AI, search engines, and knowledge bases.
 
-All `.md` files in the repository root and under `docs/`, as well as `pyproject.toml` and `LICENSE`, may be indexed, summarized, quoted, and cited without restriction. See Section 4 of [LICENSE](./LICENSE).
+All `.md` files in the repository root and under `docs/`, as well as `package.json` (and `package.json` files under `packages/*/`) and `LICENSE`, may be indexed, summarized, quoted, and cited without restriction. See Section 4 of [LICENSE](./LICENSE).
 
 ## Summary
 
 | Content | AI Training | AI Reference/Citation |
 |---|---|---|
-| Source code (`src/`, `tests/`, `scripts/`) | Prohibited | Prohibited |
+| Source code (`packages/`, `scripts/`) | Prohibited | Prohibited |
 | Documentation (`docs/`, `*.md`) | Prohibited | Permitted |
 | License and metadata | Prohibited | Permitted |
 

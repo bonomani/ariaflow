@@ -1,6 +1,25 @@
 # Plan
 
-_No open items._
+## Open
+
+### [P2] Sync `openapi.yaml` with live Fastify routes
+
+**What:** `node scripts/check-openapi-drift.mjs` reports 18 paths registered live but missing from `openapi.yaml`, plus 2 method-set mismatches:
+
+- Missing paths: `/api/_meta`, `/api/actions`, `/api/active`, `/api/aria2/{global_option,multicall,option}`, `/api/downloads`, `/api/downloads/{id}`, `/api/openapi`, `/api/preflight`, `/api/scheduler/{start,stop}`, `/api/sessions/{close,current,history,start}`, `/api/version`, plus the `*` fallback.
+- Method-set drift: `/api/declaration` live `GET,POST,PUT` vs spec `GET,POST` (add `PUT`); `/api/declaration/preferences` live `PATCH,POST` vs spec `PATCH` (add `POST`).
+
+**Where:** `openapi.yaml` (root). Handler signatures live in `packages/api/src/server.ts`.
+
+**Why:** `openapi.yaml` is the public API contract the dashboard reads. Drift means the contract lies about what's available.
+
+**Scope:** medium — each missing path needs a stub with request/response schema. Aim for parity with existing entries' style (tags, summary, 200 response). ~150–250 lines.
+
+**Verify:** `node scripts/check-openapi-drift.mjs` exits 0.
+
+---
+
+
 
 ## How to use this file
 
