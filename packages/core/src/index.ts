@@ -139,3 +139,13 @@ export {
   renderFormula,
   writeFormula,
 } from "./install/formula.js";
+export {
+  ARIA2_LAUNCHD_LABEL,
+  ARIA2_SYSTEMD_UNIT,
+  buildAria2Plist,
+  buildAria2SystemdUnit,
+  planLaunchdInstall,
+  planLaunchdUninstall,
+  planSystemdInstall,
+  planSystemdUninstall,
+} from "./install/services.js";
