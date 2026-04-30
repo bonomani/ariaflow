@@ -141,4 +141,4 @@ Job state transitions that involve aria2 are mediated by 36 `aria2_*` wrapper fu
 | any → cancelled | `aria2_remove(gid)` + `aria2_remove_download_result(gid)` |
 | daemon probe | `aria2_get_version()` |
 
-Full wrapper reference: [`../ARIA2_RPC_WRAPPERS.md`](../ARIA2_RPC_WRAPPERS.md)
+Full wrapper reference: source under `packages/core/src/aria2/` (the TS port retired the auto-generated `ARIA2_RPC_WRAPPERS.md` snapshot — read the typed wrappers directly).

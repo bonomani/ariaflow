@@ -42,7 +42,8 @@ oracle. The full decision record lives in
 
 ## How this file is used
 
-`scripts/gen_spec.py` reads this file verbatim into Section 1 of
-`docs/SPEC.md`. Edit this file by hand whenever the project's purpose
-or scope changes; everything else in `SPEC.md` is auto-generated from
-the code and the governance artifacts.
+This file is the canonical statement of project purpose and scope.
+Edit it whenever those change. The Python-era `scripts/gen_spec.py`
+and the generated `docs/SPEC.md` were retired with the Python tree;
+governance facts now live next to the code (`packages/core/src/contracts/`,
+`packages/*/src/**/*.test.ts`) and in `docs/governance/`.

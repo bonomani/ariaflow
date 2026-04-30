@@ -138,7 +138,6 @@ pnpm test
 |---|---|
 | [docs/STATE_MACHINE.md](./docs/STATE_MACHINE.md) | Item states + transitions |
 | [docs/FRESHNESS.md](./docs/FRESHNESS.md) | Per-endpoint freshness contract (`/api/_meta`) |
-| [docs/ARIA2_RPC_WRAPPERS.md](./docs/ARIA2_RPC_WRAPPERS.md) | aria2 RPC wrapper reference |
 | [docs/RELEASE.md](./docs/RELEASE.md) | Release process |
 | [docs/GAPS.md](./docs/GAPS.md) | Feature gap analysis |
 | [docs/governance/](./docs/governance/) | BGS, ASM, BISS, TIC governance framework |

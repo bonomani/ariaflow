@@ -24,7 +24,7 @@ Before starting:
 ```
 □ git status                    # must be clean
 □ git pull --rebase origin main # start from latest
-□ python -m pytest tests/ -x -q # all tests pass
+□ pnpm test                     # all tests pass
 ```
 
 For each plan item:
@@ -32,7 +32,7 @@ For each plan item:
 □ read the plan item
 □ read the code to change
 □ implement the change (smallest diff possible)
-□ python -m pytest tests/ -x -q # all tests pass
+□ pnpm test                     # all tests pass
 □ update docs if affected
 □ git add <specific files>      # no git add -A
 □ git commit                    # descriptive message
@@ -44,9 +44,7 @@ For each plan item:
 
 After all items done:
 ```
-□ python -m pytest tests/ -x -q # final pass
-□ python scripts/gen_rpc_docs.py # regenerate if code changed
-□ python scripts/gen_all_variables.py --check # naming compliance
+□ pnpm test                     # final pass
 □ verify PLAN.md says "No open items"
 □ git push origin main
 □ rm -rf .claude/worktrees/     # clean temp working folders

@@ -41,11 +41,11 @@ evidence_refs:
   - ./biss-classification.md
   - ./asm-state-model.md
   - ./tic-oracle.md
-  - ../../src/ariaflow_server/contracts.py
+  - ../../packages/core/src/contracts/
   - ../ARCHITECTURE.md
   - ../STATES_AND_INTERACTIONS.md
-  - ../ARIA2_RPC_WRAPPERS.md
-  - ../../tests/
+  - ../../packages/core/src/aria2/
+  - ../../packages/*/src/**/*.test.ts
 
 owner: bonomani
 date: 2026-04-09

@@ -2,9 +2,9 @@
 
 **aria2 version supported:** 1.37.0 (JSON-RPC interface)
 
-**Design rule:** All aria2 RPC methods listed below MUST have a corresponding `aria2_*` wrapper function in `core.py`, even if not currently used by the scheduler. This ensures the full aria2 API surface is available for future features and external consumers.
+**Design rule:** All aria2 RPC methods listed below MUST have a corresponding wrapper in `packages/core/src/aria2/`, even if not currently used by the scheduler. This ensures the full aria2 API surface is available for future features and external consumers.
 
-**See also:** [ARIA2_RPC_WRAPPERS.md](./ARIA2_RPC_WRAPPERS.md) — auto-generated reference of all 36 wrapper functions (regenerate with `python scripts/gen_rpc_docs.py`).
+**See also:** the typed RPC wrappers under `packages/core/src/aria2/` are the authoritative reference. (The auto-generated `ARIA2_RPC_WRAPPERS.md` snapshot was retired with the Python tree.)
 
 ## Section 1: aria2 — States, Transitions, and RPC Commands
 

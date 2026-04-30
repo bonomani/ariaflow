@@ -2,6 +2,8 @@
 
 Rules derived from real incidents during development. Each rule exists because we made the mistake.
 
+> **Note:** Incident anecdotes below reference the retired Python tree (`src/ariaflow_server/*.py`, `pytest`). The rules themselves are language-agnostic and still apply to the TS port; treat the file paths in the incidents as historical context.
+
 ## 1. Git Safety
 
 ### R1: NEVER use `git checkout --` on uncommitted work
@@ -15,7 +17,7 @@ Rules derived from real incidents during development. Each rule exists because w
 
 ### R3: Never commit generated files
 **Incident:** `src/ariaflow_server.egg-info/` was accidentally committed.
-**Rule:** Run `git diff --cached --stat` before commit. Add generated directories to `.gitignore` proactively. Current gitignore: `.claude/`, `src/ariaflow_server.egg-info/`, `docs/ALL_VARIABLES.md`.
+**Rule:** Run `git diff --cached --stat` before commit. Add generated directories to `.gitignore` proactively. Current gitignore covers `dist/`, `node_modules/`, `packages/*/dist/`, transpiled `*.js`/`*.d.ts` next to TS sources, and `*.tsbuildinfo`.
 
 ## 2. Renaming
 
@@ -38,11 +40,7 @@ Rules derived from real incidents during development. Each rule exists because w
 
 ### R7: Auto-generate everything that can drift
 **Incident:** OpenAPI spec had 18 endpoints when the code had 44. Manual YAML maintenance failed silently.
-**Rule:** If a doc reflects code structure, auto-generate it:
-- `scripts/gen_openapi.py` → `openapi.yaml`
-- `scripts/gen_rpc_docs.py` → `docs/ARIA2_RPC_WRAPPERS.md`
-- `scripts/gen_all_variables.py` → `docs/ALL_VARIABLES.md`
-- Run all with `make docs`. Never edit generated files by hand.
+**Rule:** If a doc reflects code structure, auto-generate it. The Python-era generators (`gen_rpc_docs.py`, `gen_all_variables.py`) were retired with the Python tree along with the docs they produced; only `openapi.yaml` (now generated from the Fastify route registrations) survives in the TS port. New auto-gen drift watchpoints should be wired through `scripts/check-openapi-drift.mjs` or a similar CI gate. Never edit generated files by hand.
 
 ### R8: One plan file, remove done items
 **Incident:** Multiple plan files (BUGFIX_PLAN.md, REFACTOR_PLAN.md, etc.) with overlapping items, stale decisions contradicting actual code.

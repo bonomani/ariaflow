@@ -4,7 +4,6 @@ build/
 .vscode/
 .claude/
 !.claude/settings.json
-docs/ALL_VARIABLES.md
 node_modules/
 packages/*/dist/
 packages/*/src/**/*.js
