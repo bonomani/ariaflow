@@ -420,10 +420,18 @@ export async function cmdServe(
           return { capBytesPerSec: fresh.cap_bytes_per_sec ?? 0 };
         },
       },
-    ).catch((err) => {
+    ).then(() => {
+      // Loop exited normally (drained / max_iterations) — clear the
+      // controller so launchScheduler() can spin up a fresh loop when
+      // new items arrive.
+      schedulerCtrl = undefined;
+      schedulerDone = Promise.resolve();
+    }, (err) => {
       // Surface scheduler crashes to stderr but don't kill the HTTP
       // listener — caller can investigate via /api/log.
       console.error("scheduler loop crashed:", err);
+      schedulerCtrl = undefined;
+      schedulerDone = Promise.resolve();
     });
     // Wait one event-loop tick so the loop's first state.running=true
     // write lands before we report success — callers immediately read
