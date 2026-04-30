@@ -58,6 +58,8 @@ describe("renderFormula", () => {
     expect(text).toContain("class AriaflowServer < Formula");
     expect(text).toContain('depends_on "node"');
     expect(text).toContain('depends_on "aria2"');
+    expect(text).toContain('depends_on "pnpm" => :build');
+    expect(text).not.toContain('"corepack"');
     expect(text).toContain('url "https://example/y.tar.gz"');
     expect(text).toContain('sha256 "deadbeef"');
     expect(text).toContain('version "1.2.3"');

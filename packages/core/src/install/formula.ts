@@ -68,13 +68,10 @@ export function renderFormula({ version, url, sha256 }: RenderFormulaInput): str
   license "MIT"
   depends_on "node"
   depends_on "aria2"
-  depends_on "corepack" => :build
+  depends_on "pnpm" => :build
   head "https://github.com/bonomani/ariaflow-server.git", branch: "main"
 
   def install
-    ENV["COREPACK_ENABLE_DOWNLOAD_PROMPT"] = "0"
-    system "corepack", "enable"
-    system "corepack", "prepare", "pnpm@9", "--activate"
     system "pnpm", "install", "--frozen-lockfile=false"
     system "pnpm", "build"
     system "pnpm", "--filter", "@ariaflow/cli", "deploy", "--prod", "--legacy",
