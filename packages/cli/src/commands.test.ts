@@ -15,6 +15,7 @@ import {
   cmdProbe,
   cmdRemove,
   cmdResume,
+  cmdDoctor,
   cmdInstallService,
   cmdSeedStop,
   cmdServe,
@@ -364,6 +365,36 @@ describe("cmdSetPref", () => {
   it("exit 2 on an unknown preference", async () => {
     const r = await cmdSetPref(ctx, "no_such_pref", "1");
     expect(r.exitCode).toBe(2);
+  });
+});
+
+describe("cmdDoctor", () => {
+  it("emits a JSON shape with five named checks", async () => {
+    // Point at a definitely-closed port so aria2 RPC fails deterministically.
+    const r = await cmdDoctor(ctx, { aria2Host: "127.0.0.1", aria2Port: 1 });
+    const body = JSON.parse(r.stdout);
+    expect(Array.isArray(body.checks)).toBe(true);
+    const names = body.checks.map((c: { name: string }) => c.name).sort();
+    expect(names).toEqual([
+      "aria2_rpc_reachable",
+      "aria2c_binary",
+      "config_dir_writable",
+      "networkquality",
+      "platform_service_target",
+    ]);
+    // RPC must fail against port 1.
+    const rpc = body.checks.find(
+      (c: { name: string }) => c.name === "aria2_rpc_reachable",
+    );
+    expect(rpc.ok).toBe(false);
+  });
+
+  it("--pretty emits OK/FAIL lines and exits 1 when any check fails", async () => {
+    const r = await cmdDoctor(ctx, { aria2Host: "127.0.0.1", aria2Port: 1, pretty: true });
+    expect(r.stdout).toMatch(/aria2_rpc_reachable/);
+    expect(r.stdout).toMatch(/^FAIL |^OK   /m);
+    // RPC unreachable -> at least one FAIL -> exit 1.
+    expect(r.exitCode).toBe(1);
   });
 });
 

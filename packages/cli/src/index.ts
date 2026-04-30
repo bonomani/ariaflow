@@ -6,6 +6,7 @@ import {
   cmdCleanup,
   cmdDashboard,
   cmdDeclaration,
+  cmdDoctor,
   cmdInstallService,
   cmdList,
   cmdOpenapi,
@@ -207,6 +208,32 @@ program
     process.stdout.write(r.stdout);
     process.exit(r.exitCode);
   });
+
+program
+  .command("doctor")
+  .description("pre-flight diagnostics for aria2c, networkQuality, RPC, config dir")
+  .option("--pretty", "human-readable layout instead of JSON")
+  .option("--aria2-host <h>", "aria2 RPC host", "127.0.0.1")
+  .option("--aria2-port <p>", "aria2 RPC port", (v) => Number(v), 6800)
+  .option("--aria2-secret <s>", "aria2 RPC secret token")
+  .action(
+    async (opts: {
+      pretty?: boolean;
+      aria2Host: string;
+      aria2Port: number;
+      aria2Secret?: string;
+    }) => {
+      const ctx = makeContext();
+      const r = await cmdDoctor(ctx, {
+        ...(opts.pretty ? { pretty: true } : {}),
+        aria2Host: opts.aria2Host,
+        aria2Port: opts.aria2Port,
+        ...(opts.aria2Secret ? { aria2Secret: opts.aria2Secret } : {}),
+      });
+      process.stdout.write(r.stdout);
+      process.exit(r.exitCode);
+    },
+  );
 
 program
   .command("openapi")
