@@ -67,8 +67,8 @@ describe("parseNetworkQualityOutput", () => {
 
 describe("shouldProbeBandwidth", () => {
   it("returns true when there's no prior probe", () => {
-    expect(shouldProbeBandwidth({}, 1000)).toBe(true);
-    expect(shouldProbeBandwidth({ last_bandwidth_probe_at: "nope" }, 1000)).toBe(true);
+    expect(shouldProbeBandwidth({}, 1000, 180)).toBe(true);
+    expect(shouldProbeBandwidth({ last_bandwidth_probe_at: "nope" }, 1000, 180)).toBe(true);
   });
   it("respects the interval", () => {
     expect(shouldProbeBandwidth({ last_bandwidth_probe_at: 900 }, 1000, 180)).toBe(false);
