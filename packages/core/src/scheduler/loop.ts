@@ -1,5 +1,5 @@
 import type { Aria2Client } from "../aria2/client.js";
-import { pauseAll } from "../aria2/methods.js";
+import { pauseAll, unpauseAll } from "../aria2/methods.js";
 import type { ActionLog } from "../storage/action-log.js";
 import type { DeclarationStore } from "../storage/declaration.js";
 import type { QueueStore } from "../storage/queue.js";
@@ -97,6 +97,15 @@ export async function runSchedulerLoop(
   await deps.stateStore.update((s) => {
     s.running = true;
   });
+
+  // Symmetric with the pauseAll in the finally block: the previous
+  // loop run paused all aria2 transfers on exit, so unpause them
+  // before reconciliation (which only sees active items).
+  try {
+    await unpauseAll(deps.aria2);
+  } catch {
+    /* aria2 unreachable — reconcile will handle it */
+  }
 
   if (opts.preLoop) {
     try {
