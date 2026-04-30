@@ -1,12 +1,13 @@
 name: release-tap
 
-# Auto-publish the rendered formula into the brew tap repo
-# (bonomani/homebrew-ariaflow-server). Runs in parallel with the
-# release-formula workflow that attaches the .rb file to the release.
+# Auto-publish the rendered formula into both brew tap repos
+# (bonomani/homebrew-ariaflow-server and bonomani/homebrew-ariaflow).
+# Runs in parallel with the release-formula workflow that attaches
+# the .rb file to the release.
 #
 # Required repo secret:
 #   TAP_PUSH_TOKEN — a fine-scoped PAT or GitHub App token with
-#                    `contents: write` on the tap repo.
+#                    `contents: write` on both tap repos.
 #
 # If the secret is missing the job exits early with a clear message
 # rather than failing the release pipeline.
@@ -78,31 +79,28 @@ jobs:
             --tag "${{ steps.tag.outputs.value }}" \
             --output "dist-formula/ariaflow-server.rb"
 
-      - name: Checkout tap repo
-        if: steps.secret.outputs.available == 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.TAP_OWNER }}/${{ env.TAP_REPO }}
-          token: ${{ secrets.TAP_PUSH_TOKEN }}
-          path: tap-repo
-
-      - name: Stage formula in tap
+      - name: Push to tap repos
         if: steps.secret.outputs.available == 'true'
         run: |
-          mkdir -p "tap-repo/$(dirname ${{ env.FORMULA_PATH }})"
-          cp dist-formula/ariaflow-server.rb "tap-repo/${{ env.FORMULA_PATH }}"
-
-      - name: Commit + push
-        if: steps.secret.outputs.available == 'true'
-        working-directory: tap-repo
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- "${{ env.FORMULA_PATH }}"; then
-            echo "no formula changes — skipping commit"
-            exit 0
-          fi
           TAG="${{ steps.tag.outputs.value }}"
-          git add "${{ env.FORMULA_PATH }}"
-          git commit -m "Bump ariaflow-server to ${TAG}"
-          git push
+          for REPO in homebrew-ariaflow-server homebrew-ariaflow; do
+            echo "--- Updating ${{ env.TAP_OWNER }}/${REPO} ---"
+            rm -rf tap-repo
+            git clone --depth 1 \
+              "https://x-access-token:${{ secrets.TAP_PUSH_TOKEN }}@github.com/${{ env.TAP_OWNER }}/${REPO}.git" \
+              tap-repo
+            mkdir -p "tap-repo/$(dirname ${{ env.FORMULA_PATH }})"
+            cp dist-formula/ariaflow-server.rb "tap-repo/${{ env.FORMULA_PATH }}"
+            cd tap-repo
+            git config user.name  "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            if git diff --quiet -- "${{ env.FORMULA_PATH }}"; then
+              echo "no formula changes in ${REPO} — skipping"
+              cd ..
+              continue
+            fi
+            git add "${{ env.FORMULA_PATH }}"
+            git commit -m "Bump ariaflow-server to ${TAG}"
+            git push
+            cd ..
+          done
