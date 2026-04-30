@@ -3,7 +3,7 @@
 Profile: ariaflow-server-scheduler
 TIC ref: tic@7cfba80
 Test runner: `pnpm test` (Vitest)
-Test count: **513 tests** across 42 files
+Test count: **514 tests** across 42 files
 
 The Python test catalog (`tests/test_*.py`, 527 tests) was retired with
 the Python source tree. The TypeScript port carries the same trace

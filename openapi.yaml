@@ -47,6 +47,43 @@ tags:
 
 
 paths:
+  /api/_meta:
+    get:
+      tags: [Meta]
+      summary: Per-endpoint freshness contract registry
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  endpoints:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        path:
+                          type: string
+                        method:
+                          type: string
+                        freshness:
+                          type: string
+                        ttl_s:
+                          type: integer
+                          nullable: true
+                        transport:
+                          type: string
+                          nullable: true
+                        transport_topics:
+                          type: array
+                          items:
+                            type: string
+                        revalidate_on:
+                          type: array
+                          items:
+                            type: object
   /api:
     get:
       tags: [Meta]
@@ -73,6 +110,47 @@ paths:
                     type: string
                   version:
                     type: string
+  /api/actions:
+    get:
+      tags: [Observability]
+      summary: Recent action log entries
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  actions:
+                    type: array
+                    items:
+                      type: object
+  /api/active:
+    get:
+      tags: [Status]
+      summary: Currently active download (live progress, derived from aria2)
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  active:
+                    type: object
+                    nullable: true
+                  reason:
+                    type: string
+                    nullable: true
   /api/aria2/change_global_option:
     post:
       tags: [aria2]
@@ -156,6 +234,51 @@ paths:
                   options:
                     nullable: true
                     type: object
+  /api/aria2/global_option:
+    get:
+      tags: [aria2]
+      summary: Get aria2 global options (alias of get_global_option)
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+  /api/aria2/multicall:
+    post:
+      tags: [aria2]
+      summary: Proxy aria2 system.multicall (batched RPC)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Bad request
+  /api/aria2/option:
+    get:
+      tags: [aria2]
+      summary: Get per-item aria2 options (alias of get_option)
+      parameters:
+        - in: query
+          name: gid
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
   /api/aria2/option_tiers:
     get:
       tags: [aria2]
@@ -418,10 +541,44 @@ paths:
                 type: object
         "400":
           description: Bad request
+    put:
+      tags: [Config]
+      summary: Save UIC declaration (alias of POST)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Bad request
   /api/declaration/preferences:
     patch:
       tags: [Config]
       summary: Atomic partial preference update
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Bad request
+    post:
+      tags: [Config]
+      summary: Atomic partial preference update (alias of PATCH)
       requestBody:
         content:
           application/json:
@@ -447,6 +604,78 @@ paths:
             application/json:
               schema:
                 type: object
+  /api/downloads:
+    get:
+      tags: [Downloads]
+      summary: List queued and active items
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  items:
+                    type: array
+                    items:
+                      type: object
+    post:
+      tags: [Downloads]
+      summary: Add downloads (alias of /api/downloads/add)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Bad request
+  /api/downloads/{id}:
+    get:
+      tags: [Downloads]
+      summary: Get a single download by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: Not found
+    delete:
+      tags: [Downloads]
+      summary: Remove a download (alias of POST /api/downloads/{id}/remove)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: Not found
   /api/downloads/add:
     post:
       tags: [Queue]
@@ -874,6 +1103,17 @@ paths:
             application/json:
               schema:
                 type: object
+  /api/openapi:
+    get:
+      tags: [Meta]
+      summary: OpenAPI spec (JSON, generated from live routes)
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
   /api/peers:
     get:
       tags: [Meta]
@@ -911,6 +1151,30 @@ paths:
                           type: string
                         tls:
                           type: boolean
+  /api/preflight:
+    get:
+      tags: [Scheduler]
+      summary: Current preflight evaluation result
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  status:
+                    type: string
+                  gates:
+                    type: array
+                    items:
+                      type: object
+                  hard_failures:
+                    type: array
+                    items:
+                      type: string
   /api/scheduler:
     get:
       tags: [Scheduler]
@@ -998,6 +1262,42 @@ paths:
                 type: object
         "400":
           description: Bad request
+  /api/scheduler/start:
+    post:
+      tags: [Scheduler]
+      summary: Start the scheduler loop (no-op if already running)
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  started:
+                    type: boolean
+                  reason:
+                    type: string
+  /api/scheduler/stop:
+    post:
+      tags: [Scheduler]
+      summary: Stop the scheduler loop
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  stopped:
+                    type: boolean
+                  reason:
+                    type: string
   /api/scheduler/ucc:
     post:
       tags: [Scheduler]
@@ -1051,6 +1351,71 @@ paths:
                         started_at:
                           nullable: true
                           type: string
+  /api/sessions/close:
+    post:
+      tags: [Sessions]
+      summary: Close the current session
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Bad request
+  /api/sessions/current:
+    get:
+      tags: [Sessions]
+      summary: Current session metadata
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  session:
+                    type: object
+                    nullable: true
+  /api/sessions/history:
+    get:
+      tags: [Sessions]
+      summary: Session history (alias of /api/sessions)
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  sessions:
+                    type: array
+                    items:
+                      type: object
+  /api/sessions/start:
+    post:
+      tags: [Sessions]
+      summary: Start a new session
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  session_id:
+                    type: string
+                    nullable: true
   /api/sessions/stats:
     get:
       tags: [Sessions]
@@ -1275,6 +1640,22 @@ paths:
           description: Bad request
         "404":
           description: Not found
+  /api/version:
+    get:
+      tags: [Meta]
+      summary: ariaflow-server version
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  version:
+                    type: string
 
 components:
   parameters:

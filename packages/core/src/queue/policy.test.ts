@@ -17,8 +17,8 @@ describe("allowedActions", () => {
     ["paused", ["resume", "remove"]],
     ["complete", ["remove"]],
     ["error", ["retry", "remove"]],
-    ["stopped", ["retry", "remove"]],
     ["removed", ["retry", "remove"]],
+    ["stopped", []],
     ["unknown", []],
   ])("status=%s -> %j", (status, expected) => {
     expect(allowedActions(status)).toEqual(expected);

@@ -16,7 +16,7 @@ members_used:
   - ASM — state model (4 axes: session, run, job, daemon; 5 coherence rules)
   - UIC — preflight gates (aria2_available, queue_readable) + 27 preferences
   - UCC — structured execution results (UCCResult dataclass)
-  - TIC — test oracle (513 tests, trace targets across ASM/UIC/UCC/BISS)
+  - TIC — test oracle (514 tests, trace targets across ASM/UIC/UCC/BISS)
 
 overlays_used: []
 

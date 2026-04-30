@@ -23,7 +23,9 @@ export interface DriftReport {
  * elsewhere (route validators, in-code docs).
  */
 export function diffOpenApi(live: OpenApiDoc, expected: OpenApiDoc): DriftReport {
-  const livePaths = new Set(Object.keys(live.paths ?? {}));
+  // Fastify registers `*` as a 404 catch-all; OpenAPI cannot represent
+  // a wildcard, so it is excluded from drift comparison.
+  const livePaths = new Set(Object.keys(live.paths ?? {}).filter((p) => p !== "*"));
   const expPaths = new Set(Object.keys(expected.paths ?? {}));
 
   const added = [...livePaths].filter((p) => !expPaths.has(p)).sort();

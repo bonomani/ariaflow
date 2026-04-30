@@ -48,6 +48,17 @@ describe("diffOpenApi", () => {
     const exp = doc({});
     expect(diffOpenApi(live, exp).added).toEqual(["/a", "/b", "/c"]);
   });
+
+  it("ignores Fastify's `*` catch-all (cannot be represented in OpenAPI)", () => {
+    const live = doc({ "/x": { get: {} }, "*": { get: {} } });
+    const exp = doc({ "/x": { get: {} } });
+    expect(diffOpenApi(live, exp)).toEqual({
+      added: [],
+      removed: [],
+      changed: [],
+      ok: true,
+    });
+  });
 });
 
 describe("loadOpenApiYaml", () => {

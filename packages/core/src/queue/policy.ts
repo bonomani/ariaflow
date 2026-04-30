@@ -9,7 +9,6 @@ const ALLOWED_ACTIONS: Record<ItemStatus, readonly string[]> = {
   complete: ["remove"],
   error: ["retry", "remove"],
   removed: ["retry", "remove"],
-  stopped: ["retry", "remove"],
 };
 
 /**
