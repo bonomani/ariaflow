@@ -1332,14 +1332,34 @@ describe("POST /api/lifecycle/:target/:action", () => {
 });
 
 describe("GET /api/lifecycle", () => {
-  it("returns ariaflow_server + networkquality status and session fields", async () => {
+  it("returns BG-20 contract: ariaflow-server / aria2 / networkquality / aria2-launchd", async () => {
     const res = await app.inject({ method: "GET", url: "/api/lifecycle" });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.ok).toBe(true);
-    expect(body.ariaflow_server).toMatchObject({ installed: true, version: "0.0.0" });
-    expect(body.networkquality).toHaveProperty("installed");
-    expect(body.networkquality).toHaveProperty("reason");
+
+    // Hyphenated key — the dashboard reads data['ariaflow-server'].
+    expect(body["ariaflow-server"].result).toMatchObject({
+      reason: "match",
+      outcome: "installed · current",
+      observation: "ok",
+      version: "0.0.0",
+    });
+
+    // aria2: no client wired in tests -> reason=missing.
+    expect(body.aria2.result.reason).toBe("missing");
+
+    // networkquality: ready or missing depending on host (Linux runners
+    // typically lack networkQuality), but the result shape is fixed.
+    expect(body.networkquality.result).toHaveProperty("reason");
+    expect(["ready", "missing"]).toContain(body.networkquality.result.reason);
+    expect(body.networkquality.result).toHaveProperty("outcome");
+
+    // aria2-launchd: always emitted; reason reflects whether the
+    // platform's unit/plist exists on disk.
+    expect(body["aria2-launchd"].result).toHaveProperty("reason");
+    expect(["match", "missing"]).toContain(body["aria2-launchd"].result.reason);
+
     expect(body.session_id).toBeNull();
     expect(body.session_closed_at).toBeNull();
   });

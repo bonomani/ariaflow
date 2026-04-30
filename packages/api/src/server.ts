@@ -1186,16 +1186,95 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   app.get("/api/lifecycle", async () => {
     const core = await import("@ariaflow/core");
+    const { existsSync } = await import("node:fs");
     const state = await deps.stateStore.load();
-    return {
-      ok: true,
-      // Lightweight status_all() equivalent — the install-side checks
-      // (brew, aria2 service) are deferred to a service-layer port.
-      ariaflow_server: {
-        installed: true,
+
+    // BG-20: contract shape — every component record nests under
+    // `result`, key names use hyphens (ariaflow-server, aria2-launchd),
+    // and `reason` is one of the dashboard's recognized values
+    // (`match` / `missing` for binaries, `ready` for networkquality).
+
+    // ariaflow-server: we're answering the request, so we're installed.
+    const ariaflowServer = {
+      result: {
+        reason: "match",
+        outcome: "installed · current",
+        message: null,
+        observation: "ok",
+        completion: null,
         version: deps.version ?? "0.0.0",
       },
-      networkquality: core.install.networkqualityStatus(),
+    };
+
+    // aria2: probe via the wired client. No client → reason=missing.
+    let aria2Result: Record<string, unknown>;
+    if (deps.aria2) {
+      try {
+        const v = await deps.aria2.call<{ version: string }>("aria2.getVersion");
+        aria2Result = {
+          reason: "match",
+          outcome: "installed · current",
+          version: v.version,
+          observation: "ok",
+        };
+      } catch (err) {
+        aria2Result = {
+          reason: "missing",
+          outcome: "unreachable",
+          observation: "failed",
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    } else {
+      aria2Result = {
+        reason: "missing",
+        outcome: "no aria2 client wired",
+        observation: "failed",
+      };
+    }
+
+    // networkquality: reuse the existing helper but reshape into the
+    // result-wrapped contract.
+    const nq = core.install.networkqualityStatus();
+    const networkquality = {
+      result: {
+        reason: nq.reason, // "ready" | "missing"
+        outcome: nq.installed && nq.usable ? "installed · usable" : "unavailable",
+        observation: nq.installed && nq.usable ? "ok" : "failed",
+        message: nq.message,
+        ...(nq.command ? { command: nq.command } : {}),
+      },
+    };
+
+    // aria2-launchd / aria2-systemd: check whether the unit / plist
+    // this platform uses exists on disk. The dashboard renders the row
+    // under the literal "aria2-launchd" key regardless of OS, so we
+    // emit that key in both cases — installed reflects the host's real
+    // state via detectServiceTarget().
+    const target = core.detectServiceTarget();
+    const home = (await import("node:os")).homedir();
+    const installedPath =
+      target === "aria2-launchd"
+        ? `${home}/Library/LaunchAgents/com.ariaflow-server.aria2.plist`
+        : target === "aria2-systemd"
+          ? `${home}/.config/systemd/user/ariaflow-server-aria2.service`
+          : null;
+    const installedHere = installedPath ? existsSync(installedPath) : false;
+    const aria2Launchd = {
+      result: {
+        reason: installedHere ? "match" : "missing",
+        outcome: installedHere ? "loaded" : "not installed",
+        observation: installedHere ? "ok" : "unknown",
+        ...(installedPath ? { path: installedPath } : {}),
+      },
+    };
+
+    return {
+      ok: true,
+      "ariaflow-server": ariaflowServer,
+      aria2: { result: aria2Result },
+      networkquality,
+      "aria2-launchd": aria2Launchd,
       session_id: state.session_id,
       session_started_at: state.session_started_at,
       session_last_seen_at: state.session_last_seen_at,
