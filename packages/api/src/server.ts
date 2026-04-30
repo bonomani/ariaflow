@@ -57,6 +57,15 @@ export interface ServerDeps {
   /** Optional override for the cwd used during output path validation. */
   cwd?: string;
   logger?: boolean;
+  /**
+   * BG-25: lifecycle hooks for the scheduler loop. When wired, the
+   * /api/scheduler/{start,stop} routes (and /resume's auto-start) drive
+   * these so the dashboard can flip `state.running` truthfully.
+   * `state.running` means "the scheduler loop is actively dispatching"
+   * — the same semantic the dashboard's `schedulerStateLabel()` reads.
+   */
+  startScheduler?: () => Promise<{ started: boolean; reason: string }>;
+  stopScheduler?: () => Promise<{ stopped: boolean; reason: string }>;
 }
 
 const SWAGGER_UI_HTML = `<!DOCTYPE html>
@@ -652,6 +661,23 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         disk_ok: diskOk,
       };
 
+
+      // BG-25 sub-issue: lift the live bandwidth probe summary to a
+      // top-level `bandwidth` key (mirroring /api/bandwidth's BG-21
+      // shape) so the dashboard's Cap chip works on the Dashboard tab
+      // without first visiting Bandwidth.
+      const probe = (state.last_bandwidth_probe ?? null) as Record<string, unknown> | null;
+      const bandwidth = probe
+        ? {
+            source: probe.source ?? null,
+            interface_name: probe.interface_name ?? null,
+            cap_mbps: probe.cap_mbps ?? null,
+            cap_bytes_per_sec: probe.cap_bytes_per_sec ?? null,
+            downlink_mbps: probe.downlink_mbps ?? null,
+            last_probe_at: state.last_bandwidth_probe_at ?? null,
+          }
+        : null;
+
       const payload: Record<string, unknown> = {
         ok: true,
         "ariaflow-server": identity,
@@ -659,6 +685,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         items: filtered,
         summary: summarizeQueue(filtered),
         state,
+        bandwidth,
         _rev: Number(state._rev ?? 0),
       };
       if (statusFilter || sessionFilter) payload.filtered = true;
@@ -1252,7 +1279,88 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       outcome: "changed",
       reason: "api_request",
     });
-    return { ok: true, paused: next.paused, _rev: Number(next._rev ?? 0) };
+    // BG-25: when the scheduler loop isn't running, /resume must also
+    // start it — otherwise unpausing has no effect and queued items sit
+    // forever. The dashboard's Start button hits /resume when
+    // state.running=false, so this is the path that has to flip the
+    // loop on.
+    let startResult: { started: boolean; reason: string } | undefined;
+    const post = await deps.stateStore.load();
+    if (!post.running && deps.startScheduler) {
+      try {
+        startResult = await deps.startScheduler();
+      } catch (err) {
+        startResult = {
+          started: false,
+          reason: err instanceof Error ? err.message : "start_failed",
+        };
+      }
+    }
+    return {
+      ok: true,
+      paused: next.paused,
+      _rev: Number(next._rev ?? 0),
+      ...(startResult ? { started: startResult.started, start_reason: startResult.reason } : {}),
+    };
+  });
+
+  // BG-25: explicit start/stop routes. `state.running` means "the
+  // scheduler loop is actively dispatching" — both views agree on that
+  // definition. /start is idempotent: if running is already true it
+  // returns started:false / reason:"already_running" rather than
+  // erroring.
+  app.post("/api/scheduler/start", async (_req, reply) => {
+    if (!deps.startScheduler) {
+      return reply
+        .code(503)
+        .send(errorPayload("scheduler_unavailable", "scheduler lifecycle not wired"));
+    }
+    const before = await deps.stateStore.load();
+    if (before.running) {
+      return { ok: true, started: false, reason: "already_running", running: true };
+    }
+    const result = await deps.startScheduler();
+    const after = await deps.stateStore.load();
+    await deps.actionLog.record({
+      action: "start",
+      target: "scheduler",
+      outcome: result.started ? "changed" : "unchanged",
+      reason: result.reason,
+    });
+    return {
+      ok: true,
+      started: result.started,
+      reason: result.reason,
+      running: Boolean(after.running),
+      _rev: Number(after._rev ?? 0),
+    };
+  });
+
+  app.post("/api/scheduler/stop", async (_req, reply) => {
+    if (!deps.stopScheduler) {
+      return reply
+        .code(503)
+        .send(errorPayload("scheduler_unavailable", "scheduler lifecycle not wired"));
+    }
+    const before = await deps.stateStore.load();
+    if (!before.running) {
+      return { ok: true, stopped: false, reason: "not_running", running: false };
+    }
+    const result = await deps.stopScheduler();
+    const after = await deps.stateStore.load();
+    await deps.actionLog.record({
+      action: "stop",
+      target: "scheduler",
+      outcome: result.stopped ? "changed" : "unchanged",
+      reason: result.reason,
+    });
+    return {
+      ok: true,
+      stopped: result.stopped,
+      reason: result.reason,
+      running: Boolean(after.running),
+      _rev: Number(after._rev ?? 0),
+    };
   });
 
   app.get("/api/lifecycle", async () => {

@@ -354,6 +354,9 @@ export interface ServeHandle {
   /** Bonjour backend in use ("dns-sd" / "avahi") or null when disabled / unavailable. */
   mdns: "dns-sd" | "avahi" | null;
   close: () => Promise<void>;
+  /** BG-25: programmatic scheduler lifecycle. Returns {started:false} when aria2 isn't wired. */
+  startScheduler: () => Promise<{ started: boolean; reason: string }>;
+  stopScheduler: () => Promise<{ stopped: boolean; reason: string }>;
 }
 
 /**
@@ -386,29 +389,16 @@ export async function cmdServe(
   // run without npm install.
   const resolvedVersion = opts.version ?? readPackageVersion();
 
-  const app = buildServer({
-    queueOps: ctx.queueOps,
-    queueStore: ctx.queue,
-    archiveStore: ctx.archive,
-    declarationStore: ctx.declaration,
-    stateStore: ctx.state,
-    sessionService: ctx.sessions,
-    actionLog: ctx.actions,
-    eventBus,
-    ...(aria2 ? { aria2 } : {}),
-    ...(resolvedVersion !== undefined ? { version: resolvedVersion } : {}),
-    ...(yamlPath ? { openapiYamlPath: yamlPath } : {}),
-  });
-  const requestedPort = opts.port ?? 8000;
-  const host = opts.host ?? "127.0.0.1";
-  await app.listen({ host, port: requestedPort });
-  const addr = app.server.address();
-  const port =
-    typeof addr === "object" && addr !== null && "port" in addr ? addr.port : requestedPort;
-
   let schedulerCtrl: AbortController | undefined;
   let schedulerDone: Promise<unknown> = Promise.resolve();
-  if (opts.startScheduler && aria2) {
+
+  // BG-25: factored so /api/scheduler/start (and /resume's auto-start)
+  // can spin up the loop on demand, not just at boot.
+  const launchScheduler = async (): Promise<{ started: boolean; reason: string }> => {
+    if (!aria2) return { started: false, reason: "aria2_unavailable" };
+    if (schedulerCtrl && !schedulerCtrl.signal.aborted) {
+      return { started: false, reason: "already_running" };
+    }
     schedulerCtrl = new AbortController();
     const state = await ctx.state.load();
     const probe = state.last_bandwidth_probe as
@@ -474,6 +464,47 @@ export async function cmdServe(
       // eslint-disable-next-line no-console
       console.error("scheduler loop crashed:", err);
     });
+    // Wait one event-loop tick so the loop's first state.running=true
+    // write lands before we report success — callers immediately read
+    // /api/status after /start and would otherwise race the flip.
+    await new Promise<void>((r) => setImmediate(r));
+    return { started: true, reason: "started" };
+  };
+
+  const stopSchedulerLoop = async (): Promise<{ stopped: boolean; reason: string }> => {
+    if (!schedulerCtrl || schedulerCtrl.signal.aborted) {
+      return { stopped: false, reason: "not_running" };
+    }
+    schedulerCtrl.abort();
+    await schedulerDone;
+    schedulerCtrl = undefined;
+    schedulerDone = Promise.resolve();
+    return { stopped: true, reason: "stopped" };
+  };
+
+  const app = buildServer({
+    queueOps: ctx.queueOps,
+    queueStore: ctx.queue,
+    archiveStore: ctx.archive,
+    declarationStore: ctx.declaration,
+    stateStore: ctx.state,
+    sessionService: ctx.sessions,
+    actionLog: ctx.actions,
+    eventBus,
+    ...(aria2 ? { aria2 } : {}),
+    ...(resolvedVersion !== undefined ? { version: resolvedVersion } : {}),
+    ...(yamlPath ? { openapiYamlPath: yamlPath } : {}),
+    ...(aria2 ? { startScheduler: launchScheduler, stopScheduler: stopSchedulerLoop } : {}),
+  });
+  const requestedPort = opts.port ?? 8000;
+  const host = opts.host ?? "127.0.0.1";
+  await app.listen({ host, port: requestedPort });
+  const addr = app.server.address();
+  const port =
+    typeof addr === "object" && addr !== null && "port" in addr ? addr.port : requestedPort;
+
+  if (opts.startScheduler && aria2) {
+    await launchScheduler();
   }
 
   // BG-18: announce _ariaflow-server._tcp via the local mDNS daemon so
@@ -503,6 +534,8 @@ export async function cmdServe(
       await mdnsHandle?.stop();
       await app.close();
     },
+    startScheduler: launchScheduler,
+    stopScheduler: stopSchedulerLoop,
   };
 }
 

@@ -1322,6 +1322,129 @@ describe("scheduler routes", () => {
   });
 });
 
+describe("BG-25: scheduler start/stop lifecycle", () => {
+  it("POST /api/scheduler/start 503s when no startScheduler dep is wired", async () => {
+    const res = await app.inject({ method: "POST", url: "/api/scheduler/start" });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error).toBe("scheduler_unavailable");
+  });
+
+  it("POST /api/scheduler/start invokes the dep and reports running:true after", async () => {
+    const env = { ARIAFLOW_DIR: dir };
+    const lock = new StorageLock(storageLockPath(env));
+    const state = new StateStore(lock, env);
+    const queue = new QueueStore(lock, env);
+    const archive = new ArchiveStore(lock, env);
+    const actions = new ActionLog(lock, state, env);
+    const sessions = new SessionService(lock, state, queue, archive, env);
+    const declaration = new DeclarationStore(lock, env);
+    const queueOps = new QueueOps(queue, sessions, declaration, actions);
+    const wired = buildServer({
+      queueOps,
+      queueStore: queue,
+      declarationStore: declaration,
+      stateStore: state,
+      sessionService: sessions,
+      actionLog: actions,
+      archiveStore: archive,
+      cwd: dir,
+      startScheduler: async () => {
+        await state.update((s) => {
+          s.running = true;
+        });
+        return { started: true, reason: "started" };
+      },
+      stopScheduler: async () => {
+        await state.update((s) => {
+          s.running = false;
+        });
+        return { stopped: true, reason: "stopped" };
+      },
+    });
+    try {
+      const start = await wired.inject({ method: "POST", url: "/api/scheduler/start" });
+      expect(start.statusCode).toBe(200);
+      expect(start.json()).toMatchObject({ ok: true, started: true, running: true });
+
+      const idem = await wired.inject({ method: "POST", url: "/api/scheduler/start" });
+      expect(idem.json()).toMatchObject({ started: false, reason: "already_running", running: true });
+
+      const status = await wired.inject({ method: "GET", url: "/api/status" });
+      expect(status.json().state.running).toBe(true);
+
+      const stop = await wired.inject({ method: "POST", url: "/api/scheduler/stop" });
+      expect(stop.json()).toMatchObject({ stopped: true, running: false });
+    } finally {
+      await wired.close();
+    }
+  });
+
+  it("POST /api/scheduler/resume auto-starts the loop when running:false", async () => {
+    const env = { ARIAFLOW_DIR: dir };
+    const lock = new StorageLock(storageLockPath(env));
+    const state = new StateStore(lock, env);
+    const queue = new QueueStore(lock, env);
+    const archive = new ArchiveStore(lock, env);
+    const actions = new ActionLog(lock, state, env);
+    const sessions = new SessionService(lock, state, queue, archive, env);
+    const declaration = new DeclarationStore(lock, env);
+    const queueOps = new QueueOps(queue, sessions, declaration, actions);
+    let startCalls = 0;
+    const wired = buildServer({
+      queueOps,
+      queueStore: queue,
+      declarationStore: declaration,
+      stateStore: state,
+      sessionService: sessions,
+      actionLog: actions,
+      archiveStore: archive,
+      cwd: dir,
+      startScheduler: async () => {
+        startCalls += 1;
+        await state.update((s) => {
+          s.running = true;
+        });
+        return { started: true, reason: "started" };
+      },
+      stopScheduler: async () => ({ stopped: false, reason: "not_running" }),
+    });
+    try {
+      const res = await wired.inject({ method: "POST", url: "/api/scheduler/resume" });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, paused: false, started: true });
+      expect(startCalls).toBe(1);
+    } finally {
+      await wired.close();
+    }
+  });
+
+  it("GET /api/status exposes a top-level bandwidth summary lifted from state.last_bandwidth_probe", async () => {
+    const env = { ARIAFLOW_DIR: dir };
+    const lock = new StorageLock(storageLockPath(env));
+    const state = new StateStore(lock, env);
+    await state.update((s) => {
+      (s as Record<string, unknown>).last_bandwidth_probe = {
+        source: "networkquality",
+        cap_mbps: 80,
+        cap_bytes_per_sec: 80 * 125_000,
+        downlink_mbps: 100,
+        interface_name: "en0",
+      };
+      s.last_bandwidth_probe_at = 1234.5;
+    });
+    const res = await app.inject({ method: "GET", url: "/api/status" });
+    const body = res.json();
+    expect(body.bandwidth).toMatchObject({
+      source: "networkquality",
+      interface_name: "en0",
+      cap_mbps: 80,
+      cap_bytes_per_sec: 80 * 125_000,
+      downlink_mbps: 100,
+      last_probe_at: 1234.5,
+    });
+  });
+});
+
 describe("POST /api/lifecycle/:target/:action", () => {
   it("400 unsupported_action on an unknown target/action pair", async () => {
     const res = await app.inject({
