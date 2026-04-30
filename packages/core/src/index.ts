@@ -90,6 +90,13 @@ export {
   type RetryResult,
 } from "./scheduler/retry.js";
 export {
+  runPostAction,
+  runPostActionBatch,
+  isAlreadySeeding,
+  type PostActionDeps,
+  type PostActionResult,
+} from "./scheduler/post-action.js";
+export {
   runSchedulerLoop,
   type SchedulerLoopDeps,
   type SchedulerLoopIteration,

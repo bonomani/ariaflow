@@ -7,6 +7,7 @@ import type { StateStore } from "../storage/state.js";
 import { runSchedulerTick, type SchedulerTickResult } from "./tick.js";
 import { pollActiveItems, type PollResult } from "./poll.js";
 import { runRetryPass, type RetryResult } from "./retry.js";
+import { runPostActionBatch, type PostActionResult } from "./post-action.js";
 import { TERMINAL_STATUSES, type ItemStatus } from "../queue/types.js";
 
 export interface SchedulerLoopDeps {
@@ -41,6 +42,7 @@ export interface SchedulerLoopIteration {
   tick: SchedulerTickResult;
   poll: PollResult;
   retry: RetryResult;
+  postAction: PostActionResult[];
   /** True when state.paused was set on this iteration (the tick was skipped). */
   paused: boolean;
   /** Live count of non-terminal rows after the iteration. */
@@ -134,6 +136,19 @@ export async function runSchedulerLoop(
         aria2: deps.aria2,
       });
 
+      // Run post-action policy on items the poll just transitioned to
+      // "complete" (auto-distribute today; archive / move-on-complete
+      // hooks land in subsequent phases).
+      const postAction = await runPostActionBatch(
+        {
+          queueStore: deps.queueStore,
+          declarationStore: deps.declarationStore,
+          actionLog: deps.actionLog,
+          aria2: deps.aria2,
+        },
+        poll.completed.map((c) => c.id),
+      );
+
       // Re-arm retries: any items that just landed in "error" via the
       // poll pass (or were already errored from a prior run) get
       // rescheduled here, so the next tick can pick them up once their
@@ -151,6 +166,7 @@ export async function runSchedulerLoop(
         tick,
         poll,
         retry,
+        postAction,
         paused,
         in_flight: inFlight,
       };
