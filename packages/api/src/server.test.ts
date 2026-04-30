@@ -767,7 +767,7 @@ describe("meta routes", () => {
     }
   });
 
-  it("GET /api/status returns items + summary + state", async () => {
+  it("GET /api/status returns items + summary + state + identity", async () => {
     await app.inject({
       method: "POST",
       url: "/api/downloads",
@@ -779,6 +779,16 @@ describe("meta routes", () => {
     expect(body.summary.total).toBe(2);
     expect(body.items).toHaveLength(2);
     expect(body.state).toBeDefined();
+    // BG-19: identity sub-object must be populated for the dashboard
+    // header pills and offline-state gate.
+    expect(body["ariaflow-server"]).toEqual({
+      reachable: true,
+      pid: expect.any(Number),
+      version: "0.0.0",
+      error: null,
+    });
+    expect(body.ok).toBe(true);
+    expect(typeof body._rev).toBe("number");
   });
 
   it("GET /api/status?status=queued filters and flips `filtered`", async () => {

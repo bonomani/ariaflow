@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
+  advertiseHttpService,
   allowedActions,
   Aria2Client,
   bandwidthConfigFrom,
@@ -248,6 +249,8 @@ export interface ServeOptions {
   startScheduler?: boolean;
   /** Scheduler tick interval in ms (default 2000). */
   schedulerIntervalMs?: number;
+  /** Disable mDNS advertisement (default: announce when a backend is available). */
+  noMdns?: boolean;
 }
 
 /**
@@ -271,6 +274,8 @@ export interface ServeHandle {
   port: number;
   /** True when the scheduler loop is running in the background. */
   scheduler: boolean;
+  /** Bonjour backend in use ("dns-sd" / "avahi") or null when disabled / unavailable. */
+  mdns: "dns-sd" | "avahi" | null;
   close: () => Promise<void>;
 }
 
@@ -387,13 +392,31 @@ export async function cmdServe(
     });
   }
 
+  // BG-18: announce _ariaflow-server._tcp via the local mDNS daemon so
+  // dashboards on the same L2 segment auto-discover the backend.
+  // Failures are non-fatal — the HTTP listener stays up either way.
+  const mdnsHandle = opts.noMdns
+    ? null
+    : advertiseHttpService({ port, path: "/api" });
+  if (mdnsHandle && mdnsHandle.backend) {
+    await ctx.actions.record({
+      action: "bonjour_register",
+      target: "system",
+      outcome: "changed",
+      reason: "registered",
+      detail: { backend: mdnsHandle.backend, port, path: "/api" },
+    });
+  }
+
   return {
     url: `http://${host}:${port}`,
     port,
     scheduler: Boolean(schedulerCtrl),
+    mdns: (mdnsHandle?.backend ?? null) as "dns-sd" | "avahi" | null,
     close: async () => {
       schedulerCtrl?.abort();
       await schedulerDone;
+      await mdnsHandle?.stop();
       await app.close();
     },
   };

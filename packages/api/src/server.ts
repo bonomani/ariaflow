@@ -572,10 +572,24 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       } else if (sessionFilter) {
         filtered = filtered.filter((i) => i.session_id === sessionFilter);
       }
+      // BG-19: identity sub-object the dashboard reads to populate
+      // header pills + the offline-state gate. Always set even when the
+      // server is the one answering (reachable=true is structurally
+      // implied — the frontend's offline detector treats reachable=false
+      // as the trigger).
+      const identity = {
+        reachable: true,
+        pid: process.pid,
+        version: deps.version ?? "0.0.0",
+        error: null,
+      };
       const payload: Record<string, unknown> = {
+        ok: true,
+        "ariaflow-server": identity,
         items: filtered,
         summary: summarizeQueue(filtered),
         state,
+        _rev: Number(state._rev ?? 0),
       };
       if (statusFilter || sessionFilter) payload.filtered = true;
       return payload;

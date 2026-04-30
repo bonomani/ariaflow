@@ -124,6 +124,7 @@ program
     (v) => Number(v),
     2000,
   )
+  .option("--no-mdns", "disable mDNS announcement of _ariaflow-server._tcp")
   .action(
     async (opts: {
       host: string;
@@ -135,6 +136,7 @@ program
       aria2Secret?: string;
       scheduler?: boolean;
       schedulerInterval: number;
+      mdns: boolean;
     }) => {
       const ctx = makeContext();
       const handle = await cmdServe(ctx, {
@@ -147,12 +149,12 @@ program
         ...(opts.aria2Secret ? { aria2Secret: opts.aria2Secret } : {}),
         startScheduler: Boolean(opts.scheduler),
         schedulerIntervalMs: opts.schedulerInterval,
+        noMdns: opts.mdns === false,
       });
-      process.stdout.write(
-        `ariaflow-server listening at ${handle.url}` +
-          (handle.scheduler ? "  (scheduler running)" : "") +
-          "\n",
-      );
+      const trail =
+        (handle.scheduler ? "  (scheduler running)" : "") +
+        (handle.mdns ? `  (mDNS via ${handle.mdns})` : "");
+      process.stdout.write(`ariaflow-server listening at ${handle.url}${trail}\n`);
       const stop = async () => {
         await handle.close();
         process.exit(0);

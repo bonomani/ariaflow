@@ -130,6 +130,11 @@ export {
 } from "./discovery/filter.js";
 export { PeerRegistry, type DiscoveredPeer } from "./discovery/registry.js";
 export * as bonjour from "./bonjour/bonjour.js";
+export {
+  advertiseHttpService,
+  type AdvertiseHandle,
+  type AdvertiseOptions,
+} from "./bonjour/advertise.js";
 export * as platform from "./platform/detect.js";
 export * as install from "./install/networkquality.js";
 export {
