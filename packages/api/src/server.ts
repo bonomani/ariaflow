@@ -671,13 +671,62 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         ? { ...probe, last_probe_at: state.last_bandwidth_probe_at ?? null }
         : null;
 
+      // BG-30 #5: derive active_gid / active_url from aria2.tellActive
+      // at read time — the stamped state.active_gid stays as a fallback
+      // when the daemon is unreachable, but the live tellActive answer
+      // wins so a crash never leaves a phantom gid spotlit on the chip.
+      let liveActiveGid: string | null = (state.active_gid as string | null) ?? null;
+      let liveActiveUrl: string | null = (state.active_url as string | null) ?? null;
+      if (deps.aria2) {
+        try {
+          const infos = (await deps.aria2.call<unknown[]>("aria2.tellActive")) as Array<
+            Record<string, unknown>
+          >;
+          if (infos.length > 0) {
+            const top = infos[0]!;
+            const gid = typeof top.gid === "string" ? top.gid : null;
+            liveActiveGid = gid;
+            const match = gid ? items.find((i) => i.gid === gid) : null;
+            liveActiveUrl = match ? match.url ?? null : liveActiveUrl;
+          } else {
+            liveActiveGid = null;
+            liveActiveUrl = null;
+          }
+        } catch {
+          /* aria2 unreachable — keep stamped fallback */
+        }
+      }
+
+      // BG-30 #4: dual-key the scheduler-pause field. `dispatch_paused`
+      // is the canonical name (disambiguates from item-level `paused`);
+      // legacy `paused` stays for one release while the dashboard cuts
+      // over.
+      const dispatchPaused = Boolean(state.paused);
+
+      // BG-30 #2: mirror summary.removed alongside summary.stopped
+      // (both counted, callers can pick either while the rename rolls
+      // out).
+      const summary = summarizeQueue(filtered);
+      const removedCount = Number(summary.removed ?? 0);
+      const stoppedCount = Number(summary.stopped ?? 0);
+      summary.removed = removedCount + stoppedCount;
+      summary.stopped = summary.removed;
+
+      const stateOut: Record<string, unknown> = {
+        ...state,
+        active_gid: liveActiveGid,
+        active_url: liveActiveUrl,
+        dispatch_paused: dispatchPaused,
+      };
+
       const payload: Record<string, unknown> = {
         ok: true,
         "ariaflow-server": identity,
         health,
         items: filtered,
-        summary: summarizeQueue(filtered),
-        state,
+        summary,
+        state: stateOut,
+        dispatch_paused: dispatchPaused,
         bandwidth,
         _rev: Number(state._rev ?? 0),
       };

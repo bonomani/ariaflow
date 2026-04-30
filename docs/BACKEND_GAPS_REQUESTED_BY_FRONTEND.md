@@ -11,44 +11,9 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
 
-### BG-30: Align download state machine on aria2's vocabulary
-
-**Problem.** Three layers use three different vocabularies for the same
-states. aria2 reports `active`/`waiting`/`paused`/`error`/`complete`/`removed`.
-Backend renames some, drops others, and invents an unreachable one
-(`cancelled`). Frontend invents aliases (`done`/`downloading`/`failed`/`recovered`).
-The word `paused` is overloaded across scheduler-level (`state.paused`,
-halts dispatch) and item-level (`item.status="paused"`, single download).
-`waiting` is reported by aria2, cached in `item.live_status`, but never
-persisted as `item.status` or counted in `summarizeQueue`.
-
-**Target canonical states:**
-- aria2-native (persisted as-is): `active`, `waiting`, `paused`, `error`, `complete`, `removed`
-- backend-only (pre-aria2 staging): `discovering`, `queued`
-
-Diagram: `discovering → queued → (active ⇄ waiting ⇄ paused) → {complete, error, removed}`
-
-**Required backend changes (ship dual-keyed for one release where noted):**
-
-1. **Persist `waiting`.** In `pollActiveItems`, when aria2's `live_status="waiting"`, call `transitionStatus(item, "waiting")`. Add `waiting` to `summarizeQueue` buckets so `summary.waiting` populates.
-2. **Rename `stopped` → `removed`.** Match aria2. Emit `item.status: "removed"`; mirror `summary.removed` and keep `summary.stopped` as an alias counter for one release. Add `removed` to `ITEM_STATUSES`, remove `stopped` after frontend cutover.
-3. **Delete `cancelled`** from `ITEM_STATUSES`, `policy.allowedActions`, types — unreachable, no producer.
-4. **Disambiguate scheduler pause.** Rename the JSON field `state.paused` → `state.dispatch_paused` on `/api/status` (item-level `paused` keeps its name). Endpoints stay `/api/scheduler/{pause,resume}`. Dual-key `state.paused` for one release.
-5. **`active_gid` derived from `aria2.tellActive()`.** Compute on `/api/status` read instead of stamping in `tick`/`poll`. Removes the stale-after-crash class. Same for `active_url`.
-6. **Document the state machine** in `docs/STATE_MACHINE.md`: 8 states, all transitions, who triggers each (user API, scheduler, poller, aria2).
-
-**Frontend code refs (paired update tracked as FE-23):**
-- `ariaflow-dashboard/src/ariaflow_dashboard/static/ts/filters.ts` (`normalizeStatus`, bucket aliases)
-- `ariaflow-dashboard/src/ariaflow_dashboard/static/ts/formatters.ts` (badge color map)
-- `ariaflow-dashboard/src/ariaflow_dashboard/static/ts/app.ts` (`schedulerOverviewLabel`, summary reads, `state.paused` reads)
-
-**Sequence:** backend ships #1–6 dual-keyed → frontend cuts over (FE-23) → backend drops aliases.
-
-**Priority:** medium — current behavior works but accumulates phantom-state debt and confuses contributors.
-
-
+_End of open gaps._
 
 ## Explicit non-requests (do not implement)
 
@@ -61,6 +26,7 @@ Diagram: `discovering → queued → (active ⇄ waiting ⇄ paused) → {comple
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-30 | Download state machine aligned on aria2's vocabulary. (1) `pollActiveItems` now persists `item.status="waiting"` (was only `live_status`). (2) `removed` added to `ITEM_STATUSES`/`TERMINAL_STATUSES`; poll emits canonical `removed` (was `stopped`); `/api/status.summary` mirrors `removed`/`stopped` as aliases. (3) `cancelled` removed from types/policy/`ITEM_STATUSES` — unreachable. (4) `/api/status` dual-keys `dispatch_paused` (top-level + on `state`) alongside legacy `state.paused`. (5) `state.active_gid`/`active_url` derived from `aria2.tellActive()` at `/api/status` read time, with stamped state as fallback when daemon unreachable. (6) `docs/STATE_MACHINE.md` documents the 8 states + transitions | 2026-04-30 |
 | BG-29 | `/api/lifecycle` adds `expected_running` and `managed_by` (each `bool\|null` / enum-or-null) to every component's `result`. aria2: `expected_running = state.running \|\| state.active_gid \|\| any item in {queued,waiting,active}`; `managed_by` = `"launchd"` when the launchd plist exists on disk and aria2 is reachable, else `"external"` (or `null` when not running). ariaflow-server / networkquality / aria2-launchd carry `null` for both axes (informational rows) | 2026-04-30 |
 | BG-28 | (a) `runSchedulerTick` stamps `state.active_gid`/`active_url` with the most recently dispatched item; `pollActiveItems` keeps state pointed at the live active row and clears both fields when nothing's in flight. (b) Poll mirrors aria2's camelCase tellStatus keys (`downloadSpeed`, `uploadSpeed`, `completedLength`, `totalLength`, `connections`, `numSeeders`) onto each row and now marks the row dirty so progress refreshes actually persist | 2026-04-30 |
 | BG-27 | `/api/lifecycle` adds three orthogonal axes per component (`installed` / `current` / `running`, each `bool \| null`) alongside the BG-20 reason/outcome/message fields; `aria2.installed` from `findAria2c()`, `aria2.running` from RPC reachability; `aria2-launchd` keeps installed/current null and proxies running through aria2 RPC; `networkquality.current` is null (no version policy), running derived from a recent successful probe; `ariaflow-server.expected_version` added | 2026-04-30 |

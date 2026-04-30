@@ -144,8 +144,9 @@ export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
         });
       }
     } else if (live === "removed") {
-      if (item.status !== "stopped") {
-        item.status = "stopped" as ItemStatus;
+      // BG-30 #2: emit canonical "removed" (aria2-native vocabulary).
+      if (item.status !== "removed" && item.status !== "stopped") {
+        item.status = "removed" as ItemStatus;
         item.removed_at = stampNow();
         dirty = true;
         await deps.actionLog.record({
@@ -157,6 +158,26 @@ export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
           after: { item: { ...item } },
           detail: { item_id: item.id, gid },
         });
+      }
+    } else if (live === "waiting") {
+      // BG-30 #1: persist aria2's waiting state (was only kept on
+      // live_status). summarizeQueue can now bucket it.
+      if (item.status !== "waiting" && item.status !== "paused") {
+        item.status = "waiting" as ItemStatus;
+        dirty = true;
+        await deps.actionLog.record({
+          action: "transition",
+          target: "queue_item",
+          outcome: "changed",
+          reason: "status:waiting",
+          before: { item: before },
+          after: { item: { ...item } },
+          detail: { item_id: item.id, gid },
+        });
+      }
+      if (before.live_status !== live) {
+        updated.push({ id: item.id, gid, status: live });
+        dirty = true;
       }
     } else {
       // Non-terminal live status: just update the live_status field if it

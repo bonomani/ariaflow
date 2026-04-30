@@ -234,4 +234,37 @@ describe("pollActiveItems", () => {
       ),
     ).toBe(true);
   });
+
+  it("BG-30 #1: persists waiting status when aria2 reports waiting", async () => {
+    await seedActiveItem("GID-WAIT");
+    await pollActiveItems({
+      queueStore: queue,
+      actionLog: actions,
+      aria2: client(({ method }) =>
+        method === "aria2.tellActive"
+          ? [{ gid: "GID-WAIT", status: "waiting", totalLength: "10", completedLength: "0" }]
+          : "OK",
+      ),
+    });
+    const items = await queue.load();
+    expect(items[0]!.status).toBe("waiting");
+    expect(items[0]!.live_status).toBe("waiting");
+  });
+
+  it("BG-30 #2: emits canonical 'removed' (not legacy 'stopped') on aria2 removal", async () => {
+    await seedActiveItem("GID-RM");
+    await pollActiveItems({
+      queueStore: queue,
+      actionLog: actions,
+      aria2: client(({ method }) => {
+        if (method === "aria2.tellActive") return [];
+        if (method === "aria2.tellStatus")
+          return { gid: "GID-RM", status: "removed", totalLength: "1", completedLength: "0" };
+        return "OK";
+      }),
+    });
+    const items = await queue.load();
+    expect(items[0]!.status).toBe("removed");
+    expect(typeof items[0]!.removed_at).toBe("string");
+  });
 });

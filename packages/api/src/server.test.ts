@@ -812,6 +812,22 @@ describe("meta routes", () => {
     expect(typeof body.health.disk_ok).toBe("boolean");
   });
 
+  it("BG-30 #4: GET /api/status dual-keys dispatch_paused alongside legacy state.paused", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/status" });
+    const body = res.json();
+    expect(body.dispatch_paused).toBe(false);
+    expect(body.state.dispatch_paused).toBe(false);
+    expect(body.state.paused).toBe(false);
+  });
+
+  it("BG-30 #2: GET /api/status mirrors summary.removed alongside summary.stopped", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/status" });
+    const body = res.json();
+    expect(body.summary).toHaveProperty("removed");
+    expect(body.summary).toHaveProperty("stopped");
+    expect(body.summary.removed).toBe(body.summary.stopped);
+  });
+
   it("GET /api/status?status=queued filters and flips `filtered`", async () => {
     await app.inject({
       method: "POST",

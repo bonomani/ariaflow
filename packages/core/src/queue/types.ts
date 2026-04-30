@@ -1,3 +1,8 @@
+// BG-30: aria2-native vocabulary first (active/waiting/paused/error/complete/removed),
+// plus two backend-only pre-aria2 staging states (discovering/queued).
+// `stopped` is kept transiently as an alias of `removed` for one release
+// while the frontend cuts over (BG-30 #2). `cancelled` was unreachable
+// and has been removed (BG-30 #3).
 export const ITEM_STATUSES = [
   "discovering",
   "queued",
@@ -6,8 +11,8 @@ export const ITEM_STATUSES = [
   "paused",
   "complete",
   "error",
+  "removed",
   "stopped",
-  "cancelled",
 ] as const;
 
 export type ItemStatus = (typeof ITEM_STATUSES)[number];
@@ -15,8 +20,8 @@ export type ItemStatus = (typeof ITEM_STATUSES)[number];
 export const TERMINAL_STATUSES: ReadonlySet<ItemStatus> = new Set([
   "complete",
   "error",
+  "removed",
   "stopped",
-  "cancelled",
 ]);
 
 export type DownloadMode =
@@ -54,7 +59,6 @@ export interface QueueItemRecord {
   completed_at?: string | null;
   error_at?: string | null;
   removed_at?: string | null;
-  cancelled_at?: string | null;
   session_history?: Array<Record<string, string>> | null;
   completed_length?: string | number | null;
   [k: string]: unknown;
