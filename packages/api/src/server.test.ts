@@ -1491,7 +1491,7 @@ describe("GET /api/lifecycle", () => {
     });
 
     // aria2: no client wired in tests -> reason=missing.
-    expect(body.aria2.result.reason).toBe("missing");
+    expect(body.aria2.result.reason).toMatch(/missing|stopped/);
 
     // networkquality: ready or missing depending on host (Linux runners
     // typically lack networkQuality), but the result shape is fixed.
@@ -1502,10 +1502,41 @@ describe("GET /api/lifecycle", () => {
     // aria2-launchd: always emitted; reason reflects whether the
     // platform's unit/plist exists on disk.
     expect(body["aria2-launchd"].result).toHaveProperty("reason");
-    expect(["match", "missing"]).toContain(body["aria2-launchd"].result.reason);
+    expect(["match", "missing", "stopped"]).toContain(body["aria2-launchd"].result.reason);
 
     expect(body.session_id).toBeNull();
     expect(body.session_closed_at).toBeNull();
+  });
+
+  it("BG-27: exposes installed/current/running axes on every component", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/lifecycle" });
+    const body = res.json();
+
+    // ariaflow-server: all three true; expected_version mirrors version.
+    expect(body["ariaflow-server"].result).toMatchObject({
+      installed: true,
+      current: true,
+      running: true,
+      expected_version: "0.0.0",
+    });
+
+    // aria2: no RPC client wired → running=false. installed depends on
+    // whether the host has aria2c on PATH; current is null when not
+    // installed or when running is null.
+    expect(body.aria2.result.running).toBe(false);
+    expect(typeof body.aria2.result.installed).toBe("boolean");
+    expect(body.aria2.result).toHaveProperty("current");
+
+    // networkquality: current is always null (no version policy).
+    expect(body.networkquality.result.current).toBeNull();
+    expect(typeof body.networkquality.result.installed).toBe("boolean");
+    // running is null (installed but no recent probe) or false (not installed).
+    expect([null, true, false]).toContain(body.networkquality.result.running);
+
+    // aria2-launchd: it's a service registration, installed/current null.
+    expect(body["aria2-launchd"].result.installed).toBeNull();
+    expect(body["aria2-launchd"].result.current).toBeNull();
+    expect(typeof body["aria2-launchd"].result.running).toBe("boolean");
   });
 
   it("surfaces the open session_id once one exists", async () => {

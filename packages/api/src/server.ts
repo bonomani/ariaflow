@@ -1361,55 +1361,84 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const { existsSync } = await import("node:fs");
     const state = await deps.stateStore.load();
 
-    // BG-20: contract shape — every component record nests under
-    // `result`, key names use hyphens (ariaflow-server, aria2-launchd),
-    // and `reason` is one of the dashboard's recognized values
-    // (`match` / `missing` for binaries, `ready` for networkquality).
+    // BG-20 + BG-27: every component record nests under `result`. BG-27
+    // adds three orthogonal axes — `installed` / `current` / `running`
+    // (each `bool | null`, with `null` for axes that don't apply) —
+    // alongside the BG-20 reason/outcome/message strings. The dashboard
+    // can drive headline rendering off the booleans and use the
+    // strings for detail rendering.
 
-    // ariaflow-server: we're answering the request, so we're installed.
+    const expectedVersion = deps.version ?? "0.0.0";
+
+    // ariaflow-server: we're answering the request, so all three axes
+    // are true and the version IS the expected version.
     const ariaflowServer = {
       result: {
+        installed: true,
+        current: true,
+        running: true,
         reason: "match",
         outcome: "installed · current",
         message: null,
         observation: "ok",
         completion: null,
-        version: deps.version ?? "0.0.0",
+        version: expectedVersion,
+        expected_version: expectedVersion,
       },
     };
 
-    // aria2: probe via the wired client. No client → reason=missing.
-    let aria2Result: Record<string, unknown>;
+    // aria2: split "binary on disk" (installed) from "RPC reachable"
+    // (running). `current` only meaningful when installed=true; we
+    // don't ship an expected aria2 version so it stays null (true if
+    // RPC succeeds, since whatever's there is what we use).
+    const aria2BinPath = core.findAria2c();
+    const aria2Installed = Boolean(aria2BinPath);
+    let aria2Running = false;
+    let aria2Version: string | null = null;
+    let aria2Err: string | null = null;
     if (deps.aria2) {
       try {
         const v = await deps.aria2.call<{ version: string }>("aria2.getVersion");
-        aria2Result = {
-          reason: "match",
-          outcome: "installed · current",
-          version: v.version,
-          observation: "ok",
-        };
+        aria2Running = true;
+        aria2Version = v.version;
       } catch (err) {
-        aria2Result = {
-          reason: "missing",
-          outcome: "unreachable",
-          observation: "failed",
-          message: err instanceof Error ? err.message : String(err),
-        };
+        aria2Err = err instanceof Error ? err.message : String(err);
       }
-    } else {
-      aria2Result = {
-        reason: "missing",
-        outcome: "no aria2 client wired",
-        observation: "failed",
-      };
     }
+    const aria2Current = aria2Installed ? (aria2Running ? true : null) : null;
+    const aria2Result: Record<string, unknown> = {
+      installed: aria2Installed,
+      current: aria2Current,
+      running: aria2Running,
+      reason: aria2Running ? "match" : aria2Installed ? "stopped" : "missing",
+      outcome: aria2Running
+        ? "installed · current"
+        : aria2Installed
+          ? "stopped"
+          : "not installed",
+      observation: aria2Running ? "ok" : "failed",
+      ...(aria2Version ? { version: aria2Version } : {}),
+      ...(aria2BinPath ? { path: aria2BinPath } : {}),
+      ...(aria2Err ? { message: aria2Err } : {}),
+    };
 
-    // networkquality: reuse the existing helper but reshape into the
-    // result-wrapped contract.
+    // networkquality: system binary, no version policy → current=null.
+    // running is derived from "last probe used networkquality recently"
+    // — the only honest signal we have without re-running the probe.
     const nq = core.install.networkqualityStatus();
+    const probe = (state.last_bandwidth_probe ?? null) as Record<string, unknown> | null;
+    const lastProbeAt = Number(state.last_bandwidth_probe_at ?? 0);
+    const probeFresh = lastProbeAt > 0 && Date.now() / 1000 - lastProbeAt < 3600;
+    const nqRunning = nq.installed
+      ? probe?.source === "networkquality" && probeFresh
+        ? true
+        : null // installed but no recent probe → "unknown", not "stopped"
+      : false;
     const networkquality = {
       result: {
+        installed: Boolean(nq.installed),
+        current: null,
+        running: nqRunning,
         reason: nq.reason, // "ready" | "missing"
         outcome: nq.installed && nq.usable ? "installed · usable" : "unavailable",
         observation: nq.installed && nq.usable ? "ok" : "failed",
@@ -1418,11 +1447,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       },
     };
 
-    // aria2-launchd / aria2-systemd: check whether the unit / plist
-    // this platform uses exists on disk. The dashboard renders the row
-    // under the literal "aria2-launchd" key regardless of OS, so we
-    // emit that key in both cases — installed reflects the host's real
-    // state via detectServiceTarget().
+    // aria2-launchd / aria2-systemd: it's a service registration, not
+    // an installable binary — installed/current are null. running
+    // proxies through aria2's RPC reachability: launchd's job is to
+    // keep aria2 up, so if RPC works the unit is doing its job.
     const target = core.detectServiceTarget();
     const home = (await import("node:os")).homedir();
     const installedPath =
@@ -1432,11 +1460,19 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
           ? `${home}/.config/systemd/user/ariaflow-server-aria2.service`
           : null;
     const installedHere = installedPath ? existsSync(installedPath) : false;
+    const launchdRunning = installedHere ? aria2Running : false;
     const aria2Launchd = {
       result: {
-        reason: installedHere ? "match" : "missing",
-        outcome: installedHere ? "loaded" : "not installed",
-        observation: installedHere ? "ok" : "unknown",
+        installed: null,
+        current: null,
+        running: launchdRunning,
+        reason: installedHere ? (aria2Running ? "match" : "stopped") : "missing",
+        outcome: installedHere
+          ? aria2Running
+            ? "loaded"
+            : "registered · not running"
+          : "not installed",
+        observation: installedHere && aria2Running ? "ok" : "unknown",
         ...(installedPath ? { path: installedPath } : {}),
       },
     };
