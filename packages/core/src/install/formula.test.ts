@@ -72,6 +72,9 @@ describe("renderFormula", () => {
     // No Python residue.
     expect(text).not.toContain("portalocker");
     expect(text).not.toContain("python3");
+    // Version stamp into cli/package.json so ariaflow --version is
+    // truthful when built from source via brew.
+    expect(text).toContain("packages/cli/package.json");
   });
 });
 

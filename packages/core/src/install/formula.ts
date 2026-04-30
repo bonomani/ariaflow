@@ -72,22 +72,32 @@ export function renderFormula({ version, url, sha256 }: RenderFormulaInput): str
   head "https://github.com/bonomani/ariaflow-server.git", branch: "main"
 
   def install
+    # Stamp the formula version into the CLI package.json so
+    # \`ariaflow --version\` and /api/version report the real release.
+    # The git source tarball ships 0.0.0; only release-npm.yml's
+    # publish path patches this normally.
+    inreplace "packages/cli/package.json", /"version": "[^"]*"/,
+              "\\"version\\": \\"#{version}\\""
+
     system "pnpm", "install", "--frozen-lockfile=false"
     system "pnpm", "build"
     system "pnpm", "--filter", "@ariaflow/cli", "deploy", "--prod",
            "#{libexec}/cli"
     libexec.install "openapi.yaml"
 
+    # Hardcode the node + script paths via Ruby interpolation —
+    # launchd doesn't set HOMEBREW_PREFIX, so $-expansion at shell
+    # time would fail (exit 126: command not executable).
     (bin/"ariaflow").write <<~EOS
       #!/bin/bash
-      exec "\${HOMEBREW_PREFIX}/bin/node" "#{libexec}/cli/dist/index.js" "$@"
+      exec "#{Formula["node"].opt_bin}/node" "#{libexec}/cli/dist/index.js" "$@"
     EOS
     chmod 0755, bin/"ariaflow"
 
     # Back-compat shim: pre-TS users scripted against \`ariaflow-server\`.
     (bin/"ariaflow-server").write <<~EOS
       #!/bin/bash
-      exec "\${HOMEBREW_PREFIX}/bin/ariaflow" "$@"
+      exec "#{opt_bin}/ariaflow" "$@"
     EOS
     chmod 0755, bin/"ariaflow-server"
   end
