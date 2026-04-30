@@ -6,11 +6,13 @@ import {
   bandwidthConfigFrom,
   deduplicateActiveTransfers,
   EventBus,
+  installAria2Service,
   planAutoCleanup,
   reconcileLiveQueue,
   runBandwidthProbe,
   runSchedulerLoop,
   summarizeQueue,
+  uninstallAria2Service,
 } from "@ariaflow/core";
 import { buildServer, generateOpenApi } from "@ariaflow/api";
 import type { CliContext } from "./context.js";
@@ -605,4 +607,32 @@ export async function cmdSeedStop(
     detail: { item_id: item.id, infohash },
   });
   return ok(json({ infohash, status: "stopped" }) + "\n");
+}
+
+export interface InstallServiceOpts {
+  dryRun?: boolean;
+  binPath?: string;
+}
+
+export async function cmdInstallService(opts: InstallServiceOpts = {}): Promise<CmdResult> {
+  try {
+    const r = await installAria2Service({
+      ...(opts.dryRun ? { dryRun: true } : {}),
+      ...(opts.binPath ? { binPath: opts.binPath } : {}),
+    });
+    return r.ok ? ok(json(r) + "\n") : fail(json(r) + "\n", 1);
+  } catch (err) {
+    return fail(`error: ${(err as Error).message}\n`, 1);
+  }
+}
+
+export async function cmdUninstallService(
+  opts: { dryRun?: boolean } = {},
+): Promise<CmdResult> {
+  try {
+    const r = await uninstallAria2Service(opts.dryRun ? { dryRun: true } : {});
+    return r.ok ? ok(json(r) + "\n") : fail(json(r) + "\n", 1);
+  } catch (err) {
+    return fail(`error: ${(err as Error).message}\n`, 1);
+  }
 }

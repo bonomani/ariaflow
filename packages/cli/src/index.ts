@@ -6,6 +6,7 @@ import {
   cmdCleanup,
   cmdDashboard,
   cmdDeclaration,
+  cmdInstallService,
   cmdList,
   cmdOpenapi,
   cmdPause,
@@ -16,6 +17,7 @@ import {
   cmdServe,
   cmdSetPref,
   cmdStatus,
+  cmdUninstallService,
   cmdWatch,
 } from "./commands.js";
 import { makeContext } from "./context.js";
@@ -245,6 +247,30 @@ program
   .action(async (infohash: string) => {
     const ctx = makeContext();
     const r = await cmdSeedStop(ctx, infohash);
+    process.stdout.write(r.stdout);
+    process.exit(r.exitCode);
+  });
+
+program
+  .command("install-service")
+  .description("install the platform-appropriate aria2 service (launchd / systemd)")
+  .option("--dry-run", "print the shell plan without executing it")
+  .option("--bin-path <path>", "path to aria2c (auto-discovered if omitted)")
+  .action(async (opts: { dryRun?: boolean; binPath?: string }) => {
+    const r = await cmdInstallService({
+      ...(opts.dryRun ? { dryRun: true } : {}),
+      ...(opts.binPath ? { binPath: opts.binPath } : {}),
+    });
+    process.stdout.write(r.stdout);
+    process.exit(r.exitCode);
+  });
+
+program
+  .command("uninstall-service")
+  .description("remove the platform aria2 service")
+  .option("--dry-run", "print the shell plan without executing it")
+  .action(async (opts: { dryRun?: boolean }) => {
+    const r = await cmdUninstallService(opts.dryRun ? { dryRun: true } : {});
     process.stdout.write(r.stdout);
     process.exit(r.exitCode);
   });

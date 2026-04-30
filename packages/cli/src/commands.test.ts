@@ -15,6 +15,7 @@ import {
   cmdProbe,
   cmdRemove,
   cmdResume,
+  cmdInstallService,
   cmdSeedStop,
   cmdServe,
   cmdSetPref,
@@ -363,6 +364,21 @@ describe("cmdSetPref", () => {
   it("exit 2 on an unknown preference", async () => {
     const r = await cmdSetPref(ctx, "no_such_pref", "1");
     expect(r.exitCode).toBe(2);
+  });
+});
+
+describe("cmdInstallService (dry-run)", () => {
+  it("prints the install plan without spawning when --dry-run is set", async () => {
+    const r = await cmdInstallService({ dryRun: true, binPath: "aria2c" });
+    if (r.exitCode === 0) {
+      const body = JSON.parse(r.stdout);
+      expect(body.target).toMatch(/^aria2-(launchd|systemd)$/);
+      expect(Array.isArray(body.commands)).toBe(true);
+      expect(body.commands.length).toBeGreaterThan(0);
+    } else {
+      // Unsupported platform — surface the canonical error string.
+      expect(r.stdout).toMatch(/not supported/);
+    }
   });
 });
 
