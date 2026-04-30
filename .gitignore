@@ -15,5 +15,8 @@ docs/ALL_VARIABLES.md
 src/ariaflow_server.egg-info/
 node_modules/
 packages/*/dist/
+packages/*/src/**/*.js
+packages/*/src/**/*.js.map
+packages/*/src/**/*.d.ts
 *.tsbuildinfo
 

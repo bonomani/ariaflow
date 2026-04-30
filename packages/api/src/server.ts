@@ -606,11 +606,24 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (!bus) {
       return reply.code(503).send(errorPayload("events_unavailable", "no event bus wired"));
     }
-    reply.raw.writeHead(200, {
+    // SSE writes via reply.raw.writeHead, which bypasses Fastify's reply
+    // pipeline and the @fastify/cors plugin. Echo the CORS headers
+    // directly so EventSource clients on a different origin can connect.
+    const headers: Record<string, string> = {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
-    });
+    };
+    if (deps.cors !== false) {
+      const origin = req.headers.origin;
+      if (typeof origin === "string" && origin) {
+        headers["Access-Control-Allow-Origin"] = origin;
+        headers["Vary"] = "Origin";
+      } else if (deps.cors === "*" || deps.cors === undefined || deps.cors === true) {
+        headers["Access-Control-Allow-Origin"] = "*";
+      }
+    }
+    reply.raw.writeHead(200, headers);
     reply.raw.write(`: connected\n\n`);
     let alive = true;
     const writeEvent = (event: string, data: unknown) => {

@@ -2,10 +2,12 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   allowedActions,
+  Aria2Client,
   bandwidthConfigFrom,
   EventBus,
   planAutoCleanup,
   runBandwidthProbe,
+  runSchedulerLoop,
   summarizeQueue,
 } from "@ariaflow/core";
 import { buildServer, generateOpenApi } from "@ariaflow/api";
@@ -219,6 +221,20 @@ export interface ServeOptions {
   version?: string;
   /** Path to openapi.yaml; auto-discovered when omitted. */
   openapiYamlPath?: string;
+  /** aria2 RPC host (default 127.0.0.1). Pass empty string to disable. */
+  aria2Host?: string;
+  /** aria2 RPC port (default 6800). */
+  aria2Port?: number;
+  /** Optional aria2 RPC secret token. */
+  aria2Secret?: string;
+  /**
+   * When true and an aria2 client is wired, also start the long-running
+   * scheduler loop that picks up queued items, dispatches them via aria2,
+   * and polls for completion. Default false (read-only).
+   */
+  startScheduler?: boolean;
+  /** Scheduler tick interval in ms (default 2000). */
+  schedulerIntervalMs?: number;
 }
 
 /**
@@ -240,6 +256,8 @@ function findOpenApiYaml(start: string = process.cwd()): string | null {
 export interface ServeHandle {
   url: string;
   port: number;
+  /** True when the scheduler loop is running in the background. */
+  scheduler: boolean;
   close: () => Promise<void>;
 }
 
@@ -256,6 +274,16 @@ export async function cmdServe(
 ): Promise<ServeHandle> {
   const eventBus = new EventBus();
   const yamlPath = opts.openapiYamlPath ?? findOpenApiYaml();
+  const aria2Host = opts.aria2Host ?? "127.0.0.1";
+  const aria2 =
+    aria2Host === ""
+      ? undefined
+      : new Aria2Client({
+          host: aria2Host,
+          port: opts.aria2Port ?? 6800,
+          ...(opts.aria2Secret !== undefined ? { secret: opts.aria2Secret } : {}),
+        });
+
   const app = buildServer({
     queueOps: ctx.queueOps,
     queueStore: ctx.queue,
@@ -265,21 +293,57 @@ export async function cmdServe(
     sessionService: ctx.sessions,
     actionLog: ctx.actions,
     eventBus,
+    ...(aria2 ? { aria2 } : {}),
     ...(opts.version !== undefined ? { version: opts.version } : {}),
     ...(yamlPath ? { openapiYamlPath: yamlPath } : {}),
   });
   const requestedPort = opts.port ?? 8000;
   const host = opts.host ?? "127.0.0.1";
   await app.listen({ host, port: requestedPort });
-  // When port=0 was passed, ask Fastify for the bound port so the URL
-  // we hand back actually reaches the listener.
   const addr = app.server.address();
   const port =
     typeof addr === "object" && addr !== null && "port" in addr ? addr.port : requestedPort;
+
+  let schedulerCtrl: AbortController | undefined;
+  let schedulerDone: Promise<unknown> = Promise.resolve();
+  if (opts.startScheduler && aria2) {
+    schedulerCtrl = new AbortController();
+    // Resolve the bandwidth cap from saved state if available, else 0
+    // (no cap). The full pre-loop probe lands in a follow-up.
+    const state = await ctx.state.load();
+    const probe = state.last_bandwidth_probe as
+      | { cap_bytes_per_sec?: number }
+      | null
+      | undefined;
+    const capBytesPerSec = Number(probe?.cap_bytes_per_sec ?? 0) || 0;
+    schedulerDone = runSchedulerLoop(
+      {
+        queueStore: ctx.queue,
+        stateStore: ctx.state,
+        declarationStore: ctx.declaration,
+        actionLog: ctx.actions,
+        aria2,
+      },
+      {
+        capBytesPerSec,
+        intervalMs: opts.schedulerIntervalMs ?? 2000,
+        signal: schedulerCtrl.signal,
+      },
+    ).catch((err) => {
+      // Surface scheduler crashes to stderr but don't kill the HTTP
+      // listener — caller can investigate via /api/log.
+      // eslint-disable-next-line no-console
+      console.error("scheduler loop crashed:", err);
+    });
+  }
+
   return {
     url: `http://${host}:${port}`,
     port,
+    scheduler: Boolean(schedulerCtrl),
     close: async () => {
+      schedulerCtrl?.abort();
+      await schedulerDone;
       await app.close();
     },
   };

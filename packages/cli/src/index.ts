@@ -106,21 +106,57 @@ program
   .option("--host <h>", "bind host", "127.0.0.1")
   .option("--port <p>", "bind port", (v) => Number(v), 8000)
   .option("--openapi-yaml <path>", "path to openapi.yaml (auto-discovered if omitted)")
-  .action(async (opts: { host: string; port: number; openapiYaml?: string }) => {
-    const ctx = makeContext();
-    const handle = await cmdServe(ctx, {
-      host: opts.host,
-      port: opts.port,
-      ...(opts.openapiYaml ? { openapiYamlPath: opts.openapiYaml } : {}),
-    });
-    process.stdout.write(`ariaflow-server listening at ${handle.url}\n`);
-    const stop = async () => {
-      await handle.close();
-      process.exit(0);
-    };
-    process.once("SIGINT", stop);
-    process.once("SIGTERM", stop);
-  });
+  .option("--aria2-host <h>", "aria2 RPC host", "127.0.0.1")
+  .option("--aria2-port <p>", "aria2 RPC port", (v) => Number(v), 6800)
+  .option("--aria2-secret <s>", "aria2 RPC secret token")
+  .option("--no-aria2", "disable the aria2 client (read-only API)")
+  .option(
+    "--scheduler",
+    "run the scheduler loop in-process (dispatches queued items to aria2)",
+  )
+  .option(
+    "--scheduler-interval <ms>",
+    "scheduler tick interval in ms",
+    (v) => Number(v),
+    2000,
+  )
+  .action(
+    async (opts: {
+      host: string;
+      port: number;
+      openapiYaml?: string;
+      aria2: boolean;
+      aria2Host: string;
+      aria2Port: number;
+      aria2Secret?: string;
+      scheduler?: boolean;
+      schedulerInterval: number;
+    }) => {
+      const ctx = makeContext();
+      const handle = await cmdServe(ctx, {
+        host: opts.host,
+        port: opts.port,
+        ...(opts.openapiYaml ? { openapiYamlPath: opts.openapiYaml } : {}),
+        // commander sets opts.aria2=false when --no-aria2 was passed.
+        aria2Host: opts.aria2 === false ? "" : opts.aria2Host,
+        aria2Port: opts.aria2Port,
+        ...(opts.aria2Secret ? { aria2Secret: opts.aria2Secret } : {}),
+        startScheduler: Boolean(opts.scheduler),
+        schedulerIntervalMs: opts.schedulerInterval,
+      });
+      process.stdout.write(
+        `ariaflow-server listening at ${handle.url}` +
+          (handle.scheduler ? "  (scheduler running)" : "") +
+          "\n",
+      );
+      const stop = async () => {
+        await handle.close();
+        process.exit(0);
+      };
+      process.once("SIGINT", stop);
+      process.once("SIGTERM", stop);
+    },
+  );
 
 program
   .command("watch")

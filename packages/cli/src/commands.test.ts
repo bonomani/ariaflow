@@ -188,6 +188,21 @@ describe("cmdWatch", () => {
   });
 });
 
+describe("cmdServe SSE CORS", () => {
+  it("echoes the request Origin on /api/events", async () => {
+    const handle = await cmdServe(ctx, { host: "127.0.0.1", port: 0, aria2Host: "" });
+    try {
+      const res = await fetch(`${handle.url}/api/events`, {
+        headers: { Accept: "text/event-stream", Origin: "http://dashboard.local" },
+      });
+      expect(res.headers.get("access-control-allow-origin")).toBe("http://dashboard.local");
+      await res.body?.cancel();
+    } finally {
+      await handle.close();
+    }
+  });
+});
+
 describe("cmdServe", () => {
   it("boots a real HTTP server on a free port and answers /api/health", async () => {
     const handle = await cmdServe(ctx, { host: "127.0.0.1", port: 0, version: "9.9.9" });
