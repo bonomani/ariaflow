@@ -1479,6 +1479,71 @@ describe("BG-25: scheduler start/stop lifecycle", () => {
     }
   });
 
+  it("POST /api/downloads auto-starts the scheduler loop when running:false and not paused", async () => {
+    const env = { ARIAFLOW_DIR: dir };
+    const lock = new StorageLock(storageLockPath(env));
+    const state = new StateStore(lock, env);
+    const queue = new QueueStore(lock, env);
+    const archive = new ArchiveStore(lock, env);
+    const actions = new ActionLog(lock, state, env);
+    const sessions = new SessionService(lock, state, queue, archive, env);
+    const declaration = new DeclarationStore(lock, env);
+    const queueOps = new QueueOps(queue, sessions, declaration, actions);
+    let startCalls = 0;
+    const wired = buildServer({
+      queueOps,
+      queueStore: queue,
+      declarationStore: declaration,
+      stateStore: state,
+      sessionService: sessions,
+      actionLog: actions,
+      archiveStore: archive,
+      cwd: dir,
+      startScheduler: async () => {
+        startCalls += 1;
+        await state.update((s) => {
+          s.running = true;
+        });
+        return { started: true, reason: "started" };
+      },
+      stopScheduler: async () => ({ stopped: false, reason: "not_running" }),
+    });
+    try {
+      // running:false, paused:false → adding an item must kick the loop.
+      const res = await wired.inject({
+        method: "POST",
+        url: "/api/downloads",
+        payload: { url: "http://example.com/a.iso" },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(startCalls).toBe(1);
+
+      // running:true now — second add must NOT call startScheduler again.
+      const res2 = await wired.inject({
+        method: "POST",
+        url: "/api/downloads",
+        payload: { url: "http://example.com/b.iso" },
+      });
+      expect(res2.statusCode).toBe(200);
+      expect(startCalls).toBe(1);
+
+      // Operator-paused: bring loop down + flip paused, then add must NOT auto-start.
+      await state.update((s) => {
+        s.running = false;
+        s.paused = true;
+      });
+      const res3 = await wired.inject({
+        method: "POST",
+        url: "/api/downloads",
+        payload: { url: "http://example.com/c.iso" },
+      });
+      expect(res3.statusCode).toBe(200);
+      expect(startCalls).toBe(1);
+    } finally {
+      await wired.close();
+    }
+  });
+
   it("GET /api/status exposes a top-level bandwidth summary lifted from state.last_bandwidth_probe", async () => {
     const env = { ARIAFLOW_DIR: dir };
     const lock = new StorageLock(storageLockPath(env));

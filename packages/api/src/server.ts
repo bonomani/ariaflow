@@ -192,6 +192,20 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         duplicate,
       });
     }
+    // If the scheduler loop has drained itself (running=false) and the
+    // operator isn't paused, kick it so newly queued items dispatch
+    // without needing a manual /resume. Mirrors the auto-start in
+    // /api/scheduler/resume so Add-Then-Wait is a coherent UX.
+    if (deps.startScheduler) {
+      const s = await deps.stateStore.load();
+      if (!s.running && !s.paused && created.some((c) => !c.duplicate)) {
+        try {
+          await deps.startScheduler();
+        } catch {
+          /* swallow — surfacing failures here would mask a successful add */
+        }
+      }
+    }
     return reply.code(200).send({ ok: true, items: created });
   };
 
