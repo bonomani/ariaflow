@@ -1,11 +1,11 @@
-export const TERMINAL_STATUSES = new Set([
+const TERMINAL_STATUSES = new Set([
   "complete",
   "error",
   "failed",
   "removed",
 ]);
 
-export const NON_COMPLETE_TERMINAL = new Set(["error", "failed", "removed"]);
+const NON_COMPLETE_TERMINAL = new Set(["error", "failed", "removed"]);
 
 export interface QueueItem {
   status?: string | null;
@@ -19,7 +19,7 @@ export interface QueueItem {
  * Parse an ISO-8601 timestamp; assume UTC if no offset present.
  * Returns epoch seconds, or `fallback` if unparseable.
  */
-export function parseItemTimestamp(value: string | null | undefined, fallback: number): number {
+function parseItemTimestamp(value: string | null | undefined, fallback: number): number {
   if (!value) return fallback;
   const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(value);
   const iso = hasTz ? value : `${value}Z`;

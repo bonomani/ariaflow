@@ -27,7 +27,6 @@ export function configDir(env: NodeJS.ProcessEnv = process.env): string {
 
 export const queuePath = (env?: NodeJS.ProcessEnv) => join(configDir(env), "queue.json");
 export const statePath = (env?: NodeJS.ProcessEnv) => join(configDir(env), "state.json");
-export const logPath = (env?: NodeJS.ProcessEnv) => join(configDir(env), "aria2.log");
 export const actionLogPath = (env?: NodeJS.ProcessEnv) => join(configDir(env), "actions.jsonl");
 export const archivePath = (env?: NodeJS.ProcessEnv) => join(configDir(env), "archive.json");
 export const sessionsLogPath = (env?: NodeJS.ProcessEnv) =>

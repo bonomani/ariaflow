@@ -40,7 +40,7 @@ Rules derived from real incidents during development. Each rule exists because w
 
 ### R7: Auto-generate everything that can drift
 **Incident:** OpenAPI spec had 18 endpoints when the code had 44. Manual YAML maintenance failed silently.
-**Rule:** If a doc reflects code structure, auto-generate it. The Python-era generators (`gen_rpc_docs.py`, `gen_all_variables.py`) were retired with the Python tree along with the docs they produced; only `openapi.yaml` (now generated from the Fastify route registrations) survives in the TS port. New auto-gen drift watchpoints should be wired through `scripts/check-openapi-drift.mjs` or a similar CI gate. Never edit generated files by hand.
+**Rule:** If a doc reflects code structure, auto-generate it. The Python-era generators (`gen_rpc_docs.py`, `gen_all_variables.py`) were retired with the Python tree along with the docs they produced; only `openapi.yaml` (now generated from the Fastify route registrations) survives in the TS port. New auto-gen drift watchpoints should be wired through `packages/api/src/drift.ts` (vitest-based) or a similar CI gate. Never edit generated files by hand.
 
 ### R8: One plan file, remove done items
 **Incident:** Multiple plan files (BUGFIX_PLAN.md, REFACTOR_PLAN.md, etc.) with overlapping items, stale decisions contradicting actual code.

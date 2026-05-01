@@ -148,16 +148,6 @@ export function planSystemdUninstall(): string[] {
   ];
 }
 
-export const paths = {
-  launchAgentsDir,
-  launchdPlistPath,
-  launchdSessionDir,
-  systemdUserDir,
-  systemdUnitPath,
-  systemdSessionDir,
-  defaultDownloadDir,
-};
-
 export type ServiceTarget = "aria2-launchd" | "aria2-systemd" | null;
 
 /**
