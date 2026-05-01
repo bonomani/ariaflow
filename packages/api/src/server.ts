@@ -753,11 +753,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         items: filtered,
         summary,
         state: stateOut,
-        dispatch_paused: dispatchPaused,
         bandwidth,
         _rev: Number(state._rev ?? 0),
       };
-      if (statusFilter || sessionFilter) payload.filtered = true;
       return withMeta("GET", "/api/status", payload);
     },
   );

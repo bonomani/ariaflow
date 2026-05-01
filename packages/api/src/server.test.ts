@@ -865,11 +865,11 @@ describe("meta routes", () => {
     expect(status.transport_topics).toEqual(["items", "scheduler"]);
   });
 
-  it("BG-33: GET /api/status surfaces canonical dispatch_paused only (no legacy state.paused)", async () => {
+  it("BG-33/BG-35: GET /api/status surfaces canonical state.dispatch_paused only (no top-level, no legacy state.paused)", async () => {
     const res = await app.inject({ method: "GET", url: "/api/status" });
     const body = res.json();
-    expect(body.dispatch_paused).toBe(false);
     expect(body.state.dispatch_paused).toBe(false);
+    expect(body).not.toHaveProperty("dispatch_paused");
     expect(body.state).not.toHaveProperty("paused");
   });
 
@@ -896,14 +896,15 @@ describe("meta routes", () => {
     }
   });
 
-  it("GET /api/status?status=queued filters and flips `filtered`", async () => {
+  it("BG-35: GET /api/status?status=queued filters items; no `filtered` flag in payload", async () => {
     await app.inject({
       method: "POST",
       url: "/api/downloads",
       payload: { items: [{ url: "http://h/a" }] },
     });
     const res = await app.inject({ method: "GET", url: "/api/status?status=queued" });
-    expect(res.json().filtered).toBe(true);
+    expect(res.json()).not.toHaveProperty("filtered");
+    expect(res.json().items.length).toBeGreaterThan(0);
     const empty = await app.inject({ method: "GET", url: "/api/status?status=active" });
     expect(empty.json().items).toEqual([]);
   });
