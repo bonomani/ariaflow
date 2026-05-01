@@ -1514,7 +1514,7 @@ describe("BG-25: scheduler start/stop lifecycle", () => {
       const res = await wired.inject({
         method: "POST",
         url: "/api/downloads",
-        payload: { url: "http://example.com/a.iso" },
+        payload: { items: [{ url: "http://example.com/a.iso" }] },
       });
       expect(res.statusCode).toBe(200);
       expect(startCalls).toBe(1);
@@ -1523,7 +1523,7 @@ describe("BG-25: scheduler start/stop lifecycle", () => {
       const res2 = await wired.inject({
         method: "POST",
         url: "/api/downloads",
-        payload: { url: "http://example.com/b.iso" },
+        payload: { items: [{ url: "http://example.com/b.iso" }] },
       });
       expect(res2.statusCode).toBe(200);
       expect(startCalls).toBe(1);
@@ -1536,7 +1536,7 @@ describe("BG-25: scheduler start/stop lifecycle", () => {
       const res3 = await wired.inject({
         method: "POST",
         url: "/api/downloads",
-        payload: { url: "http://example.com/c.iso" },
+        payload: { items: [{ url: "http://example.com/c.iso" }] },
       });
       expect(res3.statusCode).toBe(200);
       expect(startCalls).toBe(1);
