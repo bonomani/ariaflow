@@ -339,9 +339,6 @@ paths:
                     type: string
                   _schema:
                     type: string
-                  cap_bytes_per_sec:
-                    nullable: true
-                    type: integer
                   config:
                     type: object
                   current_limit:
@@ -353,9 +350,6 @@ paths:
                   downlink_mbps:
                     nullable: true
                     type: number
-                  interface:
-                    nullable: true
-                    type: string
                   last_probe:
                     nullable: true
                     type: object
@@ -428,9 +422,6 @@ paths:
                     type: string
                   _schema:
                     type: string
-                  cap_bytes_per_sec:
-                    nullable: true
-                    type: integer
                   config:
                     type: object
                   down_cap_mbps:
@@ -439,9 +430,6 @@ paths:
                   downlink_mbps:
                     nullable: true
                     type: number
-                  interface:
-                    nullable: true
-                    type: string
                   ok:
                     type: boolean
                   probe:
@@ -827,32 +815,6 @@ paths:
         "404":
           description: Not found
   /api/downloads/{id}/priority:
-    post:
-      tags: [Queue]
-      summary: Per-download action (pause/resume/remove/retry/priority)
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-        "400":
-          description: Bad request
-        "404":
-          description: Not found
-  /api/downloads/{id}/remove:
     post:
       tags: [Queue]
       summary: Per-download action (pause/resume/remove/retry/priority)

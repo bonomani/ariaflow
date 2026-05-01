@@ -302,11 +302,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     removeItem(req.params.id, reply),
   );
 
-  // POST alias for clients that can't issue DELETE; matches openapi.yaml.
-  app.post<{ Params: { id: string } }>("/api/downloads/:id/remove", (req, reply) =>
-    removeItem(req.params.id, reply),
-  );
-
   app.post<{ Params: { id: string } }>("/api/downloads/:id/pause", async (req, reply) => {
     if (!validateItemId(req.params.id)) {
       return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
@@ -891,12 +886,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       ok: true,
       probe: probeRec,
       config,
-      interface: probeRec.interface_name ?? null,
+      interface_name: probeRec.interface_name ?? null,
       downlink_mbps: probeRec.downlink_mbps,
       uplink_mbps: probeRec.uplink_mbps ?? null,
       down_cap_mbps: downCap,
       up_cap_mbps: upCap,
-      cap_bytes_per_sec: probeRec.cap_bytes_per_sec ?? null,
+      current_limit: probeRec.cap_bytes_per_sec ?? null,
       responsiveness_rpm: probeRec.responsiveness_rpm ?? null,
       source: probeRec.source,
     });
@@ -914,11 +909,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       last_probe_at: state.last_bandwidth_probe_at ?? null,
       // BG-21: surface probe fields at top level under the names the
       // dashboard's bwInterfaceText / bwSourceText / bwCurrentLimitText
-      // helpers read. Keep the legacy `interface` / `cap_bytes_per_sec`
-      // aliases too so any older client that still reads those keeps
-      // working.
+      // helpers read.
       interface_name: probe?.interface_name ?? null,
-      interface: probe?.interface_name ?? null,
       source: probe?.source ?? null,
       cap_mbps: probe?.cap_mbps ?? null,
       current_limit: probe?.cap_bytes_per_sec ?? null,
@@ -926,7 +918,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       uplink_mbps: probe?.uplink_mbps ?? null,
       down_cap_mbps: probe?.down_cap_mbps ?? null,
       up_cap_mbps: probe?.up_cap_mbps ?? null,
-      cap_bytes_per_sec: probe?.cap_bytes_per_sec ?? null,
       responsiveness_rpm: probe?.responsiveness_rpm ?? null,
     });
   });

@@ -360,7 +360,7 @@ describe("GET /api/bandwidth", () => {
     expect(body.config.down_use_percent).toBeCloseTo(0.8, 5);
     expect(body.config.up_use_percent).toBeCloseTo(0.5, 5);
     expect(body.last_probe).toBeNull();
-    expect(body.cap_bytes_per_sec).toBeNull();
+    expect(body.current_limit).toBeNull();
   });
 
   it("surfaces probe fields when the state already has a saved probe", async () => {
@@ -398,14 +398,12 @@ describe("GET /api/bandwidth", () => {
     const body = res.json();
     expect(body.downlink_mbps).toBe(100);
     expect(body.up_cap_mbps).toBe(12.5);
-    expect(body.cap_bytes_per_sec).toBe(10_000_000);
+    expect(body.current_limit).toBe(10_000_000);
     expect(body.last_probe_at).toBe(1_700_000_000);
 
     // BG-21: dashboard reads bw.interface_name / bw.source /
-    // bw.current_limit / bw.cap_mbps at the top level. Legacy
-    // interface / cap_bytes_per_sec aliases are still emitted.
+    // bw.current_limit / bw.cap_mbps at the top level.
     expect(body.interface_name).toBe("en0");
-    expect(body.interface).toBe("en0");
     expect(body.source).toBe("networkquality");
     expect(body.cap_mbps).toBe(80);
     expect(body.current_limit).toBe(10_000_000);
@@ -1039,29 +1037,6 @@ describe("aria2 / sessions / remove compat aliases", () => {
     expect(res.json().stats.session_id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it("POST /api/downloads/:id/remove behaves identically to DELETE /api/downloads/:id", async () => {
-    const add = await app.inject({
-      method: "POST",
-      url: "/api/downloads",
-      payload: { items: [{ url: "http://h/x" }] },
-    });
-    const id = add.json().items[0].id;
-    const res = await app.inject({ method: "POST", url: `/api/downloads/${id}/remove` });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true, id });
-    const list = await app.inject({ method: "GET", url: "/api/downloads" });
-    expect(list.json().summary.total).toBe(0);
-  });
-
-  it("POST /api/downloads/:id/remove 400 on bad id, 404 on miss", async () => {
-    const bad = await app.inject({ method: "POST", url: "/api/downloads/notuuid/remove" });
-    expect(bad.statusCode).toBe(400);
-    const miss = await app.inject({
-      method: "POST",
-      url: "/api/downloads/00000000-0000-0000-0000-000000000000/remove",
-    });
-    expect(miss.statusCode).toBe(404);
-  });
 });
 
 describe("priority / retry routes", () => {
