@@ -774,6 +774,28 @@ describe("meta routes", () => {
     }
   });
 
+  // BG-37: published OpenAPI spec must carry the runtime version, not a
+  // bundled-at-build-time stale stamp.
+  it("GET /api/openapi.yaml stamps info.version to match /api/version", async () => {
+    const { writeFileSync } = await import("node:fs");
+    const yamlPath = `${dir}/openapi.yaml`;
+    writeFileSync(
+      yamlPath,
+      "openapi: 3.0.3\ninfo:\n  title: t\n  version: 0.1.145\npaths: {}\n",
+    );
+    const sibling = await freshAppWithOpenApiYaml(dir, yamlPath, "0.1.244");
+    try {
+      const yamlRes = await sibling.inject({ method: "GET", url: "/api/openapi.yaml" });
+      const versionRes = await sibling.inject({ method: "GET", url: "/api/version" });
+      expect(yamlRes.statusCode).toBe(200);
+      expect(yamlRes.body).toContain("version: 0.1.244");
+      expect(yamlRes.body).not.toContain("version: 0.1.145");
+      expect(versionRes.json().version).toBe("0.1.244");
+    } finally {
+      await sibling.close();
+    }
+  });
+
   it("GET /api/status returns items + summary + state + identity", async () => {
     await app.inject({
       method: "POST",
@@ -910,7 +932,7 @@ describe("meta routes", () => {
   });
 });
 
-async function freshAppWithOpenApiYaml(baseDir: string, yamlPath: string) {
+async function freshAppWithOpenApiYaml(baseDir: string, yamlPath: string, version?: string) {
   const env = { ARIAFLOW_DIR: baseDir };
   const {
     StorageLock,
@@ -941,6 +963,7 @@ async function freshAppWithOpenApiYaml(baseDir: string, yamlPath: string) {
     actionLog: actions,
     openapiYamlPath: yamlPath,
     cwd: baseDir,
+    ...(version !== undefined ? { version } : {}),
   });
 }
 

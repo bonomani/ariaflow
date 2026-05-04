@@ -774,7 +774,15 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         .send(errorPayload("not_found", "openapi.yaml not found on disk"));
     }
     reply.type("application/yaml");
-    return reply.send(readFileSync(yamlPath, "utf8"));
+    // BG-37: rewrite info.version to match /api/version so the published
+    // contract artifact never drifts from the running release.
+    const raw = readFileSync(yamlPath, "utf8");
+    const runtimeVersion = deps.version ?? "0.0.0";
+    const stamped = raw.replace(
+      /^(info:[\s\S]*?\n {2}version:)[^\n]*/m,
+      `$1 ${runtimeVersion}`,
+    );
+    return reply.send(stamped);
   });
 
   app.get("/api/docs", async (_req, reply) => {
