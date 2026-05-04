@@ -8,7 +8,7 @@ import {
 import { queueItemForActiveInfo } from "../reconcile/match.js";
 import type { ActionLog } from "../storage/action-log.js";
 import type { QueueStore } from "../storage/queue.js";
-import type { ServerState, StateStore } from "../storage/state.js";
+import type { StateStore } from "../storage/state.js";
 import { summarizeQueue } from "../queue/policy.js";
 import type { QueueItemRecord } from "../queue/types.js";
 

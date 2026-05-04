@@ -21,14 +21,6 @@ const systemdSessionDir = (): string =>
 
 const defaultDownloadDir = (): string => join(home(), "Downloads");
 
-interface InstallPaths {
-  binPath: string;
-  sessionDir: string;
-  sessionFile: string;
-  downloadDir: string;
-  unitPath: string;
-}
-
 /**
  * Render the launchd plist for the aria2 RPC daemon. Pure: caller passes
  * the resolved aria2c path (e.g. `which aria2c` or a Homebrew default).
