@@ -226,7 +226,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   };
 
   app.post("/api/downloads", (req, reply) => addDownloads(req.body, reply));
-  // Compat alias from the legacy openapi.yaml.
+  // openapi.yaml documents /api/downloads/add as the canonical add
+  // endpoint; /api/downloads is the alias. Both are kept wired.
   app.post("/api/downloads/add", (req, reply) => addDownloads(req.body, reply));
 
   app.get("/api/downloads", async () => {
@@ -463,9 +464,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return { ok: true, session: state, stats };
   });
 
-  // Compat aliases: the canonical openapi.yaml documents /api/sessions
-  // (=current) and /api/sessions/stats as separate endpoints — both are
-  // thin views over SessionService that are cheap to keep wired.
+  // openapi.yaml documents /api/sessions (= current session) and
+  // /api/sessions/stats as separate endpoints; both are thin views
+  // over SessionService and used by the dashboard.
   app.get("/api/sessions", async () => {
     const state = await deps.stateStore.load();
     return withMeta("GET", "/api/sessions", {
@@ -530,7 +531,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   };
 
   app.put("/api/declaration", (req, reply) => saveDeclaration(req.body, reply));
-  // POST alias for the canonical openapi.yaml.
+  // POST alias documented in openapi.yaml for clients that can't
+  // issue PUT.
   app.post("/api/declaration", (req, reply) => saveDeclaration(req.body, reply));
 
   const patchPreferences = async (
@@ -978,7 +980,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // must be spread at the top level. aria2 option names are kebab-case
   // ("connect-timeout", "max-tries", ...) so they never collide with
   // our envelope keys (`ok`, `gid`). Same fix for all four endpoints
-  // (the canonical pair + the legacy `get_*` aliases).
+  // (canonical `get_*` per openapi.yaml + the `global_option` /
+  // `option` short-form aliases).
   const globalOptionsHandler = async (
     _req: import("fastify").FastifyRequest,
     reply: import("fastify").FastifyReply,
