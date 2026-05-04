@@ -39,7 +39,10 @@ export type ResolvedProbe = BandwidthProbe & {
 export async function runBandwidthProbe(opts: RunProbeOptions): Promise<ResolvedProbe> {
   const spawn = opts.spawn ?? nodeSpawn;
   const timeoutMs = opts.timeoutMs ?? 10_000;
-  const cmd = opts.binary ?? findNetworkQuality();
+  // Escape hatch for tests / CI hosts where the real macOS networkQuality
+  // binary exists but we don't want to spawn it (10 s+ wall clock).
+  const disabled = process.env.ARIAFLOW_DISABLE_NETWORKQUALITY === "1";
+  const cmd = opts.binary ?? (disabled ? null : findNetworkQuality());
   let probe: BandwidthProbe;
   if (!cmd) {
     probe = defaultBandwidthProbe({ floorMbps: 1, reason: "probe_unavailable" });

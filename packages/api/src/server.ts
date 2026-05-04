@@ -72,6 +72,12 @@ export interface ServerDeps {
    */
   startScheduler?: () => Promise<{ started: boolean; reason: string }>;
   stopScheduler?: () => Promise<{ stopped: boolean; reason: string }>;
+  /**
+   * Optional override for the bandwidth probe entry point. Defaults to
+   * `core.runBandwidthProbe`. Tests pass a stub so they don't spawn the
+   * real macOS `networkQuality` binary (which can take 10s+).
+   */
+  runBandwidthProbe?: typeof import("@ariaflow/core").runBandwidthProbe;
 }
 
 const SWAGGER_UI_HTML = `<!DOCTYPE html>
@@ -864,7 +870,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const core = await import("@ariaflow/core");
     const declaration = await deps.declarationStore.load();
     const config = bandwidthConfigFrom(declaration);
-    const probeRec = await core.runBandwidthProbe({ config });
+    const runProbe = deps.runBandwidthProbe ?? core.runBandwidthProbe;
+    const probeRec = await runProbe({ config });
     const downCap = probeRec.down_cap_mbps;
     const upCap = probeRec.up_cap_mbps;
 

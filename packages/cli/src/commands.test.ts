@@ -31,8 +31,12 @@ let ctx: CliContext;
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "ariaflow-cli-"));
   ctx = makeContext({ ARIAFLOW_DIR: dir });
+  // Skip the real macOS networkQuality probe in tests — its 10 s wall
+  // clock exceeds vitest's default 5 s timeout.
+  process.env.ARIAFLOW_DISABLE_NETWORKQUALITY = "1";
 });
 afterEach(() => {
+  delete process.env.ARIAFLOW_DISABLE_NETWORKQUALITY;
   rmSync(dir, { recursive: true, force: true });
 });
 

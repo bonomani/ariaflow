@@ -12,13 +12,19 @@ const CANDIDATES = [
  * Locate the macOS `networkQuality` binary. Probes PATH first under both
  * casings, then walks a list of well-known absolute paths used on
  * recent macOS releases. Mirrors bandwidth._find_networkquality.
+ *
+ * `candidates` defaults to the OS fallback list; tests pass `[]` to
+ * isolate from the real filesystem.
  */
-export function findNetworkQuality(env: NodeJS.ProcessEnv = process.env): string | null {
+export function findNetworkQuality(
+  env: NodeJS.ProcessEnv = process.env,
+  candidates: readonly string[] = CANDIDATES,
+): string | null {
   for (const name of ["networkQuality", "networkquality"]) {
     const found = which(name, env);
     if (found) return found;
   }
-  for (const candidate of CANDIDATES) {
+  for (const candidate of candidates) {
     if (existsSync(candidate)) return candidate;
   }
   return null;
@@ -39,8 +45,9 @@ export interface NetworkQualityStatus {
  */
 export function networkqualityStatus(
   env: NodeJS.ProcessEnv = process.env,
+  candidates: readonly string[] = CANDIDATES,
 ): NetworkQualityStatus {
-  const cmd = findNetworkQuality(env);
+  const cmd = findNetworkQuality(env, candidates);
   if (!cmd) {
     return {
       installed: false,

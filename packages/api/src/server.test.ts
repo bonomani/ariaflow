@@ -38,6 +38,7 @@ beforeEach(() => {
     actionLog: actions,
     archiveStore: archive,
     cwd: dir,
+    runBandwidthProbe: stubBandwidthProbe,
   });
 });
 
@@ -930,6 +931,22 @@ describe("meta routes", () => {
     const empty = await app.inject({ method: "GET", url: "/api/status?status=active" });
     expect(empty.json().items).toEqual([]);
   });
+});
+
+// Stub bandwidth probe: returns the same default-shape the real probe
+// emits when `networkQuality` is missing. Avoids spawning the macOS
+// binary (which can take 10s+) during tests.
+const stubBandwidthProbe: typeof import("@ariaflow/core").runBandwidthProbe = async ({
+  config,
+}) => ({
+  source: "default",
+  reason: "probe_unavailable",
+  downlink_mbps: null,
+  cap_mbps: 1,
+  cap_bytes_per_sec: 125_000,
+  interval_seconds: config.probe_interval_seconds,
+  down_cap_mbps: null,
+  up_cap_mbps: null,
 });
 
 async function freshAppWithOpenApiYaml(baseDir: string, yamlPath: string, version?: string) {
