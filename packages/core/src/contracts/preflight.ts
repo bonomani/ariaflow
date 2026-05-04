@@ -6,7 +6,7 @@ export interface GateSignals {
   paused?: boolean;
 }
 
-export interface GateResult {
+interface GateResult {
   name: string;
   satisfied: boolean;
   blocking: string;

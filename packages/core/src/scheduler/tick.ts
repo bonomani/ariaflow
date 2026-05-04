@@ -131,5 +131,3 @@ export async function runSchedulerTick(deps: SchedulerTickDeps): Promise<Schedul
  */
 export const isTerminalStatus = (status: string | undefined | null): boolean =>
   TERMINAL_STATUSES.has(String(status ?? "") as never);
-
-export { type QueueItemRecord };

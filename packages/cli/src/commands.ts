@@ -26,7 +26,7 @@ import {
 import { buildServer, generateOpenApi } from "@ariaflow/api";
 import type { CliContext } from "./context.js";
 
-export interface CmdResult {
+interface CmdResult {
   ok: boolean;
   exitCode: number;
   stdout: string;
@@ -137,7 +137,7 @@ export async function cmdStatus(ctx: CliContext): Promise<CmdResult> {
   );
 }
 
-export interface WatchOptions {
+interface WatchOptions {
   url: string;
   /** Maximum events to receive before resolving; default unlimited. */
   limit?: number;
@@ -228,7 +228,7 @@ export async function cmdWatch(opts: WatchOptions): Promise<CmdResult> {
   return ok("");
 }
 
-export interface ServeOptions {
+interface ServeOptions {
   host?: string;
   port?: number;
   version?: string;
@@ -308,7 +308,7 @@ function readPackageVersion(): string | undefined {
   return undefined;
 }
 
-export interface ServeHandle {
+interface ServeHandle {
   url: string;
   port: number;
   /** True when the scheduler loop is running in the background. */
@@ -535,7 +535,7 @@ export async function cmdSetPref(
   return ok(json({ name, before, after: value }) + "\n");
 }
 
-export interface CleanupOptions {
+interface CleanupOptions {
   maxDoneAgeDays?: number;
   maxDoneCount?: number;
   archiveNonComplete?: boolean;
@@ -727,14 +727,14 @@ export async function cmdSeedStop(
   return ok(json({ infohash, status: "stopped" }) + "\n");
 }
 
-export interface DoctorOptions {
+interface DoctorOptions {
   aria2Host?: string;
   aria2Port?: number;
   aria2Secret?: string;
   pretty?: boolean;
 }
 
-export interface DoctorCheck {
+interface DoctorCheck {
   name: string;
   ok: boolean;
   detail: string;
@@ -831,7 +831,7 @@ export async function cmdDoctor(
   return allOk ? ok(lines.join("\n") + "\n") : fail(lines.join("\n") + "\n", 1);
 }
 
-export interface FormulaOptions {
+interface FormulaOptions {
   tag: string;
   sha256?: string;
   output?: string;
@@ -865,7 +865,7 @@ export async function cmdFormula(opts: FormulaOptions): Promise<CmdResult> {
   return ok(formula);
 }
 
-export interface InstallServiceOpts {
+interface InstallServiceOpts {
   dryRun?: boolean;
   binPath?: string;
 }

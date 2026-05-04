@@ -40,7 +40,7 @@ export async function downloadSha256(
   return hasher.digest("hex");
 }
 
-export interface RenderFormulaInput {
+interface RenderFormulaInput {
   version: string;
   url: string;
   sha256: string;

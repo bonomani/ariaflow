@@ -164,5 +164,3 @@ export async function reconcileLiveQueue(
     items,
   };
 }
-
-export type { ServerState };

@@ -15,7 +15,7 @@
 //   swr        — stale-while-revalidate; show cached, refetch in bg
 //   derived    — computed from another endpoint's body, never fetched
 
-export type FreshnessClass =
+type FreshnessClass =
   | "bootstrap"
   | "live"
   | "warm"
@@ -24,7 +24,7 @@ export type FreshnessClass =
   | "swr"
   | "derived";
 
-export interface FreshnessMeta {
+interface FreshnessMeta {
   freshness: FreshnessClass;
   /** Required for `warm` / `swr`. */
   ttl_s?: number;

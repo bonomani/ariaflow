@@ -21,7 +21,7 @@ const systemdSessionDir = (): string =>
 
 const defaultDownloadDir = (): string => join(home(), "Downloads");
 
-export interface InstallPaths {
+interface InstallPaths {
   binPath: string;
   sessionDir: string;
   sessionFile: string;

@@ -1,4 +1,4 @@
-export interface Aria2RpcResponse<T = unknown> {
+interface Aria2RpcResponse<T = unknown> {
   jsonrpc: "2.0";
   id: string;
   result?: T;

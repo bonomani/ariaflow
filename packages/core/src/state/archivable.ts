@@ -50,7 +50,7 @@ export function countArchivable(
   return n;
 }
 
-export interface ArchivePlan {
+interface ArchivePlan {
   keep: QueueItem[];
   archive: QueueItem[];
 }

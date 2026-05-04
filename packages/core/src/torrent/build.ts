@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { bencode, computePieceSize, type Bencodable } from "./bencode.js";
 
-export interface BuiltTorrent {
+interface BuiltTorrent {
   torrentBytes: Uint8Array;
   infohash: string;
   pieceCount: number;

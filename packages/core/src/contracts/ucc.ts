@@ -1,4 +1,4 @@
-export interface UccEnvelopeInput {
+interface UccEnvelopeInput {
   target: string;
   observed: boolean;
   outcome: string;

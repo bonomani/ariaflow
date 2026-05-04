@@ -7,7 +7,7 @@ import type { ServerState, StateStore } from "./state.js";
 import type { ArchiveStore, QueueStore } from "./queue.js";
 import type { QueueItem } from "../state/archivable.js";
 
-export interface SessionHistoryEntry {
+interface SessionHistoryEntry {
   session_id: string;
   started_at: string | null;
   closed_at: string | null;
@@ -19,7 +19,7 @@ export interface SessionHistoryEntry {
   timestamp: string;
 }
 
-export interface SessionStats {
+interface SessionStats {
   session_id: string | null;
   started_at: string | null;
   items_total: number;

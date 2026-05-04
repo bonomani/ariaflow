@@ -1,7 +1,7 @@
 import type { QueueItemRecord } from "../queue/types.js";
 import { comparePreference, mergeQueueRows, normalizeQueueRow } from "./merge.js";
 
-export interface CleanupResult {
+interface CleanupResult {
   changed: boolean;
   items: QueueItemRecord[];
   removed: number;

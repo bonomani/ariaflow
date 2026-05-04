@@ -2,7 +2,7 @@ import type { Aria2Client } from "../aria2/client.js";
 import { tellStatus } from "../aria2/methods.js";
 import type { ServerState } from "../storage/state.js";
 
-export interface ActiveProgress {
+interface ActiveProgress {
   gid: string;
   url: string | null;
   status?: string;

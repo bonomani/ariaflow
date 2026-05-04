@@ -11,7 +11,7 @@ import {
 } from "./probe.js";
 import type { BandwidthConfig } from "./config.js";
 
-export interface RunProbeOptions {
+interface RunProbeOptions {
   config: BandwidthConfig;
   /** Override networkQuality binary path; default = findNetworkQuality(). */
   binary?: string;

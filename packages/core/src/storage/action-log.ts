@@ -8,7 +8,7 @@ const MAX_LINES = 10_000;
 const KEEP_LINES = 5_000;
 const ROTATE_SIZE_BYTES = 512 * 1024;
 
-export interface ActionLogEntry {
+interface ActionLogEntry {
   action: string;
   target: string;
   outcome: string;
@@ -22,7 +22,7 @@ export interface ActionLogEntry {
   [k: string]: unknown;
 }
 
-export interface RecordActionInput {
+interface RecordActionInput {
   action: string;
   target: string;
   outcome: string;
