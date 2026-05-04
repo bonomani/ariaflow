@@ -82,9 +82,8 @@ const isTerminal = (status: unknown): boolean =>
  * On exit, sets state.running=false and (if abort was requested) records
  * a "scheduler_stopped" action so /api/log shows the shutdown.
  *
- * Mirrors the polling structure of scheduler.process_queue. The
- * bandwidth-probe / reconcile / dedup composition is deferred to a
- * higher-level "ariaflow start" command that runs them once before
+ * The bandwidth-probe / reconcile / dedup composition is deferred to
+ * a higher-level "ariaflow start" command that runs them once before
  * handing off to runSchedulerLoop.
  */
 export async function runSchedulerLoop(

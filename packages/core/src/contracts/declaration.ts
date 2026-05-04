@@ -123,10 +123,7 @@ const GATES: UicGate[] = [
   { name: "queue_readable", class: "integrity", blocking: "hard" },
 ];
 
-/**
- * Return a fresh deep clone of the default declaration. Mirrors
- * src/ariaflow_server/contracts.py::DEFAULT_DECLARATION.
- */
+/** Return a fresh deep clone of the default declaration. */
 export function defaultDeclaration(): Declaration {
   return structuredClone({
     meta: { contract: "UCC", version: "2.0" },

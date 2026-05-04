@@ -95,10 +95,7 @@ export interface UCCResult {
   diff?: Record<string, unknown> | null;
 }
 
-/**
- * Strip null/empty fields from a UCCResult, mirroring the Python
- * `UCCResult.to_dict()` cleanup.
- */
+/** Strip null/empty fields from a UCCResult. */
 export function uccResultToDict(r: UCCResult): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(r)) {

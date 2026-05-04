@@ -21,7 +21,7 @@ export function allowedActions(status: string): string[] {
 
 /**
  * Classify a download URL / payload into the aria2 ingestion mode.
- * Mirrors queue_ops.detect_download_mode precedence:
+ * Precedence:
  *   torrent_data > metalink_data > mirror > magnet > torrent > metalink > http.
  */
 export function detectDownloadMode(opts: {

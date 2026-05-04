@@ -11,8 +11,7 @@ export interface CleanupResult {
 /**
  * Pure decision step for queue cleanup: dedupe rows by gid or url,
  * normalize status/live_status pairs, and merge duplicates so the
- * surviving row carries the best fields from both. Mirrors the
- * in-storage half of reconcile.cleanup_queue_state — caller persists
+ * surviving row carries the best fields from both. Caller persists
  * the result.
  */
 export function planCleanup(items: QueueItemRecord[]): CleanupResult {

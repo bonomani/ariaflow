@@ -34,10 +34,7 @@ function itemTs(item: QueueItem, now: number): number {
   );
 }
 
-/**
- * Count items eligible for auto-archival given a max age in hours.
- * Mirrors Python state.count_archivable.
- */
+/** Count items eligible for auto-archival given a max age in hours. */
 export function countArchivable(
   items: QueueItem[],
   opts: { maxDoneAgeHours?: number; now?: number } = {},

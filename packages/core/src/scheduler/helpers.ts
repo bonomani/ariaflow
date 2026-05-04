@@ -2,9 +2,9 @@ import type { QueueItemRecord } from "../queue/types.js";
 import { prefValue, type Declaration } from "../contracts/declaration.js";
 
 /**
- * Best-effort human message from a thrown RPC poll error.
- * Mirrors scheduler._rpc_poll_failure_message: prefer the exception's
- * own text; otherwise classify by error name (Timeout / Connection / *).
+ * Best-effort human message from a thrown RPC poll error: prefer the
+ * exception's own text; otherwise classify by error name
+ * (Timeout / Connection / *).
  */
 export function rpcPollFailureMessage(err: unknown): string {
   if (err instanceof Error) {
@@ -56,9 +56,8 @@ export interface DiskCheckResult {
  * Pure disk-space gate: caller resolves the configured download dir +
  * threshold and a usage probe. Returns ok=false when usage >= threshold;
  * ok=true with 0 when the threshold is disabled or the probe fails.
- *
- * Mirrors scheduler.check_disk_space — split this way so tests can
- * inject a fake usage probe without touching the filesystem.
+ * Split this way so tests can inject a fake usage probe without
+ * touching the filesystem.
  */
 export function checkDiskSpace(opts: {
   maxPercent: number;

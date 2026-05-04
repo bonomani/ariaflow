@@ -11,7 +11,7 @@ const CANDIDATES = [
 /**
  * Locate the macOS `networkQuality` binary. Probes PATH first under both
  * casings, then walks a list of well-known absolute paths used on
- * recent macOS releases. Mirrors bandwidth._find_networkquality.
+ * recent macOS releases.
  *
  * `candidates` defaults to the OS fallback list; tests pass `[]` to
  * isolate from the real filesystem.

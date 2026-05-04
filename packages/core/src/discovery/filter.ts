@@ -1,7 +1,4 @@
-/**
- * Convert a fnmatch-style glob (`*`, `?`, `[abc]`) into a RegExp.
- * Matches Python's fnmatch.fnmatch semantics for our use cases.
- */
+/** Convert a fnmatch-style glob (`*`, `?`, `[abc]`) into a RegExp. */
 function fnmatchToRegExp(pattern: string): RegExp {
   let re = "^";
   for (let i = 0; i < pattern.length; i++) {

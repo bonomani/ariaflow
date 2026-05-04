@@ -38,9 +38,9 @@ describe("parseTxtRecords", () => {
   it("parses quoted records (the format used by avahi/dns-sd output)", () => {
     expect(parseTxtRecords('"path=/api" "tls=0"')).toEqual({ path: "/api", tls: "0" });
   });
-  it("greedily consumes everything after = on bare input (parity with Python)", () => {
-    // The pattern "[^"]*" greedily eats spaces; this matches the Python
-    // regex used in src/ariaflow_server/discovery.py.
+  it("greedily consumes everything after = on bare input", () => {
+    // The pattern "[^"]*" greedily eats spaces, so a bare unquoted run
+    // collapses into a single value.
     expect(parseTxtRecords("path=/api tls=0")).toEqual({ path: "/api tls=0" });
   });
   it("returns {} for empty input", () => {

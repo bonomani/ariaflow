@@ -44,8 +44,8 @@ const stampNow = (): string => new Date().toISOString();
  *     error_at / removed_at;
  *   - record a "transition" action per state change.
  *
- * Mirrors the per-iteration polling block inside scheduler.process_queue.
- * Composes existing helpers and stays free of session / bandwidth concerns.
+ * Composes existing helpers and stays free of session / bandwidth
+ * concerns.
  */
 export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
   const items = await deps.queueStore.load();

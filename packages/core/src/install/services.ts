@@ -73,7 +73,7 @@ export function buildAria2Plist(opts: {
 
 /**
  * Render the systemd user unit for the aria2 RPC daemon. Pure: caller
- * passes the resolved aria2c path. Mirrors platform/linux.py::_build_unit.
+ * passes the resolved aria2c path.
  */
 export function buildAria2SystemdUnit(opts: {
   binPath: string;

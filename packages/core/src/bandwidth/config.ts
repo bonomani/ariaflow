@@ -15,10 +15,10 @@ const clampPct = (v: unknown): number =>
 const clampAbs = (v: unknown): number => Math.max(0, Number(v) || 0);
 
 /**
- * Resolve the bandwidth config from a declaration, mirroring Python's
- * bandwidth.bandwidth_config(): pct clamped to [0,100], abs >= 0,
- * probe_interval_seconds with a floor of 30. The use_percent fields
- * are derived from free_percent so callers don't recompute them.
+ * Resolve the bandwidth config from a declaration: pct clamped to
+ * [0,100], abs >= 0, probe_interval_seconds with a floor of 30. The
+ * use_percent fields are derived from free_percent so callers don't
+ * recompute them.
  */
 export function bandwidthConfigFrom(declaration: Declaration): BandwidthConfig {
   const downFreePct = clampPct(prefValue(declaration, "bandwidth_down_free_percent", 20));

@@ -23,10 +23,7 @@ export interface UccEnvelope {
   result: UccResult;
 }
 
-/**
- * Build the canonical UCC v2.0 response envelope.
- * Mirrors src/ariaflow_server/ucc.py::ucc_envelope.
- */
+/** Build the canonical UCC v2.0 response envelope. */
 export function uccEnvelope(input: UccEnvelopeInput): UccEnvelope {
   const result: UccResult = {
     observation: input.observed ? "ok" : "failed",
@@ -48,6 +45,3 @@ export function uccEnvelope(input: UccEnvelopeInput): UccEnvelope {
     result,
   };
 }
-
-/** Alias preserved for parity with the Python module. */
-export const uccRecord = uccEnvelope;

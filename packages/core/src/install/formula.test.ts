@@ -69,7 +69,7 @@ describe("renderFormula", () => {
     expect(text).toContain("service do");
     expect(text).toContain("--scheduler");
     expect(text).toMatch(/keep_alive true/);
-    // No Python residue.
+    // Regression: no leftover toolchain references.
     expect(text).not.toContain("portalocker");
     expect(text).not.toContain("python3");
     // Version stamp into cli/package.json so ariaflow --version is

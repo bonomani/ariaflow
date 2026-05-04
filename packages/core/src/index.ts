@@ -45,7 +45,7 @@ export {
   type GateSignals,
   type UCCResult,
 } from "./contracts/preflight.js";
-export { uccEnvelope, uccRecord, type UccEnvelope, type UccResult } from "./contracts/ucc.js";
+export { uccEnvelope, type UccEnvelope, type UccResult } from "./contracts/ucc.js";
 
 // aria2
 export { Aria2Client, Aria2RpcError, type Aria2ClientOptions } from "./aria2/client.js";

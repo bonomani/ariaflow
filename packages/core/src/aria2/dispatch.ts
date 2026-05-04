@@ -26,8 +26,8 @@ export function dispatchPrefsFrom(declaration: Declaration): DispatchPrefs {
  * Hand a queue item to aria2 using the appropriate RPC for its mode.
  * Returns the resulting GID (the first GID for metalink batches).
  *
- * Mirrors aria2_rpc.aria2_add_download. Pure-async: takes the client +
- * resolved prefs + bandwidth cap as inputs; no storage, no contracts read.
+ * Pure-async: takes the client + resolved prefs + bandwidth cap as
+ * inputs; no storage, no contracts read.
  */
 export async function dispatchDownload(
   client: Aria2Client,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { uccEnvelope, uccRecord } from "./ucc.js";
+import { uccEnvelope } from "./ucc.js";
 
 describe("uccEnvelope", () => {
   it("emits the canonical UCC v2.0 meta + result shape", () => {
@@ -55,9 +55,5 @@ describe("uccEnvelope", () => {
       reason: "aggregate",
       target: "x",
     });
-  });
-
-  it("uccRecord is an alias of uccEnvelope", () => {
-    expect(uccRecord).toBe(uccEnvelope);
   });
 });

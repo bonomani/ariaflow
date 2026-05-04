@@ -33,10 +33,9 @@ export type ChangeOptionsValidation =
 
 /**
  * Pure validator for the body of POST /api/aria2/change_global_option.
- * Mirrors aria2_rpc.aria2_change_options' pre-RPC checks: forbids
- * managed-set options, rejects everything outside SAFE_ARIA2_OPTIONS
- * unless `aria2_unsafe_options` preference is true, and demands a
- * non-empty body.
+ * Forbids managed-set options, rejects everything outside
+ * SAFE_ARIA2_OPTIONS unless the `aria2_unsafe_options` preference is
+ * true, and demands a non-empty body.
  */
 export function validateChangeOptions(
   payload: unknown,

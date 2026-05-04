@@ -2,8 +2,8 @@ import { prefValue, type Declaration } from "../contracts/declaration.js";
 
 /**
  * Generate a readable failure message for an RPC error during a named
- * action (pause/resume/etc). Mirrors transfers._rpc_failure_message:
- * prefer the error's own text, otherwise classify by name suffix.
+ * action (pause/resume/etc). Prefers the error's own text, otherwise
+ * classifies by name suffix.
  */
 export function rpcFailureMessage(action: string, err: unknown): string {
   if (err instanceof Error) {

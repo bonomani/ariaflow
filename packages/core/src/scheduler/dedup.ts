@@ -30,10 +30,9 @@ export interface DeduplicateResult {
  *   - "pause":  aria2.pause(gid)
  *   - "ignore": no-op (still returns the kept list)
  *
- * Mirrors reconcile.deduplicate_active_transfers. The keeper is chosen
- * by rankActiveInfos (Phase 11) — descending by [percent, completed,
- * speed] — same algorithm Python used. RPC failures on the duplicate
- * side don't abort the pass; the next iteration retries.
+ * The keeper is chosen by rankActiveInfos — descending by
+ * [percent, completed, speed]. RPC failures on the duplicate side
+ * don't abort the pass; the next iteration retries.
  *
  * Records a "deduplicate" action when anything changed.
  */

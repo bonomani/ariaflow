@@ -259,10 +259,9 @@ describe("cmdServe", () => {
   });
 
   it("BG-23: /api/version reports a semver string when no override is passed", async () => {
-    // After the Python tree was retired, the only stamp source is
-    // packages/cli/package.json (set by release-npm.yml on tag push).
-    // In a fresh checkout it's the placeholder 0.0.0; either way the
-    // shape must be a valid semver.
+    // The only stamp source is packages/cli/package.json (set by
+    // release-npm.yml on tag push). In a fresh checkout it's the
+    // placeholder 0.0.0; either way the shape must be a valid semver.
     const handle = await cmdServe(ctx, { host: "127.0.0.1", port: 0 });
     try {
       const res = await fetch(`${handle.url}/api/version`);

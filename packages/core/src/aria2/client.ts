@@ -21,7 +21,7 @@ export interface Aria2ClientOptions {
   defaultTimeoutMs?: number;
   /** Override fetch (for tests). Defaults to globalThis.fetch. */
   fetch?: typeof fetch;
-  /** RPC `id` field; mirrors Python's "ariaflow-server". */
+  /** RPC `id` field; defaults to "ariaflow-server". */
   rpcId?: string;
   /** Optional aria2 RPC secret token (passed as `token:<secret>` first param). */
   secret?: string;

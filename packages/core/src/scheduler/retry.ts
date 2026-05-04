@@ -35,9 +35,9 @@ const numberPref = (decl: Declaration, name: string, fallback: number): number =
  *     once per item (idempotent — we only emit when the item lacks the
  *     retry_exhausted_at stamp).
  *
- * Mirrors the auto-retry tier in scheduler.process_queue. Pure of RPC
- * concerns: the actual aria2 re-add happens on the next runSchedulerTick
- * once the row is back in "queued" with retry_at <= now.
+ * Pure of RPC concerns: the actual aria2 re-add happens on the next
+ * runSchedulerTick once the row is back in "queued" with
+ * retry_at <= now.
  */
 export async function runRetryPass(deps: RetryDeps, now: number = Date.now()): Promise<RetryResult> {
   const declaration = await deps.declarationStore.load();

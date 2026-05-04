@@ -5,9 +5,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import lockfile from "proper-lockfile";
 
 /**
- * Reentrant async storage lock.
- *
- * Mirrors Python's `storage_locked()`:
+ * Reentrant async storage lock:
  * - exclusive across processes via a sentinel file (proper-lockfile),
  * - reentrant within the same async context: a nested `with()` call from
  *   inside an already-held section runs immediately, without queuing.

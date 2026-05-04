@@ -36,8 +36,8 @@ export interface PostActionResult {
 /**
  * Run the configured post-action policy for a single completed item.
  *
- * Today this implements only the auto-distribute branch from
- * queue_ops.post_action: when the item carries `distribute=true` (or
+ * Today this implements only the auto-distribute branch: when the
+ * item carries `distribute=true` (or
  * the global pref `distribute_completed_downloads` is set) AND an
  * `internal_tracker_url` is configured AND the item is HTTP-source,
  * read the downloaded file off disk, build a private .torrent in

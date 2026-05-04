@@ -90,7 +90,7 @@ const NUMERIC_KEYS = ["download_speed", "completed_length", "total_length"] as c
 /**
  * Merge two duplicate queue rows in place: empty primary fields are
  * filled from candidate; numeric fields take the larger value.
- * Returns true if anything changed. Mirrors reconcile._merge_queue_rows.
+ * Returns true if anything changed.
  */
 export function mergeQueueRows(primary: QueueItemRecord, candidate: QueueItemRecord): boolean {
   let changed = false;
@@ -135,8 +135,7 @@ export function mergeQueueRows(primary: QueueItemRecord, candidate: QueueItemRec
 
 /**
  * Normalize a single queue row so live_status/status/recovery flags
- * agree. Returns true on any in-place mutation. Mirrors
- * reconcile._normalize_queue_row.
+ * agree. Returns true on any in-place mutation.
  */
 export function normalizeQueueRow(item: QueueItemRecord): boolean {
   let changed = false;

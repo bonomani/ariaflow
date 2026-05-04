@@ -19,7 +19,7 @@ export function shortHostname(): string {
 
 /**
  * Bonjour instance name: the short hostname truncated to <=63 bytes UTF-8
- * (RFC 6763). Mirrors bonjour._instance_name.
+ * (RFC 6763).
  */
 export function instanceName(): string {
   const name = shortHostname();
@@ -60,9 +60,8 @@ const avahiPublishPath = (env?: BonjourEnvironment): string | null =>
   which("avahi-publish-service", env);
 
 /**
- * Pick the available mDNS backend for the current platform. Mirrors
- * bonjour._detect_backend: dns-sd on macOS / Windows, avahi (or dns-sd
- * via WSL interop) on Linux.
+ * Pick the available mDNS backend for the current platform: dns-sd on
+ * macOS / Windows, avahi (or dns-sd via WSL interop) on Linux.
  */
 export function detectBackend(env: BonjourEnvironment = process.env): BonjourBackend | null {
   if (isMacOS() && dnsSdPath(env)) return "dns-sd";

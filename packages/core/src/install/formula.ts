@@ -51,7 +51,7 @@ export interface RenderFormulaInput {
  * Node + aria2, builds the workspace via Corepack-pinned pnpm,
  * flattens @ariaflow/cli into libexec, then writes thin bin shims
  * for both `ariaflow` (canonical) and `ariaflow-server` (back-compat
- * with users who scripted against the legacy Python binary name).
+ * with users who scripted against the legacy binary name).
  *
  * The brew service stanza launches `ariaflow serve --scheduler` on
  * 127.0.0.1:8000 so the user gets a working downloader once aria2 is

@@ -9,8 +9,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * missing or unparseable. On a parse error the file is preserved at
  * `<path>.corrupt.bak` (best-effort) before returning the default.
  *
- * One short retry mirrors the Python implementation's tolerance for a
- * concurrent write that hasn't yet completed its atomic rename.
+ * One short retry tolerates a concurrent write that hasn't yet
+ * completed its atomic rename.
  */
 export async function readJson<T>(path: string, defaultValue: T): Promise<T> {
   if (!existsSync(path)) return defaultValue;
@@ -51,8 +51,7 @@ function stringifySorted(value: unknown): string {
 }
 
 function replacerSortKeys() {
-  // Sort object keys recursively for deterministic output (parity with
-  // Python's json.dumps(..., sort_keys=True)).
+  // Sort object keys recursively for deterministic output.
   return function (this: unknown, _key: string, val: unknown): unknown {
     if (val && typeof val === "object" && !Array.isArray(val)) {
       const sorted: Record<string, unknown> = {};

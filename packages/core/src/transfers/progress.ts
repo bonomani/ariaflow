@@ -23,8 +23,6 @@ const num = (v: unknown): number => {
  * Build the TransferSummary shape used by the /api/active endpoint
  * and CLI status output, given an aria2 tellStatus payload + a known
  * URL. Percent is computed only when totalLength > 0.
- *
- * Mirrors the per-info mapper inside transfers.discover_active_transfer.
  */
 export function buildTransferSummary(
   info: Aria2Status,

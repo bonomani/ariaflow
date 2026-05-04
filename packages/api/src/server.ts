@@ -582,9 +582,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // alias for clients that can't issue PATCH.
   app.patch("/api/declaration/preferences", (req, reply) => patchPreferences(req.body, reply));
 
-  // Stub /api/tests so the documented endpoint exists. The Python
-  // version actually runs the project's test suite — that's a TS-build
-  // concern (vitest invocation) so this just reports availability.
+  // Stub /api/tests so the documented endpoint exists. In-server test
+  // execution is intentionally out of scope; users run `pnpm test` on
+  // the host.
   app.get("/api/tests", async () => ({
     ok: true,
     available: false,
@@ -598,8 +598,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return { ok: true, limit, entries };
   });
 
-  // /api/log mirrors the Python route's {items} shape — a clamped tail
-  // of actions.jsonl. Default limit 120, max 500 (matches Python).
+  // /api/log returns a clamped tail of actions.jsonl in {items} shape.
+  // Default limit 120, max 500.
   // BG-24 cosmetic nit: emit `ok: true` so the response is consistent
   // with every other backend endpoint (frontend gate is
   // `data?.ok !== false` so the missing-key form was working, but the

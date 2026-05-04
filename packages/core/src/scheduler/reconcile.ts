@@ -35,7 +35,7 @@ const stampNow = (): string => new Date().toISOString();
 
 /**
  * Walk aria2's active list, match each GID to a queue row, and merge
- * live state back. Mirrors reconcile.reconcile_live_queue:
+ * live state back:
  *
  *   - GID matches a row: refresh status / live_status / url; if the row
  *     belongs to a stale session, stamp recovery_session_id +

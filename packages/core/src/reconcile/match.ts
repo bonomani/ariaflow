@@ -9,7 +9,7 @@ const urlTail = (url: string): string =>
 /**
  * Find the queue row that corresponds to an aria2 active job.
  *
- * Matching strategy (mirrors reconcile._queue_item_for_active_info):
+ * Matching strategy:
  *   1. exact gid match across all items
  *   2. exact url match across all items
  *   3. tail-of-path url match across all items

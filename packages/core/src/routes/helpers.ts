@@ -22,7 +22,7 @@ export function validateItemId(itemId: string): boolean {
 
 /**
  * Reject unsafe download URLs. Returns null on accept, or a human
- * message describing the problem. Mirrors downloads._validate_url.
+ * message describing the problem.
  */
 export function validateUrl(url: string): string | null {
   if (url.startsWith("magnet:")) return null;
@@ -32,10 +32,8 @@ export function validateUrl(url: string): string | null {
   } catch {
     return "malformed URL";
   }
-  // URL parses `http:foo` with empty hostname; surface that as "no scheme"
-  // for parity with Python's urlparse — but Python urlparse extracts
-  // "http" as scheme. Keep the scheme path consistent and only trip the
-  // "must include scheme" branch when truly empty.
+  // URL parses `http:foo` with empty hostname; only trip the "must
+  // include scheme" branch when the protocol is truly empty.
   const scheme = parsed.protocol.replace(/:$/, "").toLowerCase();
   if (!scheme) {
     return "URL must include a scheme (http://, https://, ftp://, sftp://, magnet:)";
@@ -54,8 +52,7 @@ export function validateUrl(url: string): string | null {
 
 /**
  * Reject unsafe output paths: must be relative, free of `..` and hidden
- * directories, and confined to the resolved cwd. Mirrors
- * downloads._validate_output_path.
+ * directories, and confined to the resolved cwd.
  *
  * Caller injects the resolution helpers so this stays pure (and so tests
  * can pin a fixed cwd / Path resolver).
@@ -85,7 +82,7 @@ const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
 /**
  * Strict base64 validator (RFC 4648 alphabet, 1-2 trailing `=`, length %4).
- * Mirrors `base64.b64decode(s, validate=True)` — empty strings reject.
+ * Empty strings reject.
  */
 export function isValidBase64(value: string): boolean {
   if (!value) return false;

@@ -90,7 +90,7 @@ export class ActionLog {
     });
   }
 
-  /** High-level convenience matching Python state.record_action. */
+  /** High-level convenience for recording an action. */
   record(input: RecordActionInput): Promise<ActionLogEntry> {
     const entry: ActionLogEntry = {
       action: input.action,

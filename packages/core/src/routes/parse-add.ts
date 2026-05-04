@@ -30,8 +30,7 @@ const trimmedString = (v: unknown): string =>
  * Validate and normalize the body of POST /api/downloads.
  *
  * Returns either the parsed items array or an `errorPayload` describing
- * the first invalid item. Mirrors downloads._parse_add_items but takes
- * the cwd injectable so tests can pin it.
+ * the first invalid item. The cwd is injectable so tests can pin it.
  */
 export function parseAddItems(
   payload: unknown,

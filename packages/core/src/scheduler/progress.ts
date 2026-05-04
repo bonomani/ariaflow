@@ -19,8 +19,6 @@ export interface ActiveProgress {
  * Probe aria2 for the currently-active item's progress. Returns null
  * when no `active_gid` is recorded; returns a partial result with `error`
  * set when the RPC call throws.
- *
- * Mirrors scheduler.get_active_progress.
  */
 export async function getActiveProgress(
   client: Aria2Client,

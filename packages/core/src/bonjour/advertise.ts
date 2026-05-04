@@ -28,7 +28,7 @@ export interface AdvertiseOptions {
  * `_ariaflow-server._tcp` so dashboards on the same L2 segment can
  * discover it without configuration.
  *
- * Mirrors bonjour.advertise_http_service:
+ * Backend selection:
  *   - macOS / Windows / WSL: `dns-sd -R ...`
  *   - Linux: `avahi-publish-service ...`
  *   - Unsupported / no backend on PATH: returns a no-op handle.
