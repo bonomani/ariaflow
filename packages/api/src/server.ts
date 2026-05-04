@@ -15,26 +15,36 @@ import {
   planAutoCleanup,
   Aria2Client,
   bandwidthConfigFrom,
+  bandwidthUnits,
   buildTransferSummary,
   DeclarationStore,
+  detectServiceTarget,
   errorPayload,
   EventBus,
   evaluatePreflight,
+  findAria2c,
   getActiveProgress,
+  install as installNs,
+  installAria2Service,
   MANAGED_ARIA2_OPTIONS,
   parseAddItems,
+  prefValue,
   QueueStore,
   rankActiveInfos,
+  runBandwidthProbe,
   SAFE_ARIA2_OPTIONS,
+  scheduler as schedulerHelpers,
   SessionService,
   StateStore,
   summarizeQueue,
+  uninstallAria2Service,
   validateChangeOptions,
   validateItemId,
   type Declaration,
   type ParsedAddItem,
   type QueueOps,
 } from "@ariaflow/core";
+import { generateOpenApi } from "./openapi.js";
 
 export interface ServerDeps {
   queueOps: QueueOps;
@@ -663,15 +673,14 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       // checkDiskSpace() so a low-disk warning surfaces here too.
       let diskOk = true;
       try {
-        const core = await import("@ariaflow/core");
         const declaration = await deps.declarationStore.load();
-        const max = core.scheduler.maxDiskPercent(declaration);
+        const max = schedulerHelpers.maxDiskPercent(declaration);
         const downloadDirPref = String(
-          core.prefValue(declaration, "download_dir", "") ?? "",
+          prefValue(declaration, "download_dir", "") ?? "",
         );
         const probePath = downloadDirPref || process.cwd();
         const { statfsSync } = await import("node:fs");
-        diskOk = core.scheduler.checkDiskSpace({
+        diskOk = schedulerHelpers.checkDiskSpace({
           maxPercent: max,
           probe: () => {
             if (typeof statfsSync !== "function") return null;
@@ -797,7 +806,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   });
 
   app.get("/api/openapi", async () => {
-    const { generateOpenApi } = await import("./openapi.js");
     return generateOpenApi(app);
   });
 
@@ -867,10 +875,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   });
 
   app.post("/api/bandwidth/probe", async (_req, reply) => {
-    const core = await import("@ariaflow/core");
     const declaration = await deps.declarationStore.load();
     const config = bandwidthConfigFrom(declaration);
-    const runProbe = deps.runBandwidthProbe ?? core.runBandwidthProbe;
+    const runProbe = deps.runBandwidthProbe ?? runBandwidthProbe;
     const probeRec = await runProbe({ config });
     const downCap = probeRec.down_cap_mbps;
     const upCap = probeRec.up_cap_mbps;
@@ -890,7 +897,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         /* RPC failure is logged-only; the probe still applies locally */
       }
       const upCapBytes = Math.trunc(
-        Number(probeRec.up_cap_mbps ?? 0) * core.bandwidthUnits.BYTES_PER_MEGABIT,
+        Number(probeRec.up_cap_mbps ?? 0) * bandwidthUnits.BYTES_PER_MEGABIT,
       );
       if (upCapBytes > 0) {
         try {
@@ -1451,7 +1458,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   });
 
   app.get("/api/lifecycle", async () => {
-    const core = await import("@ariaflow/core");
     const { existsSync } = await import("node:fs");
     const state = await deps.stateStore.load();
 
@@ -1488,7 +1494,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     // (running). `current` only meaningful when installed=true; we
     // don't ship an expected aria2 version so it stays null (true if
     // RPC succeeds, since whatever's there is what we use).
-    const aria2BinPath = core.findAria2c();
+    const aria2BinPath = findAria2c();
     const aria2Installed = Boolean(aria2BinPath);
     let aria2Running = false;
     let aria2Version: string | null = null;
@@ -1550,7 +1556,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     // networkquality: system binary, no version policy → current=null.
     // running is derived from "last probe used networkquality recently"
     // — the only honest signal we have without re-running the probe.
-    const nq = core.install.networkqualityStatus();
+    const nq = installNs.networkqualityStatus();
     const probe = (state.last_bandwidth_probe ?? null) as Record<string, unknown> | null;
     const lastProbeAt = Number(state.last_bandwidth_probe_at ?? 0);
     const probeFresh = lastProbeAt > 0 && Date.now() / 1000 - lastProbeAt < 3600;
@@ -1579,7 +1585,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     // an installable binary — installed/current are null. running
     // proxies through aria2's RPC reachability: launchd's job is to
     // keep aria2 up, so if RPC works the unit is doing its job.
-    const target = core.detectServiceTarget();
+    const target = detectServiceTarget();
     const home = (await import("node:os")).homedir();
     const installedPath =
       target === "aria2-launchd"
@@ -1627,7 +1633,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.post<{ Params: { target: string; action: string }; Querystring: { dry_run?: string } }>(
     "/api/lifecycle/:target/:action",
     async (req, reply) => {
-      const core = await import("@ariaflow/core");
       const target = req.params.target;
       const action = req.params.action;
       const dryRun = req.query?.dry_run === "1" || req.query?.dry_run === "true";
@@ -1642,7 +1647,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       try {
         let result: Record<string, unknown>;
         if (ARIA2_SERVICE_TARGETS.has(target) && action === "install") {
-          const out = await core.installAria2Service({ dryRun });
+          const out = await installAria2Service({ dryRun });
           result = {
             [out.target]: {
               ok: out.ok,
@@ -1651,7 +1656,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
             },
           };
         } else if (ARIA2_SERVICE_TARGETS.has(target) && action === "uninstall") {
-          const out = await core.uninstallAria2Service({ dryRun });
+          const out = await uninstallAria2Service({ dryRun });
           result = {
             [out.target]: {
               ok: out.ok,
