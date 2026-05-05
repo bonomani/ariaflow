@@ -1758,6 +1758,15 @@ describe("GET /api/lifecycle", () => {
     expect(body["aria2-launchd"].result).toHaveProperty("reason");
     expect(["match", "missing", "stopped"]).toContain(body["aria2-launchd"].result.reason);
 
+    // BG-44 phase 1: aria2.result.auto_start sub-object surfaces the
+    // auto-start mechanism alongside the legacy aria2-launchd row.
+    expect(body.aria2.result.auto_start).toMatchObject({
+      installed: expect.any(Boolean),
+    });
+    expect(["launchd", "systemd", null]).toContain(
+      body.aria2.result.auto_start.target,
+    );
+
     expect(body.session_id).toBeNull();
     expect(body.session_closed_at).toBeNull();
   });

@@ -24,6 +24,41 @@ import type { RouteContext } from "./_context.js";
 
 const PENDING = new Set(["queued", "waiting", "active"]);
 const LAUNCHD_PLIST = `${homedir()}/Library/LaunchAgents/com.ariaflow-server.aria2.plist`;
+const SYSTEMD_UNIT = `${homedir()}/.config/systemd/user/ariaflow-server-aria2.service`;
+
+interface AutoStart {
+  installed: boolean;
+  target: "launchd" | "systemd" | null;
+  path: string | null;
+}
+
+/**
+ * Phase 1 of the proposed BG-44 consolidation: surface aria2's
+ * auto-start mechanism on the aria2 row itself. The standalone
+ * `aria2-launchd` row is unchanged for now (back-compat), giving the
+ * frontend a deprecation cycle to migrate before the row is removed.
+ *
+ * `target` is platform-detected (no auto-start mechanism on
+ * Windows / unknown → null). `installed` checks for the actual file.
+ */
+function detectAria2AutoStart(): AutoStart {
+  if (existsSync(LAUNCHD_PLIST)) {
+    return { installed: true, target: "launchd", path: LAUNCHD_PLIST };
+  }
+  if (existsSync(SYSTEMD_UNIT)) {
+    return { installed: true, target: "systemd", path: SYSTEMD_UNIT };
+  }
+  // Per the platform we know how to install onto: report the prospective
+  // path as `path` (so the FE can display "would install to ...") with
+  // installed=false.
+  if (process.platform === "darwin") {
+    return { installed: false, target: "launchd", path: LAUNCHD_PLIST };
+  }
+  if (process.platform === "linux") {
+    return { installed: false, target: "systemd", path: SYSTEMD_UNIT };
+  }
+  return { installed: false, target: null, path: null };
+}
 
 interface ComponentRow {
   result: Record<string, unknown>;
@@ -116,6 +151,10 @@ function buildAria2Row(
       running: probe.running,
       expected_running: expectedRunning,
       managed_by: managedBy,
+      // Phase 1 of BG-44 consolidation: auto-start is now a
+      // sub-object on the aria2 row. The standalone aria2-launchd
+      // row is still emitted for back-compat (FE migration window).
+      auto_start: detectAria2AutoStart(),
       reason: probe.running ? "match" : probe.installed ? "stopped" : "missing",
       outcome: probe.running
         ? "installed · current"
