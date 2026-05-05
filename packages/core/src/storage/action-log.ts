@@ -79,7 +79,7 @@ export class ActionLog {
   }
 
   /** Low-level append. Stamps timestamp + session_id if not already set. */
-  async append(entry: ActionLogEntry): Promise<ActionLogEntry> {
+  private async append(entry: ActionLogEntry): Promise<ActionLogEntry> {
     return this.lock.with(async () => {
       const path = actionLogPath(this.env);
       const payload: ActionLogEntry = { ...entry };

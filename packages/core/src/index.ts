@@ -34,7 +34,7 @@ export type {
 export { ITEM_STATUSES, TERMINAL_STATUSES } from "./queue/types.js";
 export { QueueOps, type AddInput, type AddResult } from "./queue/ops.js";
 export { allowedActions, detectDownloadMode, summarizeQueue } from "./queue/policy.js";
-export { findItemById, findItemByGid, findLiveItemByUrl } from "./queue/lookup.js";
+export { findLiveItemByUrl } from "./queue/lookup.js";
 
 // Contracts
 export {

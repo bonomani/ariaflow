@@ -10,7 +10,7 @@ import { ArchiveStore, QueueStore } from "../storage/queue.js";
 import { SessionService } from "../storage/sessions.js";
 import { StateStore } from "../storage/state.js";
 import { QueueOps } from "./ops.js";
-import { findItemByGid, findLiveItemByUrl } from "./lookup.js";
+import { findLiveItemByUrl } from "./lookup.js";
 
 let dir: string;
 let env: NodeJS.ProcessEnv;
@@ -109,14 +109,6 @@ describe("QueueOps.transitionStatus / remove", () => {
 });
 
 describe("lookup helpers", () => {
-  it("findItemByGid skips terminal items", () => {
-    const items = [
-      { id: "1", url: "u", gid: "g1", status: "complete" },
-      { id: "2", url: "u", gid: "g1", status: "active" },
-    ];
-    expect(findItemByGid(items, "g1")!.id).toBe("2");
-  });
-
   it("findLiveItemByUrl returns null when only terminal copies exist", () => {
     const items = [{ id: "1", url: "u", status: "complete" }];
     expect(findLiveItemByUrl(items, "u")).toBeNull();
