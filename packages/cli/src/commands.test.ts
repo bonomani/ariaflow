@@ -332,7 +332,9 @@ describe("cmdDashboard", () => {
     await cmdAdd(ctx, "http://h/x");
     const r = await cmdDashboard(ctx);
     const body = JSON.parse(r.stdout);
-    expect(body.scheduler.status).toBe("starting");
+    // BG-40: fresh state has scheduler_intent="stopped" by default;
+    // deriveSchedulerStatus returns "stopped" until /start fires.
+    expect(body.scheduler.status).toBe("stopped");
     expect(body.queue.total).toBe(1);
     expect(body.queue.queued).toBe(1);
     expect(body.bandwidth.config.probe_interval_seconds).toBeGreaterThanOrEqual(30);
@@ -342,7 +344,7 @@ describe("cmdDashboard", () => {
 
   it("--pretty emits a human layout including the no-probe hint", async () => {
     const r = await cmdDashboard(ctx, { pretty: true });
-    expect(r.stdout).toContain("Scheduler: starting");
+    expect(r.stdout).toContain("Scheduler: stopped");
     expect(r.stdout).toContain("Queue: total=0");
     expect(r.stdout).toContain("Bandwidth: no probe yet");
     expect(r.stdout).toContain("Declaration: UCC v2.0");

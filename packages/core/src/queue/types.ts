@@ -57,6 +57,17 @@ export interface QueueItemRecord {
   session_history?: Array<Record<string, string>> | null;
   completed_length?: string | number | null;
   /**
+   * Recovery / retry bookkeeping. Set by the scheduler reconcile +
+   * retry passes when an item is adopted from a stale aria2 session
+   * or scheduled for re-dispatch.
+   */
+  recovered?: boolean;
+  retry_at?: string | null;
+  retry_count?: number;
+  retry_exhausted_at?: string | null;
+  /** File listing populated by the aria2 poller (per-file metadata). */
+  files?: unknown[];
+  /**
    * Distribution / seeding fields stamped by the post-action seed flow.
    * Optional because most items never become seed sources. Surfaced by
    * `/api/torrents` and the seed-stop / torrent-file routes.

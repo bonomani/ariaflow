@@ -1,3 +1,4 @@
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { aria2, errorPayload } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
 import type { RouteContext } from "./_context.js";
@@ -49,7 +50,6 @@ export function registerTorrentsRoutes({ app, deps }: RouteContext): void {
       const torrentPath = item.distribute_torrent_path;
       if (torrentPath) {
         try {
-          const { unlinkSync, existsSync } = await import("node:fs");
           if (existsSync(torrentPath)) unlinkSync(torrentPath);
         } catch {
           /* best-effort cleanup */
@@ -82,7 +82,6 @@ export function registerTorrentsRoutes({ app, deps }: RouteContext): void {
     if (!match || !torrentPath) {
       return reply.code(404).send(errorPayload("not_found", "torrent not found"));
     }
-    const { existsSync, readFileSync } = await import("node:fs");
     if (!existsSync(torrentPath)) {
       return reply.code(404).send(errorPayload("not_found", "torrent not found"));
     }

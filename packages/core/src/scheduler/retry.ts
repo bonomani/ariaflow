@@ -55,11 +55,10 @@ export async function runRetryPass(deps: RetryDeps, now: number = Date.now()): P
 
   for (const item of items) {
     if (item.status !== "error") continue;
-    const rec = item as Record<string, unknown>;
-    const currentRetries = isFiniteNum(rec.retry_count) ? rec.retry_count : 0;
+    const currentRetries = isFiniteNum(item.retry_count) ? item.retry_count : 0;
     if (currentRetries >= maxRetries) {
-      if (!rec.retry_exhausted_at) {
-        rec.retry_exhausted_at = new Date(now).toISOString();
+      if (!item.retry_exhausted_at) {
+        item.retry_exhausted_at = new Date(now).toISOString();
         dirty = true;
         await deps.actionLog.record({
           action: "retry_exhausted",
@@ -75,8 +74,8 @@ export async function runRetryPass(deps: RetryDeps, now: number = Date.now()): P
     const nextCount = currentRetries + 1;
     const delayMs = backoffSec * nextCount * 1000;
     const retryAt = new Date(now + delayMs).toISOString();
-    rec.retry_count = nextCount;
-    rec.retry_at = retryAt;
+    item.retry_count = nextCount;
+    item.retry_at = retryAt;
     item.status = "queued";
     item.gid = null;
     item.live_status = null;
@@ -108,9 +107,8 @@ export async function runRetryPass(deps: RetryDeps, now: number = Date.now()): P
  * future `retry_at` timestamp must wait — the tick filter calls this.
  */
 export function isRetryReady(item: QueueItemRecord, now: number = Date.now()): boolean {
-  const rec = item as Record<string, unknown>;
-  const retryAt = rec.retry_at;
-  if (typeof retryAt !== "string" || !retryAt) return true;
+  const retryAt = item.retry_at;
+  if (!retryAt) return true;
   const ms = Date.parse(retryAt);
   return !Number.isFinite(ms) || ms <= now;
 }

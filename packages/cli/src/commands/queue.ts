@@ -1,13 +1,15 @@
+import { existsSync, unlinkSync } from "node:fs";
 import { allowedActions, planAutoCleanup, summarizeQueue } from "@ariaflow/core";
 import type { CliContext } from "../context.js";
-import { fail, json, ok, type CmdResult } from "./_shared.js";
+import { fail, json, ok, requireArg, type CmdResult } from "./_shared.js";
 
 export async function cmdAdd(
   ctx: CliContext,
   url: string,
   opts: { output?: string; priority?: number; pretty?: boolean } = {},
 ): Promise<CmdResult> {
-  if (!url) return fail("error: url is required\n");
+  const guard = requireArg("url", url);
+  if (guard) return guard;
   const { item, duplicate } = await ctx.queueOps.add({
     url,
     output: opts.output ?? null,
@@ -49,21 +51,24 @@ export async function cmdList(
 }
 
 export async function cmdRemove(ctx: CliContext, itemId: string): Promise<CmdResult> {
-  if (!itemId) return fail("error: id is required\n");
+  const guard = requireArg("id", itemId);
+  if (guard) return guard;
   const removed = await ctx.queueOps.remove(itemId);
   if (!removed) return fail(`error: item ${itemId} not found\n`, 2);
   return ok(json({ removed: removed.id }) + "\n");
 }
 
 export async function cmdPause(ctx: CliContext, itemId: string): Promise<CmdResult> {
-  if (!itemId) return fail("error: id is required\n");
+  const guard = requireArg("id", itemId);
+  if (guard) return guard;
   const next = await ctx.queueOps.transitionStatus(itemId, "paused", "paused_at");
   if (!next) return fail(`error: item ${itemId} not found\n`, 2);
   return ok(json({ id: next.id, status: next.status, paused_at: next.paused_at }) + "\n");
 }
 
 export async function cmdResume(ctx: CliContext, itemId: string): Promise<CmdResult> {
-  if (!itemId) return fail("error: id is required\n");
+  const guard = requireArg("id", itemId);
+  if (guard) return guard;
   const next = await ctx.queueOps.transitionStatus(itemId, "queued", "resumed_at");
   if (!next) return fail(`error: item ${itemId} not found\n`, 2);
   return ok(json({ id: next.id, status: next.status, resumed_at: next.resumed_at }) + "\n");
@@ -73,7 +78,8 @@ export async function cmdSeedStop(
   ctx: CliContext,
   infohash: string,
 ): Promise<CmdResult> {
-  if (!infohash) return fail("error: infohash is required\n");
+  const guard = requireArg("infohash", infohash);
+  if (guard) return guard;
   const items = await ctx.queue.load();
   const item = items.find(
     (i) => i.distribute_infohash === infohash && i.distribute_status === "seeding",
@@ -82,7 +88,6 @@ export async function cmdSeedStop(
   const torrentPath = item.distribute_torrent_path;
   if (torrentPath) {
     try {
-      const { existsSync, unlinkSync } = await import("node:fs");
       if (existsSync(torrentPath)) unlinkSync(torrentPath);
     } catch {
       /* best-effort cleanup */

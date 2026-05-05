@@ -1,5 +1,6 @@
 import {
   bandwidthConfigFrom,
+  deriveSchedulerStatus,
   runBandwidthProbe,
   summarizeQueue,
 } from "@ariaflow/core";
@@ -95,7 +96,10 @@ export async function cmdDashboard(
   const config = bandwidthConfigFrom(declaration);
   const running = Boolean(state.running);
   const paused = Boolean(state.paused);
-  const schedulerStatus = running && paused ? "paused" : running ? "running" : "starting";
+  // BG-40: 5-state enum (stopped|starting|idle|running|paused) sourced
+  // from @ariaflow/core so the CLI dashboard stays coherent with
+  // /api/scheduler.status.
+  const schedulerStatus = deriveSchedulerStatus(state);
   const dashboard = {
     scheduler: {
       status: schedulerStatus,

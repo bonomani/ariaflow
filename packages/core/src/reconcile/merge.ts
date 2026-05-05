@@ -58,7 +58,7 @@ export function queueItemPreference(
     ranks[status] ?? 0,
     coerceFloat(item.completed_length) ?? 0,
     item.gid ? 1 : 0,
-    (item as Record<string, unknown>).recovered ? 1 : 0,
+    item.recovered ? 1 : 0,
   ];
 }
 
@@ -95,23 +95,26 @@ const NUMERIC_KEYS = ["download_speed", "completed_length", "total_length"] as c
 export function mergeQueueRows(primary: QueueItemRecord, candidate: QueueItemRecord): boolean {
   let changed = false;
   const primaryStatus = String(primary.status ?? "").toLowerCase();
-  const p = primary as Record<string, unknown>;
-  const c = candidate as Record<string, unknown>;
 
   for (const key of STRING_KEYS) {
-    if (!p[key] && c[key]) {
-      p[key] = c[key];
+    if (!primary[key] && candidate[key]) {
+      primary[key] = candidate[key];
       changed = true;
     }
   }
   if (primaryStatus !== "complete" && primaryStatus !== "error") {
     for (const key of RECOVERY_KEYS) {
-      if (!p[key] && c[key]) {
-        p[key] = c[key];
+      if (!primary[key] && candidate[key]) {
+        primary[key] = candidate[key];
         changed = true;
       }
     }
   }
+  // NUMERIC_KEYS reach for loosely-typed numeric/string-numeric fields
+  // (download_speed isn't on the typed surface); index-signature access
+  // gives us `unknown`, so coerce + write through the index.
+  const p = primary as Record<string, unknown>;
+  const c = candidate as Record<string, unknown>;
   for (const key of NUMERIC_KEYS) {
     const cv = c[key];
     if (cv === null || cv === undefined) continue;
@@ -122,12 +125,12 @@ export function mergeQueueRows(primary: QueueItemRecord, candidate: QueueItemRec
       changed = true;
     }
   }
-  if (!p.files && c.files) {
-    p.files = c.files;
+  if (!primary.files && candidate.files) {
+    primary.files = candidate.files;
     changed = true;
   }
-  if (c.recovered && !p.recovered) {
-    p.recovered = true;
+  if (candidate.recovered && !primary.recovered) {
+    primary.recovered = true;
     changed = true;
   }
   return changed;
@@ -151,14 +154,13 @@ export function normalizeQueueRow(item: QueueItemRecord): boolean {
       changed = true;
     }
   } else if (status === "complete" && item.live_status !== undefined && item.live_status !== null) {
-    delete (item as Record<string, unknown>).live_status;
+    delete item.live_status;
     changed = true;
   }
   if (status === "complete") {
-    const r = item as Record<string, unknown>;
-    for (const k of ["recovered", "recovered_at", "recovery_session_id"]) {
-      if (r[k] !== undefined && r[k] !== null) {
-        delete r[k];
+    for (const k of ["recovered", "recovered_at", "recovery_session_id"] as const) {
+      if (item[k] !== undefined && item[k] !== null) {
+        delete item[k];
         changed = true;
       }
     }

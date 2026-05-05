@@ -81,20 +81,20 @@ export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
     // /api/status.items[]). Snake-case aliases stay for any internal
     // caller that depended on them. Mutations here mark the row dirty
     // so the queue store actually persists the refresh.
-    const obj = item as Record<string, unknown>;
     const setField = (key: string, value: unknown): void => {
       if (value === undefined) return;
-      if (obj[key] !== value) {
-        obj[key] = value;
+      if (item[key] !== value) {
+        item[key] = value;
         dirty = true;
       }
     };
+    const infoRec = info as Record<string, unknown>;
     setField("downloadSpeed", info.downloadSpeed);
     setField("uploadSpeed", info.uploadSpeed);
     setField("completedLength", info.completedLength);
     setField("totalLength", info.totalLength);
-    setField("connections", (info as Record<string, unknown>).connections);
-    setField("numSeeders", (info as Record<string, unknown>).numSeeders);
+    setField("connections", infoRec.connections);
+    setField("numSeeders", infoRec.numSeeders);
     setField("download_speed", info.downloadSpeed);
     setField("completed_length", info.completedLength);
     setField("total_length", info.totalLength);

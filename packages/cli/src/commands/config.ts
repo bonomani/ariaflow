@@ -1,12 +1,13 @@
 import type { CliContext } from "../context.js";
-import { fail, json, ok, type CmdResult } from "./_shared.js";
+import { fail, json, ok, requireArg, type CmdResult } from "./_shared.js";
 
 export async function cmdSetPref(
   ctx: CliContext,
   name: string,
   rawValue: string,
 ): Promise<CmdResult> {
-  if (!name) return fail("error: preference name is required\n");
+  const guard = requireArg("preference name", name);
+  if (guard) return guard;
   const declaration = await ctx.declaration.load();
   const pref = declaration.uic.preferences.find((p) => p.name === name);
   if (!pref) return fail(`error: unknown preference: ${name}\n`, 2);

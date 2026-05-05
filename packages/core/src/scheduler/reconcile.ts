@@ -94,7 +94,7 @@ export async function reconcileLiveQueue(
         recovered_at: now,
         live_status: String(info.status ?? "active"),
       };
-      (adopted as Record<string, unknown>).recovered = true;
+      adopted.recovered = true;
       items.push(adopted);
       changed = true;
       recovered += 1;
@@ -118,18 +118,17 @@ export async function reconcileLiveQueue(
     }
     if (liveStatus) item.live_status = liveStatus;
 
-    const rec = item as Record<string, unknown>;
     if (sessionId && item.session_id !== sessionId) {
-      rec.recovered = true;
-      rec.recovery_session_id = sessionId;
-      rec.recovered_at = now;
+      item.recovered = true;
+      item.recovery_session_id = sessionId;
+      item.recovered_at = now;
       item.session_id = sessionId;
       changed = true;
       recovered += 1;
     } else if (liveStatus === "active" && (item.status === "paused" || item.status === "queued")) {
-      rec.recovered = true;
-      rec.recovery_session_id = sessionId;
-      rec.recovered_at = now;
+      item.recovered = true;
+      item.recovery_session_id = sessionId;
+      item.recovered_at = now;
       item.session_id = sessionId;
       changed = true;
       recovered += 1;

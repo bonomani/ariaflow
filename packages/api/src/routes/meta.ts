@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { errorPayload } from "@ariaflow/core";
 import { listFreshness, withMeta } from "../freshness.js";
 import { generateOpenApi } from "../openapi.js";
@@ -64,7 +65,6 @@ export function registerMetaRoutes({ app, deps }: RouteContext): void {
         .code(404)
         .send(errorPayload("not_found", "openapi.yaml path not configured"));
     }
-    const { existsSync, readFileSync } = await import("node:fs");
     if (!existsSync(yamlPath)) {
       return reply
         .code(404)

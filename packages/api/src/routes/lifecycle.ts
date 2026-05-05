@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import {
   detectServiceTarget,
   errorPayload,
@@ -11,7 +13,6 @@ import type { RouteContext } from "./_context.js";
 
 export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
   app.get("/api/lifecycle", async () => {
-    const { existsSync } = await import("node:fs");
     const state = await deps.stateStore.load();
 
     // BG-20 + BG-27: every component record nests under `result`. BG-27
@@ -79,8 +80,7 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
     // unreachable in current code; a launchd plist on disk is the only
     // signal we have for "auto-start (launchd)" — anything else is
     // attributed to "external". null when not running.
-    const launchdPath =
-      `${(await import("node:os")).homedir()}/Library/LaunchAgents/com.ariaflow-server.aria2.plist`;
+    const launchdPath = `${homedir()}/Library/LaunchAgents/com.ariaflow-server.aria2.plist`;
     const launchdInstalled = existsSync(launchdPath);
     const aria2ManagedBy: "ariaflow" | "launchd" | "external" | null = aria2Running
       ? launchdInstalled
@@ -139,7 +139,7 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
     // proxies through aria2's RPC reachability: launchd's job is to
     // keep aria2 up, so if RPC works the unit is doing its job.
     const target = detectServiceTarget();
-    const home = (await import("node:os")).homedir();
+    const home = homedir();
     const installedPath =
       target === "aria2-launchd"
         ? `${home}/Library/LaunchAgents/com.ariaflow-server.aria2.plist`
