@@ -92,6 +92,14 @@ Rules derived from real incidents during development. Each rule exists because w
 **Incident:** API grew organically — `/api/add`, `/api/run`, `/api/pause` mixed with `/api/scheduler/start`, `/api/aria2/change_global_option`. Required a full rename pass.
 **Rule:** Every endpoint follows `POST /api/{resource}/{action}` or `GET /api/{resource}`. Agree on the pattern before adding new endpoints.
 
+### R19: Never spread `ServerState` onto a wire surface — use `toWireState()`
+**Incident:** BG-33 declared `state.paused` an internal-only field; `dispatch_paused` is the canonical name on every wire surface. The strip was originally inlined in `routes/status.ts` only. Two later additions silently bypassed it: R-T's `state_changed` SSE event (carried the full state, leaking `paused`) and `routes/sessions.ts` (4 endpoints returning the full state from `ctx.stateStore.load()` / `sessionService.startNew/close`). Both leaks shipped before the next coherence audit caught them.
+**Rule:** Any code that returns a `ServerState` to a remote consumer — HTTP response body, SSE event payload, or any other transport — MUST go through `toWireState(state)` from `@ariaflow/core`. Never `return { session: state }`, never `bus.publish("event", state)`, never `{...state}` into a response. The single sanitizer enforces the BG-33 contract; bypassing it for a "small" new endpoint will leak.
+
+### R20: Audit-log vocabulary lives in `ACTIONS` / `TARGETS` — never hardcode
+**Incident:** R-O centralized 16 distinct `action` strings and 7 `target` strings into the `ACTIONS` / `TARGETS` const objects in `@ariaflow/core/storage/actions`. The same audit found 13 missed sites in `core/scheduler/{tick,reconcile,poll,loop,retry,post-action,dedup}.ts` and `core/queue/ops.ts` still using literal strings — all introduced before the constants existed. Each literal is a typo waiting to happen and a vocabulary divergence the dashboard's audit-log filters can't catch at compile time.
+**Rule:** `actionLog.record({ action: ACTIONS.X, target: TARGETS.Y, ... })` — always reference the constants. Adding a new audit-log action means extending `ACTIONS` first; the type check then forces every call site to use the new key.
+
 ## Quick Checklist (before every commit)
 
 ```
