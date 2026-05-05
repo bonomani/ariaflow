@@ -38,17 +38,16 @@ export interface RouteContext {
 }
 
 /**
- * Factory for the requireAria2 guard used by /api/aria2/* and a handful
- * of other RPC-coupled routes. Returns null when aria2 is wired (proceed)
- * or the reply (already sent 503) when not.
+ * Guard for /api/aria2/* and other RPC-coupled routes. Returns true and
+ * sends a 503 envelope when no aria2 client is wired; returns false to
+ * let the handler proceed. Caller pattern: `if (requireAria2(deps,
+ * reply)) return;`.
  */
-export const requireAria2Of =
-  (deps: ServerDeps) =>
-  (reply: FastifyReply): FastifyReply | null => {
-    if (deps.aria2) return null;
-    reply.code(503).send(errorPayload("aria2_unavailable", "no aria2 client wired"));
-    return reply;
-  };
+export function requireAria2(deps: ServerDeps, reply: FastifyReply): boolean {
+  if (deps.aria2) return false;
+  reply.code(503).send(errorPayload("aria2_unavailable", "no aria2 client wired"));
+  return true;
+}
 
 /**
  * Reject :id params that aren't a valid UUID before the handler runs.

@@ -14,7 +14,7 @@ import {
 import { withMeta } from "../freshness.js";
 import {
   loadItemOr404,
-  requireAria2Of,
+  requireAria2,
   requireObjectBody,
   sendNotFound,
   sendRpcError,
@@ -23,7 +23,6 @@ import {
 } from "./_context.js";
 
 export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
-  const requireAria2 = requireAria2Of(deps);
 
   const addDownloads = async (
     body: unknown,
@@ -286,7 +285,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
     if (!gid) {
       return reply.code(409).send(errorPayload("no_gid", "item has no aria2 GID"));
     }
-    if (requireAria2(reply)) return;
+    if (requireAria2(deps, reply)) return;
     try {
       const files = await aria2.getFiles(deps.aria2!, gid);
       return { ok: true, item_id: item.id, gid, files };

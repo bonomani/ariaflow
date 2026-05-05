@@ -9,10 +9,9 @@ import {
   validateChangeOptions,
 } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
-import { requireAria2Of, requireObjectBody, sendRpcError, type RouteContext } from "./_context.js";
+import { requireAria2, requireObjectBody, sendRpcError, type RouteContext } from "./_context.js";
 
 export function registerAria2Routes({ app, deps }: RouteContext): void {
-  const requireAria2 = requireAria2Of(deps);
 
   app.get("/api/aria2/option_tiers", async () => {
     const declaration = await deps.declarationStore.load();
@@ -34,7 +33,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
     _req: FastifyRequest,
     reply: FastifyReply,
   ) => {
-    if (requireAria2(reply)) return;
+    if (requireAria2(deps, reply)) return;
     try {
       const opts = await aria2.getGlobalOption(deps.aria2!);
       return withMeta("GET", "/api/aria2/global_option", { ok: true, ...opts });
@@ -47,7 +46,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
     req: FastifyRequest<{ Querystring: { gid?: string } }>,
     reply: FastifyReply,
   ) => {
-    if (requireAria2(reply)) return;
+    if (requireAria2(deps, reply)) return;
     const gid = (req.query?.gid ?? "").trim();
     if (!gid) {
       return reply.code(400).send(errorPayload("missing_gid", "gid query parameter required"));
@@ -64,7 +63,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
   app.get<{ Querystring: { gid?: string } }>("/api/aria2/option", itemOptionsHandler);
 
   app.post("/api/aria2/change_global_option", async (req, reply) => {
-    if (requireAria2(reply)) return;
+    if (requireAria2(deps, reply)) return;
     const declaration = await deps.declarationStore.load();
     const validated = validateChangeOptions(req.body, declaration);
     if (!validated.ok) {
@@ -89,7 +88,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
   });
 
   app.post("/api/aria2/multicall", async (req, reply) => {
-    if (requireAria2(reply)) return;
+    if (requireAria2(deps, reply)) return;
     const obj = requireObjectBody(
       req.body,
       reply,
@@ -138,7 +137,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
   });
 
   app.post("/api/aria2/set_limits", async (req, reply) => {
-    if (requireAria2(reply)) return;
+    if (requireAria2(deps, reply)) return;
     const p = requireObjectBody(req.body, reply);
     if (!p) return;
     const gid = typeof p.gid === "string" && p.gid.trim() ? p.gid.trim() : null;
@@ -184,7 +183,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
   });
 
   app.post("/api/aria2/change_option", async (req, reply) => {
-    if (requireAria2(reply)) return;
+    if (requireAria2(deps, reply)) return;
     const obj = requireObjectBody(
       req.body,
       reply,
