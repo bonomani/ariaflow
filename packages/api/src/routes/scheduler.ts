@@ -173,6 +173,14 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
           reason: err instanceof Error ? err.message : "start_failed",
         };
       }
+      if (!startResult.started && startResult.reason !== "already_running") {
+        // BG-40: failed auto-start → revert intent so status doesn't
+        // get wedged at "starting". "already_running" is fine (loop IS
+        // running and our intent="running" is correct).
+        await deps.stateStore.update((s) => {
+          s.scheduler_intent = "stopped";
+        });
+      }
     }
     return {
       ok: true,
@@ -203,6 +211,14 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
       s.scheduler_intent = "running";
     });
     const result = await deps.startScheduler();
+    // BG-40: roll intent back on genuine failure (e.g. aria2_unavailable)
+    // so status doesn't wedge at "starting". "already_running" means the
+    // loop IS running, so intent="running" stays correct.
+    if (!result.started && result.reason !== "already_running") {
+      await deps.stateStore.update((s) => {
+        s.scheduler_intent = "stopped";
+      });
+    }
     const after = await deps.stateStore.load();
     await deps.actionLog.record({
       action: "start",

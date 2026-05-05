@@ -1170,6 +1170,20 @@ paths:
                     type: string
                   status:
                     type: string
+                    enum: [stopped, starting, idle, running, paused]
+                    description: BG-40 derived status enum.
+                  wait_reason:
+                    type: string
+                    nullable: true
+                    enum:
+                      - queue_empty
+                      - aria2_unreachable
+                      - preflight_blocked
+                      - disk_full
+                      - bandwidth_probe_pending
+                    description: |
+                      BG-40. Populated only when status="idle"; explains
+                      why the scheduler is idle. null otherwise.
   /api/scheduler/pause:
     post:
       tags: [Scheduler]

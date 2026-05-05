@@ -54,10 +54,37 @@ on the wire.
 
 | Endpoint                 | Effect                                  |
 |--------------------------|-----------------------------------------|
-| `POST /api/scheduler/pause`  | `state.dispatch_paused = true`      |
-| `POST /api/scheduler/resume` | `state.dispatch_paused = false` + auto-start loop |
-| `POST /api/scheduler/start`  | start loop if `running=false`       |
-| `POST /api/scheduler/stop`   | abort loop                          |
+| `POST /api/scheduler/pause`  | `state.dispatch_paused = true`                                          |
+| `POST /api/scheduler/resume` | `state.dispatch_paused = false` + `scheduler_intent="running"` + auto-start loop |
+| `POST /api/scheduler/start`  | `scheduler_intent="running"` + start loop if `running=false`            |
+| `POST /api/scheduler/stop`   | `scheduler_intent="stopped"` + abort loop                               |
+
+## Scheduler status (BG-40)
+
+`/api/scheduler` and `/api/status.state` surface a derived status enum
+distinct from item status. It composes three persisted axes:
+
+- `state.scheduler_intent` (`"stopped" | "running"`) — operator-declared
+  intent. Stamped by start/stop/resume routes (and the `/api/downloads`
+  auto-kick + `cmdServe --scheduler` boot path).
+- `state.running` — flipped true/false by the scheduler loop itself
+  (BG-25 semantic: "loop is actively dispatching").
+- `state.paused` — dispatch pause flag (surfaced as `dispatch_paused`
+  per BG-33).
+
+Truth table:
+
+| intent    | running | paused | active_gid | → status     |
+|-----------|---------|--------|------------|--------------|
+| stopped   | *       | *      | *          | `stopped`    |
+| running   | false   | *      | *          | `starting`   |
+| running   | true    | true   | *          | `paused`     |
+| running   | true    | false  | set        | `running`    |
+| running   | true    | false  | null       | `idle`       |
+
+`wait_reason` is populated only when status is `idle`, in priority
+order: `aria2_unreachable` > `preflight_blocked` > `disk_full` >
+`bandwidth_probe_pending` > `queue_empty` > `null`.
 
 ## Active gid (live, derived)
 

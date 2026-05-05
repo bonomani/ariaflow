@@ -52,10 +52,22 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
         await deps.stateStore.update((st) => {
           st.scheduler_intent = "running";
         });
+        let started = false;
+        let reason = "start_failed";
         try {
-          await deps.startScheduler();
+          const result = await deps.startScheduler();
+          started = result.started;
+          reason = result.reason;
         } catch {
           /* swallow — surfacing failures here would mask a successful add */
+        }
+        if (!started && reason !== "already_running") {
+          // BG-40: revert intent on genuine failure so status doesn't
+          // wedge at "starting". already_running means loop is up and
+          // intent="running" is correct.
+          await deps.stateStore.update((st) => {
+            st.scheduler_intent = "stopped";
+          });
         }
       }
     }

@@ -1494,6 +1494,40 @@ describe("BG-25: scheduler start/stop lifecycle", () => {
     }
   });
 
+  // BG-40: a failed start must roll back scheduler_intent so /api/scheduler.status
+  // doesn't wedge at "starting" forever.
+  it("POST /api/scheduler/start reverts intent on failed start (e.g. aria2_unavailable)", async () => {
+    const env = { ARIAFLOW_DIR: dir };
+    const lock = new StorageLock(storageLockPath(env));
+    const state = new StateStore(lock, env);
+    const queue = new QueueStore(lock, env);
+    const archive = new ArchiveStore(lock, env);
+    const actions = new ActionLog(lock, state, env);
+    const sessions = new SessionService(lock, state, queue, archive, env);
+    const declaration = new DeclarationStore(lock, env);
+    const queueOps = new QueueOps(queue, sessions, declaration, actions);
+    const wired = buildServer({
+      queueOps,
+      queueStore: queue,
+      declarationStore: declaration,
+      stateStore: state,
+      sessionService: sessions,
+      actionLog: actions,
+      archiveStore: archive,
+      cwd: dir,
+      startScheduler: async () => ({ started: false, reason: "aria2_unavailable" }),
+      stopScheduler: async () => ({ stopped: false, reason: "not_running" }),
+    });
+    try {
+      const start = await wired.inject({ method: "POST", url: "/api/scheduler/start" });
+      expect(start.json()).toMatchObject({ started: false, reason: "aria2_unavailable" });
+      const sched = await wired.inject({ method: "GET", url: "/api/scheduler" });
+      expect(sched.json().status).toBe("stopped");
+    } finally {
+      await wired.close();
+    }
+  });
+
   it("POST /api/scheduler/resume auto-starts the loop when running:false", async () => {
     const env = { ARIAFLOW_DIR: dir };
     const lock = new StorageLock(storageLockPath(env));
