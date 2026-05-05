@@ -1,3 +1,4 @@
+import type { FastifyReply, FastifyRequest } from "fastify";
 import {
   aria2,
   errorPayload,
@@ -30,8 +31,8 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
   // (canonical `get_*` per openapi.yaml + the `global_option` /
   // `option` short-form aliases).
   const globalOptionsHandler = async (
-    _req: import("fastify").FastifyRequest,
-    reply: import("fastify").FastifyReply,
+    _req: FastifyRequest,
+    reply: FastifyReply,
   ) => {
     if (requireAria2(reply)) return;
     try {
@@ -45,8 +46,8 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
   };
 
   const itemOptionsHandler = async (
-    req: import("fastify").FastifyRequest<{ Querystring: { gid?: string } }>,
-    reply: import("fastify").FastifyReply,
+    req: FastifyRequest<{ Querystring: { gid?: string } }>,
+    reply: FastifyReply,
   ) => {
     if (requireAria2(reply)) return;
     const gid = (req.query?.gid ?? "").trim();

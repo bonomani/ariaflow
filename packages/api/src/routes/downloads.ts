@@ -6,11 +6,10 @@ import {
   parseAddItems,
   planAutoCleanup,
   summarizeQueue,
-  validateItemId,
   type ParsedAddItem,
 } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
-import { requireAria2Of, type RouteContext } from "./_context.js";
+import { requireAria2Of, validateIdParam, type RouteContext } from "./_context.js";
 
 export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
   const requireAria2 = requireAria2Of(deps);
@@ -153,9 +152,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
   });
 
   app.get<{ Params: { id: string } }>("/api/downloads/:id", async (req, reply) => {
-    if (!validateItemId(req.params.id)) {
-      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
-    }
+    if (!validateIdParam(req.params.id, reply)) return;
     const items = await deps.queueStore.load();
     const item = items.find((i) => i.id === req.params.id);
     if (!item) return reply.code(404).send(errorPayload("not_found", "item not found"));
@@ -170,9 +167,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
     id: string,
     reply: FastifyReply,
   ): Promise<unknown> => {
-    if (!validateItemId(id)) {
-      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
-    }
+    if (!validateIdParam(id, reply)) return;
     const removed = await deps.queueOps.remove(id);
     if (!removed) return reply.code(404).send(errorPayload("not_found", "item not found"));
     return { ok: true, id: removed.id };
@@ -183,18 +178,14 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
   );
 
   app.post<{ Params: { id: string } }>("/api/downloads/:id/pause", async (req, reply) => {
-    if (!validateItemId(req.params.id)) {
-      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
-    }
+    if (!validateIdParam(req.params.id, reply)) return;
     const next = await deps.queueOps.transitionStatus(req.params.id, "paused", "paused_at");
     if (!next) return reply.code(404).send(errorPayload("not_found", "item not found"));
     return { ok: true, item: next };
   });
 
   app.post<{ Params: { id: string } }>("/api/downloads/:id/priority", async (req, reply) => {
-    if (!validateItemId(req.params.id)) {
-      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
-    }
+    if (!validateIdParam(req.params.id, reply)) return;
     const body = req.body;
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       return reply.code(400).send(errorPayload("invalid_payload", "expected {priority: number}"));
@@ -222,9 +213,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
   });
 
   app.post<{ Params: { id: string } }>("/api/downloads/:id/retry", async (req, reply) => {
-    if (!validateItemId(req.params.id)) {
-      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
-    }
+    if (!validateIdParam(req.params.id, reply)) return;
     const items = await deps.queueStore.load();
     const item = items.find((i) => i.id === req.params.id);
     if (!item) return reply.code(404).send(errorPayload("not_found", "item not found"));
@@ -251,18 +240,14 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
   });
 
   app.post<{ Params: { id: string } }>("/api/downloads/:id/resume", async (req, reply) => {
-    if (!validateItemId(req.params.id)) {
-      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
-    }
+    if (!validateIdParam(req.params.id, reply)) return;
     const next = await deps.queueOps.transitionStatus(req.params.id, "queued", "resumed_at");
     if (!next) return reply.code(404).send(errorPayload("not_found", "item not found"));
     return { ok: true, item: next };
   });
 
   app.post<{ Params: { id: string } }>("/api/downloads/:id/files", async (req, reply) => {
-    if (!validateItemId(req.params.id)) {
-      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
-    }
+    if (!validateIdParam(req.params.id, reply)) return;
     const body = req.body;
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       return reply
@@ -313,9 +298,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
   });
 
   app.get<{ Params: { id: string } }>("/api/downloads/:id/files", async (req, reply) => {
-    if (!validateItemId(req.params.id)) {
-      return reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
-    }
+    if (!validateIdParam(req.params.id, reply)) return;
     const items = await deps.queueStore.load();
     const item = items.find((i) => i.id === req.params.id);
     if (!item) return reply.code(404).send(errorPayload("not_found", "item not found"));

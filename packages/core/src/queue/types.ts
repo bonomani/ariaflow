@@ -56,5 +56,16 @@ export interface QueueItemRecord {
   removed_at?: string | null;
   session_history?: Array<Record<string, string>> | null;
   completed_length?: string | number | null;
+  /**
+   * Distribution / seeding fields stamped by the post-action seed flow.
+   * Optional because most items never become seed sources. Surfaced by
+   * `/api/torrents` and the seed-stop / torrent-file routes.
+   */
+  distribute?: boolean;
+  distribute_status?: "seeding" | "stopped";
+  distribute_infohash?: string;
+  distribute_seed_gid?: string;
+  distribute_torrent_path?: string;
+  distribute_started_at?: string;
   [k: string]: unknown;
 }

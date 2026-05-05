@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { errorPayload } from "@ariaflow/core";
+import { errorPayload, validateItemId } from "@ariaflow/core";
 import type { ServerDeps } from "../server.js";
 
 export interface ServerMetrics {
@@ -29,3 +29,14 @@ export const requireAria2Of =
     reply.code(503).send(errorPayload("aria2_unavailable", "no aria2 client wired"));
     return reply;
   };
+
+/**
+ * Reject :id params that aren't a valid UUID before the handler runs.
+ * Returns the validated id on success, or null after sending a 400
+ * envelope. Caller must `return` immediately on null.
+ */
+export function validateIdParam(id: string, reply: FastifyReply): string | null {
+  if (validateItemId(id)) return id;
+  reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
+  return null;
+}

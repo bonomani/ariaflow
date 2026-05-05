@@ -714,14 +714,11 @@ export async function cmdSeedStop(
   if (!infohash) return fail("error: infohash is required\n");
   const items = await ctx.queue.load();
   const item = items.find(
-    (i) =>
-      (i as Record<string, unknown>).distribute_infohash === infohash &&
-      (i as Record<string, unknown>).distribute_status === "seeding",
+    (i) => i.distribute_infohash === infohash && i.distribute_status === "seeding",
   );
   if (!item) return fail(`error: no active seed for ${infohash}\n`, 2);
-  const itemRec = item as Record<string, unknown>;
-  const torrentPath = itemRec.distribute_torrent_path;
-  if (typeof torrentPath === "string" && torrentPath) {
+  const torrentPath = item.distribute_torrent_path;
+  if (torrentPath) {
     try {
       const { existsSync, unlinkSync } = await import("node:fs");
       if (existsSync(torrentPath)) unlinkSync(torrentPath);
@@ -729,8 +726,8 @@ export async function cmdSeedStop(
       /* best-effort cleanup */
     }
   }
-  itemRec.distribute_status = "stopped";
-  delete itemRec.distribute_seed_gid;
+  item.distribute_status = "stopped";
+  delete item.distribute_seed_gid;
   await ctx.queue.save(items);
   await ctx.actions.record({
     action: "seed_stopped",

@@ -949,19 +949,24 @@ const stubBandwidthProbe: typeof import("@ariaflow/core").runBandwidthProbe = as
   up_cap_mbps: null,
 });
 
-async function freshAppWithOpenApiYaml(baseDir: string, yamlPath: string, version?: string) {
+/**
+ * Build the storage stack + a Fastify server bound to it under a given
+ * temp dir. Override any ServerDeps via `overrides`. Returns the app
+ * plus the live store handles so tests can manipulate state, queue,
+ * etc. between requests.
+ */
+type ServerOverrides = Partial<Parameters<typeof buildServer>[0]>;
+interface WiredServer {
+  app: ReturnType<typeof buildServer>;
+  state: StateStore;
+  queue: QueueStore;
+  archive: ArchiveStore;
+  actions: ActionLog;
+  sessions: SessionService;
+  declaration: DeclarationStore;
+}
+function makeWiredServer(baseDir: string, overrides: ServerOverrides = {}): WiredServer {
   const env = { ARIAFLOW_DIR: baseDir };
-  const {
-    StorageLock,
-    storageLockPath,
-    StateStore,
-    QueueStore,
-    ArchiveStore,
-    ActionLog,
-    SessionService,
-    DeclarationStore,
-    QueueOps,
-  } = await import("@ariaflow/core");
   const lock = new StorageLock(storageLockPath(env));
   const state = new StateStore(lock, env);
   const queue = new QueueStore(lock, env);
@@ -970,7 +975,7 @@ async function freshAppWithOpenApiYaml(baseDir: string, yamlPath: string, versio
   const sessions = new SessionService(lock, state, queue, archive, env);
   const declaration = new DeclarationStore(lock, env);
   const queueOps = new QueueOps(queue, sessions, declaration, actions);
-  return buildServer({
+  const app = buildServer({
     queueOps,
     queueStore: queue,
     archiveStore: archive,
@@ -978,10 +983,18 @@ async function freshAppWithOpenApiYaml(baseDir: string, yamlPath: string, versio
     stateStore: state,
     sessionService: sessions,
     actionLog: actions,
-    openapiYamlPath: yamlPath,
     cwd: baseDir,
-    ...(version !== undefined ? { version } : {}),
+    runBandwidthProbe: stubBandwidthProbe,
+    ...overrides,
   });
+  return { app, state, queue, archive, actions, sessions, declaration };
+}
+
+function freshAppWithOpenApiYaml(baseDir: string, yamlPath: string, version?: string) {
+  return makeWiredServer(baseDir, {
+    openapiYamlPath: yamlPath,
+    ...(version !== undefined ? { version } : {}),
+  }).app;
 }
 
 describe("downloads compat aliases + cleanup", () => {
@@ -1319,41 +1332,11 @@ describe("GET /api/peers", () => {
   });
 });
 
-async function freshAppWithPeerRegistry(
+function freshAppWithPeerRegistry(
   baseDir: string,
   registry: import("@ariaflow/core").PeerRegistry,
 ) {
-  const env = { ARIAFLOW_DIR: baseDir };
-  const {
-    StorageLock,
-    storageLockPath,
-    StateStore,
-    QueueStore,
-    ArchiveStore,
-    ActionLog,
-    SessionService,
-    DeclarationStore,
-    QueueOps,
-  } = await import("@ariaflow/core");
-  const lock = new StorageLock(storageLockPath(env));
-  const state = new StateStore(lock, env);
-  const queue = new QueueStore(lock, env);
-  const archive = new ArchiveStore(lock, env);
-  const actions = new ActionLog(lock, state, env);
-  const sessions = new SessionService(lock, state, queue, archive, env);
-  const declaration = new DeclarationStore(lock, env);
-  const queueOps = new QueueOps(queue, sessions, declaration, actions);
-  return buildServer({
-    queueOps,
-    queueStore: queue,
-    declarationStore: declaration,
-    stateStore: state,
-    sessionService: sessions,
-    actionLog: actions,
-    archiveStore: archive,
-    peerRegistry: registry,
-    cwd: baseDir,
-  });
+  return makeWiredServer(baseDir, { peerRegistry: registry }).app;
 }
 
 describe("scheduler routes", () => {
@@ -1437,24 +1420,7 @@ describe("BG-25: scheduler start/stop lifecycle", () => {
   });
 
   it("POST /api/scheduler/start invokes the dep and reports running:true after", async () => {
-    const env = { ARIAFLOW_DIR: dir };
-    const lock = new StorageLock(storageLockPath(env));
-    const state = new StateStore(lock, env);
-    const queue = new QueueStore(lock, env);
-    const archive = new ArchiveStore(lock, env);
-    const actions = new ActionLog(lock, state, env);
-    const sessions = new SessionService(lock, state, queue, archive, env);
-    const declaration = new DeclarationStore(lock, env);
-    const queueOps = new QueueOps(queue, sessions, declaration, actions);
-    const wired = buildServer({
-      queueOps,
-      queueStore: queue,
-      declarationStore: declaration,
-      stateStore: state,
-      sessionService: sessions,
-      actionLog: actions,
-      archiveStore: archive,
-      cwd: dir,
+    const { app: wired, state } = makeWiredServer(dir, {
       startScheduler: async () => {
         await state.update((s) => {
           s.running = true;
@@ -1497,24 +1463,7 @@ describe("BG-25: scheduler start/stop lifecycle", () => {
   // BG-40: a failed start must roll back scheduler_intent so /api/scheduler.status
   // doesn't wedge at "starting" forever.
   it("POST /api/scheduler/start reverts intent on failed start (e.g. aria2_unavailable)", async () => {
-    const env = { ARIAFLOW_DIR: dir };
-    const lock = new StorageLock(storageLockPath(env));
-    const state = new StateStore(lock, env);
-    const queue = new QueueStore(lock, env);
-    const archive = new ArchiveStore(lock, env);
-    const actions = new ActionLog(lock, state, env);
-    const sessions = new SessionService(lock, state, queue, archive, env);
-    const declaration = new DeclarationStore(lock, env);
-    const queueOps = new QueueOps(queue, sessions, declaration, actions);
-    const wired = buildServer({
-      queueOps,
-      queueStore: queue,
-      declarationStore: declaration,
-      stateStore: state,
-      sessionService: sessions,
-      actionLog: actions,
-      archiveStore: archive,
-      cwd: dir,
+    const { app: wired } = makeWiredServer(dir, {
       startScheduler: async () => ({ started: false, reason: "aria2_unavailable" }),
       stopScheduler: async () => ({ stopped: false, reason: "not_running" }),
     });
@@ -1529,25 +1478,8 @@ describe("BG-25: scheduler start/stop lifecycle", () => {
   });
 
   it("POST /api/scheduler/resume auto-starts the loop when running:false", async () => {
-    const env = { ARIAFLOW_DIR: dir };
-    const lock = new StorageLock(storageLockPath(env));
-    const state = new StateStore(lock, env);
-    const queue = new QueueStore(lock, env);
-    const archive = new ArchiveStore(lock, env);
-    const actions = new ActionLog(lock, state, env);
-    const sessions = new SessionService(lock, state, queue, archive, env);
-    const declaration = new DeclarationStore(lock, env);
-    const queueOps = new QueueOps(queue, sessions, declaration, actions);
     let startCalls = 0;
-    const wired = buildServer({
-      queueOps,
-      queueStore: queue,
-      declarationStore: declaration,
-      stateStore: state,
-      sessionService: sessions,
-      actionLog: actions,
-      archiveStore: archive,
-      cwd: dir,
+    const { app: wired, state } = makeWiredServer(dir, {
       startScheduler: async () => {
         startCalls += 1;
         await state.update((s) => {
@@ -1568,25 +1500,8 @@ describe("BG-25: scheduler start/stop lifecycle", () => {
   });
 
   it("POST /api/downloads auto-starts the scheduler loop when running:false and not paused", async () => {
-    const env = { ARIAFLOW_DIR: dir };
-    const lock = new StorageLock(storageLockPath(env));
-    const state = new StateStore(lock, env);
-    const queue = new QueueStore(lock, env);
-    const archive = new ArchiveStore(lock, env);
-    const actions = new ActionLog(lock, state, env);
-    const sessions = new SessionService(lock, state, queue, archive, env);
-    const declaration = new DeclarationStore(lock, env);
-    const queueOps = new QueueOps(queue, sessions, declaration, actions);
     let startCalls = 0;
-    const wired = buildServer({
-      queueOps,
-      queueStore: queue,
-      declarationStore: declaration,
-      stateStore: state,
-      sessionService: sessions,
-      actionLog: actions,
-      archiveStore: archive,
-      cwd: dir,
+    const { app: wired, state } = makeWiredServer(dir, {
       startScheduler: async () => {
         startCalls += 1;
         await state.update((s) => {
@@ -2013,39 +1928,9 @@ async function mockServerWithAria2(
       { status: 200, headers: { "content-type": "application/json" } },
     );
   };
-  const {
-    Aria2Client,
-    StorageLock,
-    storageLockPath,
-    StateStore,
-    QueueStore,
-    ArchiveStore,
-    ActionLog,
-    SessionService,
-    DeclarationStore,
-    QueueOps,
-  } = await import("@ariaflow/core");
-  const env = { ARIAFLOW_DIR: baseDir };
-  const lock = new StorageLock(storageLockPath(env));
-  const state = new StateStore(lock, env);
-  const queue = new QueueStore(lock, env);
-  const archive = new ArchiveStore(lock, env);
-  const actions = new ActionLog(lock, state, env);
-  const sessions = new SessionService(lock, state, queue, archive, env);
-  const declaration = new DeclarationStore(lock, env);
-  const queueOps = new QueueOps(queue, sessions, declaration, actions);
+  const { Aria2Client } = await import("@ariaflow/core");
   const client = new Aria2Client({ fetch: fetchImpl as unknown as typeof fetch });
-  return buildServer({
-    queueOps,
-    queueStore: queue,
-    declarationStore: declaration,
-    stateStore: state,
-    sessionService: sessions,
-    actionLog: actions,
-    archiveStore: archive,
-    aria2: client,
-    cwd: baseDir,
-  });
+  return makeWiredServer(baseDir, { aria2: client }).app;
 }
 
 describe("OpenAPI path-template override", () => {
