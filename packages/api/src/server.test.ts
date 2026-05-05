@@ -450,6 +450,55 @@ describe("ActionLog -> EventBus bridge", () => {
   });
 });
 
+// R-T: every StateStore.update / .save publishes a "state_changed"
+// frame on the wired EventBus so /api/events SSE clients see scheduler
+// / run / pause flips live.
+describe("StateStore -> EventBus bridge", () => {
+  it("publishes 'state_changed' on update and save", async () => {
+    const { EventBus, StateStore, StorageLock, storageLockPath } = await import(
+      "@ariaflow/core"
+    );
+    const env = { ARIAFLOW_DIR: dir };
+    const lock = new StorageLock(storageLockPath(env));
+    const state = new StateStore(lock, env);
+    const bus = new EventBus();
+    state.setBus(bus);
+    const seen: Array<[string, unknown]> = [];
+    bus.subscribe((event, data) => seen.push([event, data]));
+    await state.update((s) => {
+      s.running = true;
+    });
+    await state.save({
+      paused: false,
+      active_gid: null,
+      active_url: null,
+      running: false,
+      session_id: null,
+      session_started_at: null,
+      session_last_seen_at: null,
+      session_closed_at: null,
+      session_closed_reason: null,
+    });
+    expect(seen.filter(([e]) => e === "state_changed")).toHaveLength(2);
+  });
+
+  it("buildServer attaches the EventBus to StateStore so route mutations stream via SSE", async () => {
+    const { EventBus } = await import("@ariaflow/core");
+    const bus = new EventBus();
+    const { app: wired, state } = makeWiredServer(dir, { eventBus: bus });
+    try {
+      const seen: string[] = [];
+      bus.subscribe((event) => seen.push(event));
+      await state.update((s) => {
+        s.scheduler_intent = "running";
+      });
+      expect(seen).toContain("state_changed");
+    } finally {
+      await wired.close();
+    }
+  });
+});
+
 describe("GET /api/log", () => {
   it("returns {ok: true, items: [...]} matching the canonical envelope", async () => {
     await app.inject({

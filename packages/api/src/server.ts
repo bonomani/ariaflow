@@ -146,6 +146,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   if (deps.eventBus) {
     deps.actionLog.setBus(deps.eventBus);
     deps.sessionService.setBus(deps.eventBus);
+    // R-T: state mutations publish state_changed so /api/events SSE
+    // clients see scheduler/run/pause flips live, matching the
+    // freshness contract's claim that /api/status is "live, sse,
+    // transport_topics: [items, scheduler]".
+    deps.stateStore.setBus(deps.eventBus);
   }
 
   app.setNotFoundHandler((_req, reply) => {

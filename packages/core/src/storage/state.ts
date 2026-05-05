@@ -43,11 +43,33 @@ const DEFAULT_STATE: ServerState = {
   scheduler_intent: "stopped",
 };
 
+interface StateBus {
+  publish(event: string, data: unknown): void;
+}
+
 export class StateStore {
+  private bus: StateBus | undefined;
+
   constructor(
     private readonly lock: StorageLock,
     private readonly env: NodeJS.ProcessEnv = process.env,
   ) {}
+
+  /**
+   * R-T: attach an event bus so each successful save() / update() also
+   * publishes "state_changed" carrying the next ServerState. Mirrors
+   * ActionLog.setBus / SessionService.setBus. The /api/events SSE
+   * stream ships state_changed under the "items" + "scheduler" topics
+   * (per event-topics.ts).
+   */
+  setBus(bus: StateBus): void {
+    this.bus = bus;
+  }
+
+  /** Detach any previously-attached event bus. */
+  clearBus(): void {
+    this.bus = undefined;
+  }
 
   load(): Promise<ServerState> {
     return this.lock.with(() => readJson(statePath(this.env), { ...DEFAULT_STATE }));
@@ -58,6 +80,7 @@ export class StateStore {
     return this.lock.with(async () => {
       const next = { ...state, _rev: Number(state._rev ?? 0) + 1 };
       await writeJson(statePath(this.env), next);
+      this.bus?.publish("state_changed", next);
       return next;
     });
   }
@@ -70,6 +93,7 @@ export class StateStore {
       const next = (result ?? current) as ServerState;
       const stamped = { ...next, _rev: Number(next._rev ?? 0) + 1 };
       await writeJson(statePath(this.env), stamped);
+      this.bus?.publish("state_changed", stamped);
       return stamped;
     });
   }

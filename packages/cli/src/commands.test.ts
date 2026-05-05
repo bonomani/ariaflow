@@ -175,9 +175,12 @@ describe("cmdWatch", () => {
     const watch = cmdWatch({
       url: `${handle.url}/api/events`,
       out,
-      // /api/events emits a "connected" handshake first, then cmdAdd
-      // produces session_started + action_logged — wait for all three.
-      limit: 3,
+      // /api/events emits "connected" first, then cmdAdd produces
+      // session_started + state_changed (from session start) +
+      // state_changed (from action-log session_last_seen_at update) +
+      // action_logged. R-T added the state_changed frames, so we wait
+      // for 6 to be sure action_logged lands inside the window.
+      limit: 6,
     });
     await new Promise((r) => setTimeout(r, 50));
     await cmdAdd(ctx, "http://h/x");
