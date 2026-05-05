@@ -134,9 +134,7 @@ export function registerDefaultFreshness(): void {
   registerFreshness("GET", "/api/declaration", {
     freshness: "cold",
     revalidate_on: [
-      "POST /api/declaration",
       "PUT /api/declaration",
-      "POST /api/declaration/preferences",
       "PATCH /api/declaration/preferences",
     ],
   });

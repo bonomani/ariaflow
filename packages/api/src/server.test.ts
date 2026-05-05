@@ -730,33 +730,9 @@ describe("GET /api/tests", () => {
 });
 
 describe("PATCH /api/declaration/preferences", () => {
-  it("PATCH and POST are both wired and apply identically", async () => {
-    const patch = await app.inject({
-      method: "PATCH",
-      url: "/api/declaration/preferences",
-      payload: { max_simultaneous_downloads: 7 },
-    });
-    expect(patch.statusCode).toBe(200);
-    expect(patch.json().applied.max_simultaneous_downloads).toEqual({
-      before: 1,
-      after: 7,
-    });
-    const post = await app.inject({
-      method: "POST",
-      url: "/api/declaration/preferences",
-      payload: { max_simultaneous_downloads: 9 },
-    });
-    expect(post.json().applied.max_simultaneous_downloads).toEqual({
-      before: 7,
-      after: 9,
-    });
-  });
-});
-
-describe("POST /api/declaration/preferences", () => {
   it("400s on empty / non-object payload", async () => {
     const a = await app.inject({
-      method: "POST",
+      method: "PATCH",
       url: "/api/declaration/preferences",
       payload: {},
     });
@@ -766,7 +742,7 @@ describe("POST /api/declaration/preferences", () => {
 
   it("400 unknown_preferences on a typo'd key", async () => {
     const res = await app.inject({
-      method: "POST",
+      method: "PATCH",
       url: "/api/declaration/preferences",
       payload: { not_a_real_pref: 1 },
     });
@@ -776,7 +752,7 @@ describe("POST /api/declaration/preferences", () => {
 
   it("applies a single-key update and returns before/after", async () => {
     const res = await app.inject({
-      method: "POST",
+      method: "PATCH",
       url: "/api/declaration/preferences",
       payload: { max_simultaneous_downloads: 3 },
     });
@@ -1079,20 +1055,6 @@ async function freshAppWithVersion(baseDir: string, version: string) {
 }
 
 describe("downloads compat aliases + cleanup", () => {
-  it("POST /api/declaration behaves like PUT /api/declaration", async () => {
-    const got = await app.inject({ method: "GET", url: "/api/declaration" });
-    const decl = got.json().declaration;
-    decl.uic.preferences[0].value = "edited-via-post";
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/declaration",
-      payload: { declaration: decl },
-    });
-    expect(res.statusCode).toBe(200);
-    const reloaded = await app.inject({ method: "GET", url: "/api/declaration" });
-    expect(reloaded.json().declaration.uic.preferences[0].value).toBe("edited-via-post");
-  });
-
   it("GET /api/downloads/archive returns {ok, items} (empty by default)", async () => {
     const res = await app.inject({ method: "GET", url: "/api/downloads/archive" });
     expect(res.statusCode).toBe(200);

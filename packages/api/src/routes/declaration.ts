@@ -84,9 +84,6 @@ export function registerDeclarationRoutes({ app, deps }: RouteContext): void {
   };
 
   app.put("/api/declaration", (req, reply) => saveDeclaration(req.body, reply));
-  // POST alias documented in openapi.yaml for clients that can't
-  // issue PUT.
-  app.post("/api/declaration", (req, reply) => saveDeclaration(req.body, reply));
 
   const patchPreferences = async (
     body: unknown,
@@ -132,8 +129,5 @@ export function registerDeclarationRoutes({ app, deps }: RouteContext): void {
     return { ok: true, applied, declaration: saved };
   };
 
-  app.post("/api/declaration/preferences", (req, reply) => patchPreferences(req.body, reply));
-  // PATCH is the canonical method per openapi.yaml; POST is kept as an
-  // alias for clients that can't issue PATCH.
   app.patch("/api/declaration/preferences", (req, reply) => patchPreferences(req.body, reply));
 }
