@@ -128,6 +128,10 @@ export function registerDefaultFreshness(): void {
   registerFreshness("GET", "/api/downloads/archive", { freshness: "swr", ttl_s: 60 });
   registerFreshness("GET", "/api/sessions", { freshness: "swr", ttl_s: 30 });
   registerFreshness("GET", "/api/sessions/history", { freshness: "swr", ttl_s: 30 });
+  // BG-40: /api/scheduler is the snapshot view of state.scheduler_status
+  // + wait_reason. The same fields flow on /api/status via the
+  // "scheduler" SSE topic; this endpoint is the cold-cache fallback.
+  registerFreshness("GET", "/api/scheduler", { freshness: "swr", ttl_s: 5 });
   registerFreshness("GET", "/api/declaration", {
     freshness: "cold",
     revalidate_on: [

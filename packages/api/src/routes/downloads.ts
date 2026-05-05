@@ -47,6 +47,11 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
     if (deps.startScheduler) {
       const s = await deps.stateStore.load();
       if (!s.running && !s.paused && created.some((c) => !c.duplicate)) {
+        // BG-40: stamp intent before kicking the loop so /api/scheduler.status
+        // reports "starting" during the bootstrap window (not "stopped").
+        await deps.stateStore.update((st) => {
+          st.scheduler_intent = "running";
+        });
         try {
           await deps.startScheduler();
         } catch {

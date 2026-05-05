@@ -1,4 +1,5 @@
 import { errorPayload, evaluatePreflight, summarizeQueue } from "@ariaflow/core";
+import { withMeta } from "../freshness.js";
 import type { RouteContext } from "./_context.js";
 import { computeSchedulerStatus } from "./_scheduler_status.js";
 
@@ -6,7 +7,7 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
   app.get("/api/scheduler", async () => {
     const s = await deps.stateStore.load();
     const { status, wait_reason } = await computeSchedulerStatus(deps, s);
-    return {
+    return withMeta("GET", "/api/scheduler", {
       status,
       wait_reason,
       running: Boolean(s.running),
@@ -15,7 +16,7 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
       session_started_at: s.session_started_at,
       session_closed_at: s.session_closed_at,
       _rev: Number(s._rev ?? 0),
-    };
+    });
   });
 
   app.post("/api/scheduler/pause", async () => {
