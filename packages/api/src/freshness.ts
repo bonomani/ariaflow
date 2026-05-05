@@ -117,7 +117,6 @@ export function registerDefaultFreshness(): void {
     freshness: "on-action",
     revalidate_on: ["POST /api/bandwidth/probe"],
   });
-  registerFreshness("GET", "/api/aria2/get_global_option", { freshness: "cold" });
   registerFreshness("GET", "/api/aria2/global_option", { freshness: "cold" });
   registerFreshness("GET", "/api/log", { freshness: "swr", ttl_s: 10 });
   // BG-34: per-tab loader endpoints. Classes follow the frontend's

@@ -60,9 +60,6 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
   };
 
   app.post("/api/downloads", (req, reply) => addDownloads(req.body, reply));
-  // openapi.yaml documents /api/downloads/add as the canonical add
-  // endpoint; /api/downloads is the alias. Both are kept wired.
-  app.post("/api/downloads/add", (req, reply) => addDownloads(req.body, reply));
 
   app.get("/api/downloads", async () => {
     const items = await deps.queueStore.load();

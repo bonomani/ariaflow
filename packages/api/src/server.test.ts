@@ -1079,16 +1079,6 @@ async function freshAppWithVersion(baseDir: string, version: string) {
 }
 
 describe("downloads compat aliases + cleanup", () => {
-  it("POST /api/downloads/add behaves like POST /api/downloads", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/api/downloads/add",
-      payload: { items: [{ url: "http://h/x" }] },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().items[0].url).toBe("http://h/x");
-  });
-
   it("POST /api/declaration behaves like PUT /api/declaration", async () => {
     const got = await app.inject({ method: "GET", url: "/api/declaration" });
     const decl = got.json().declaration;
@@ -1144,18 +1134,6 @@ describe("downloads compat aliases + cleanup", () => {
 });
 
 describe("aria2 / sessions / remove compat aliases", () => {
-  it("/api/aria2/get_global_option mirrors /api/aria2/global_option (503 unwired)", async () => {
-    const a = await app.inject({ method: "GET", url: "/api/aria2/get_global_option" });
-    const b = await app.inject({ method: "GET", url: "/api/aria2/global_option" });
-    expect(a.statusCode).toBe(503);
-    expect(b.statusCode).toBe(503);
-  });
-
-  it("/api/aria2/get_option mirrors /api/aria2/option (missing gid -> 503 first)", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/aria2/get_option" });
-    expect(res.statusCode).toBe(503);
-  });
-
   it("/api/sessions returns the same shape as /api/sessions/current minus stats", async () => {
     const before = await app.inject({ method: "GET", url: "/api/sessions" });
     expect(before.json()).toMatchObject({ ok: true, session: null });
@@ -2010,7 +1988,7 @@ describe("aria2 option routes", () => {
   it("get_global_option (legacy alias) shares the same shape", async () => {
     const mock = await mockServerWithAria2(dir, () => ({ split: "16" }));
     try {
-      const res = await mock.inject({ method: "GET", url: "/api/aria2/get_global_option" });
+      const res = await mock.inject({ method: "GET", url: "/api/aria2/global_option" });
       const body = res.json();
       expect(body.split).toBe("16");
       expect(body.options).toBeUndefined();

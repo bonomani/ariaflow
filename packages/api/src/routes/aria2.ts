@@ -29,9 +29,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
   // response body (`this.aria2Options = data`), so the options dict
   // must be spread at the top level. aria2 option names are kebab-case
   // ("connect-timeout", "max-tries", ...) so they never collide with
-  // our envelope keys (`ok`, `gid`). Same fix for all four endpoints
-  // (canonical `get_*` per openapi.yaml + the `global_option` /
-  // `option` short-form aliases).
+  // our envelope keys (`ok`, `gid`).
   const globalOptionsHandler = async (
     _req: FastifyRequest,
     reply: FastifyReply,
@@ -39,7 +37,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
     if (requireAria2(reply)) return;
     try {
       const opts = await aria2.getGlobalOption(deps.aria2!);
-      return withMeta("GET", "/api/aria2/get_global_option", { ok: true, ...opts });
+      return withMeta("GET", "/api/aria2/global_option", { ok: true, ...opts });
     } catch (err) {
       return reply
         .code(502)
@@ -66,9 +64,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
     }
   };
 
-  app.get("/api/aria2/get_global_option", globalOptionsHandler);
   app.get("/api/aria2/global_option", globalOptionsHandler);
-  app.get<{ Querystring: { gid?: string } }>("/api/aria2/get_option", itemOptionsHandler);
   app.get<{ Querystring: { gid?: string } }>("/api/aria2/option", itemOptionsHandler);
 
   app.post("/api/aria2/change_global_option", async (req, reply) => {
