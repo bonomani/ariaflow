@@ -12,7 +12,7 @@ import {
   type ParsedAddItem,
 } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
-import { requireAria2Of, requireObjectBody, validateIdParam, type RouteContext } from "./_context.js";
+import { requireAria2Of, requireObjectBody, sendRpcError, validateIdParam, type RouteContext } from "./_context.js";
 
 export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
   const requireAria2 = requireAria2Of(deps);
@@ -288,9 +288,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
       const files = await aria2.getFiles(deps.aria2!, gid);
       return { ok: true, item_id: item.id, gid, files };
     } catch (err) {
-      return reply
-        .code(502)
-        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+      return sendRpcError(reply, err);
     }
   });
 }

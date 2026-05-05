@@ -9,7 +9,7 @@ import {
   validateChangeOptions,
 } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
-import { requireAria2Of, requireObjectBody, type RouteContext } from "./_context.js";
+import { requireAria2Of, requireObjectBody, sendRpcError, type RouteContext } from "./_context.js";
 
 export function registerAria2Routes({ app, deps }: RouteContext): void {
   const requireAria2 = requireAria2Of(deps);
@@ -39,9 +39,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
       const opts = await aria2.getGlobalOption(deps.aria2!);
       return withMeta("GET", "/api/aria2/global_option", { ok: true, ...opts });
     } catch (err) {
-      return reply
-        .code(502)
-        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+      return sendRpcError(reply, err);
     }
   };
 
@@ -58,9 +56,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
       const opts = await aria2.getOption(deps.aria2!, gid);
       return { ok: true, gid, ...opts };
     } catch (err) {
-      return reply
-        .code(502)
-        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+      return sendRpcError(reply, err);
     }
   };
 
@@ -88,9 +84,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
       });
       return { ok: true, applied: validated.options };
     } catch (err) {
-      return reply
-        .code(502)
-        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+      return sendRpcError(reply, err);
     }
   });
 
@@ -138,9 +132,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
       const results = await aria2.multicall(deps.aria2!, calls);
       return { ok: true, results };
     } catch (err) {
-      return reply
-        .code(502)
-        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+      return sendRpcError(reply, err);
     }
   });
 
@@ -213,9 +205,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
       await aria2.changeOption(deps.aria2!, gid, options);
       return { ok: true, gid, applied: options };
     } catch (err) {
-      return reply
-        .code(502)
-        .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+      return sendRpcError(reply, err);
     }
   });
 }

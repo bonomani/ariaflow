@@ -62,6 +62,16 @@ export function validateIdParam(id: string, reply: FastifyReply): string | null 
 }
 
 /**
+ * Send a 502 `rpc_error` envelope from a caught aria2 RPC exception.
+ * Returns the reply so callers can `return sendRpcError(reply, err)`.
+ */
+export function sendRpcError(reply: FastifyReply, err: unknown): FastifyReply {
+  return reply
+    .code(502)
+    .send(errorPayload("rpc_error", err instanceof Error ? err.message : "aria2 RPC failed"));
+}
+
+/**
  * Coerce a request body into a plain object record, or send a 400
  * `invalid_payload` envelope and return null. Centralizes the
  * `!body || typeof body !== "object" || Array.isArray(body)` pattern
