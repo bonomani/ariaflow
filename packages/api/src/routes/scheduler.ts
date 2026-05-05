@@ -57,7 +57,11 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
     return { ok: true, paused: next.paused, _rev: Number(next._rev ?? 0) };
   });
 
-  app.post("/api/scheduler/ucc", async () => {
+  // BG-48: /api/scheduler/contract is the operator-facing name.
+  // /api/scheduler/ucc stays for one release of back-compat; both
+  // call the same handler and both emit `action: "contract"` in the
+  // audit log (see ACTIONS.schedulerContract → "contract").
+  const runContract = async () => {
     const declaration = await deps.declarationStore.load();
     const aria2Available = (await probeAria2Reachable(deps.aria2)) === true;
     const stateBefore = await deps.stateStore.load();
@@ -78,7 +82,7 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
         diff: { failures: pf.hard_failures },
       };
       await deps.actionLog.record({
-        action: ACTIONS.schedulerUcc,
+        action: ACTIONS.schedulerContract,
         target: TARGETS.queue,
         outcome: result.outcome,
         observation: result.observation,
@@ -112,7 +116,7 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
       },
     };
     await deps.actionLog.record({
-      action: ACTIONS.schedulerUcc,
+      action: ACTIONS.schedulerContract,
       target: TARGETS.queue,
       outcome: result.outcome,
       observation: result.observation,
@@ -126,7 +130,10 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
       detail: { result, preflight: pf },
     });
     return { meta: { contract: "UCC", version: "2.0" }, result, preflight: pf };
-  });
+  };
+
+  app.post("/api/scheduler/contract", runContract);
+  app.post("/api/scheduler/ucc", runContract);
 
   app.post("/api/scheduler/preflight", async () => {
     const declaration = await deps.declarationStore.load();

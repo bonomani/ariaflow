@@ -1429,13 +1429,21 @@ describe("scheduler routes", () => {
     expect(body.preflight.hard_failures).toContain("aria2_available");
   });
 
-  it("POST /api/scheduler/ucc records a 'ucc' action entry", async () => {
+  it("POST /api/scheduler/ucc records a 'contract' action entry (BG-48)", async () => {
     await app.inject({ method: "POST", url: "/api/scheduler/ucc" });
     const log = await app.inject({ method: "GET", url: "/api/actions" });
     const entries = log.json().entries as Array<{ action: string; outcome: string }>;
-    const ucc = entries.find((e) => e.action === "ucc");
-    expect(ucc).toBeDefined();
-    expect(ucc!.outcome).toBe("failed");
+    const entry = entries.find((e) => e.action === "contract");
+    expect(entry).toBeDefined();
+    expect(entry!.outcome).toBe("failed");
+  });
+
+  it("POST /api/scheduler/contract is the BG-48 alias and emits the same shape", async () => {
+    const res = await app.inject({ method: "POST", url: "/api/scheduler/contract" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.meta).toEqual({ contract: "UCC", version: "2.0" });
+    expect(body.preflight).toBeDefined();
   });
 
   it("POST /api/scheduler/preflight returns the gate result and logs an action", async () => {
