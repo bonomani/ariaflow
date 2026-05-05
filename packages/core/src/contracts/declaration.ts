@@ -116,6 +116,26 @@ const PREFERENCES: UicPreference[] = [
     options: [],
     rationale: "comma-separated instance names to accept (empty = accept all peers)",
   },
+  // BG-45 phase 1: self-management preferences. Persistence only —
+  // reconciliation + scheduled update checks land in later phases.
+  {
+    name: "auto_start_aria2",
+    value: process.platform === "darwin" || process.platform === "linux",
+    options: [true, false],
+    rationale: "keep the aria2 supervisor (launchd plist / systemd unit) installed across reboots",
+  },
+  {
+    name: "auto_update",
+    value: false,
+    options: [false, true],
+    rationale: "periodically check the package manager for newer ariaflow / aria2 versions and apply them",
+  },
+  {
+    name: "auto_update_check_hours",
+    value: 24,
+    options: [6, 12, 24, 48, 168],
+    rationale: "hours between auto-update checks when auto_update is enabled",
+  },
 ];
 
 const GATES: UicGate[] = [
