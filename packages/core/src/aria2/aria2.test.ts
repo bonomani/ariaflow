@@ -8,7 +8,6 @@ import {
   setMaxOverallDownloadLimit,
   tellActive,
   tellStatus,
-  tellWaiting,
 } from "./methods.js";
 
 function makeFetch(handler: (req: { method: string; params: unknown[] }) => unknown) {
@@ -100,15 +99,6 @@ describe("aria2 method wrappers", () => {
     expect(await tellActive(c)).toEqual([]);
   });
 
-  it("tellWaiting passes offset, num, fields", async () => {
-    const fetchImpl = makeFetch(({ params }) => {
-      expect(params).toEqual([0, 100, ["gid", "status"]]);
-      return [];
-    });
-    const c = new Aria2Client({ fetch: fetchImpl as unknown as typeof fetch });
-    await tellWaiting(c, 0, 100, ["gid", "status"]);
-  });
-
   it("setMaxOverallDownloadLimit goes through changeGlobalOption", async () => {
     const fetchImpl = makeFetch(({ method, params }) => {
       expect(method).toBe("aria2.changeGlobalOption");
@@ -134,7 +124,7 @@ describe("aria2 method wrappers", () => {
       expect(params).toEqual([
         [
           { methodName: "aria2.tellActive", params: [] },
-          { methodName: "aria2.tellWaiting", params: [0, 50] },
+          { methodName: "aria2.tellStatus", params: ["g1"] },
         ],
       ]);
       return [];
@@ -142,7 +132,7 @@ describe("aria2 method wrappers", () => {
     const c = new Aria2Client({ fetch: fetchImpl as unknown as typeof fetch });
     await multicall(c, [
       { methodName: "aria2.tellActive" },
-      { methodName: "aria2.tellWaiting", params: [0, 50] },
+      { methodName: "aria2.tellStatus", params: ["g1"] },
     ]);
   });
 });
