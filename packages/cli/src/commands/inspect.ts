@@ -45,10 +45,7 @@ export async function cmdProbe(ctx: CliContext): Promise<CmdResult> {
   const config = bandwidthConfigFrom(declaration);
   const probe = await runBandwidthProbe({ config });
   await ctx.state.update((s) => {
-    (s as Record<string, unknown>).last_bandwidth_probe = probe as unknown as Record<
-      string,
-      unknown
-    >;
+    s.last_bandwidth_probe = probe;
     s.last_bandwidth_probe_at = Date.now() / 1000;
   });
   await ctx.actions.record({
@@ -130,7 +127,7 @@ export async function cmdDashboard(
       `queued=${summary.queued ?? 0}  paused=${summary.paused ?? 0}  ` +
       `complete=${summary.complete ?? 0}  error=${summary.error ?? 0}`,
   );
-  const probe = state.last_bandwidth_probe as Record<string, unknown> | null;
+  const probe = state.last_bandwidth_probe ?? null;
   if (probe) {
     const dl = probe.downlink_mbps ?? "—";
     const ul = probe.uplink_mbps ?? "—";

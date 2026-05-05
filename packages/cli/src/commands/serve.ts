@@ -149,11 +149,7 @@ export async function cmdServe(
     }
     schedulerCtrl = new AbortController();
     const state = await ctx.state.load();
-    const probe = state.last_bandwidth_probe as
-      | { cap_bytes_per_sec?: number }
-      | null
-      | undefined;
-    const initialCap = Number(probe?.cap_bytes_per_sec ?? 0) || 0;
+    const initialCap = Number(state.last_bandwidth_probe?.cap_bytes_per_sec ?? 0) || 0;
     schedulerDone = runSchedulerLoop(
       {
         queueStore: ctx.queue,
@@ -192,8 +188,7 @@ export async function cmdServe(
           const config = bandwidthConfigFrom(declaration);
           const fresh = await runBandwidthProbe({ config });
           await ctx.state.update((s) => {
-            (s as Record<string, unknown>).last_bandwidth_probe =
-              fresh as unknown as Record<string, unknown>;
+            s.last_bandwidth_probe = fresh;
             s.last_bandwidth_probe_at = Date.now() / 1000;
           });
           await ctx.actions.record({

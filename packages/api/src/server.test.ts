@@ -1552,12 +1552,16 @@ describe("BG-25: scheduler start/stop lifecycle", () => {
     const lock = new StorageLock(storageLockPath(env));
     const state = new StateStore(lock, env);
     await state.update((s) => {
-      (s as Record<string, unknown>).last_bandwidth_probe = {
+      s.last_bandwidth_probe = {
         source: "networkquality",
+        reason: "ok",
+        downlink_mbps: 100,
         cap_mbps: 80,
         cap_bytes_per_sec: 80 * 125_000,
-        downlink_mbps: 100,
         interface_name: "en0",
+        interval_seconds: 180,
+        down_cap_mbps: 80,
+        up_cap_mbps: null,
       };
       s.last_bandwidth_probe_at = 1234.5;
     });

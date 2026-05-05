@@ -1,5 +1,6 @@
 import { readJson, writeJson } from "./json.js";
 import { statePath } from "./paths.js";
+import type { ResolvedProbe } from "../bandwidth/run.js";
 import type { StorageLock } from "./lock.js";
 
 export interface ServerState {
@@ -21,6 +22,10 @@ export interface ServerState {
    * from `starting` in the derived status enum.
    */
   scheduler_intent?: "stopped" | "running";
+  /** Last bandwidth probe result; null/undefined before the first probe. */
+  last_bandwidth_probe?: ResolvedProbe | null;
+  /** Epoch seconds when `last_bandwidth_probe` was stamped. */
+  last_bandwidth_probe_at?: number | null;
   _rev?: number;
   [k: string]: unknown;
 }

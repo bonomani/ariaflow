@@ -76,7 +76,7 @@ export async function runPostAction(
   };
 
   const shouldDistribute =
-    Boolean((item as Record<string, unknown>).distribute) ||
+    Boolean(item.distribute) ||
     Boolean(prefValue(declaration, "distribute_completed_downloads", false));
   const trackerUrl = String(prefValue(declaration, "internal_tracker_url", "") || "");
   const isHttpSource =
@@ -128,12 +128,11 @@ export async function runPostAction(
       dir: downloadDir,
     });
 
-    const itemRec = item as Record<string, unknown>;
-    itemRec.distribute_status = "seeding";
-    itemRec.distribute_infohash = built.infohash;
-    itemRec.distribute_seed_gid = seedGid;
-    itemRec.distribute_torrent_path = torrentPath;
-    itemRec.distribute_started_at = new Date().toISOString();
+    item.distribute_status = "seeding";
+    item.distribute_infohash = built.infohash;
+    item.distribute_seed_gid = seedGid;
+    item.distribute_torrent_path = torrentPath;
+    item.distribute_started_at = new Date().toISOString();
     await deps.queueStore.save(items);
 
     result.distribute = {
@@ -181,4 +180,4 @@ export async function runPostActionBatch(
 
 /** Skip-guard for callers that want to filter already-seeding items. */
 export const isAlreadySeeding = (item: QueueItemRecord): boolean =>
-  (item as Record<string, unknown>).distribute_status === "seeding";
+  item.distribute_status === "seeding";

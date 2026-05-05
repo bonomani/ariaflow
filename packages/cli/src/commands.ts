@@ -1,7 +1,6 @@
 // Barrel file. Each cmd lives in its own per-concern module under
 // commands/. Keep this list in sync with cli/src/index.ts and the
 // public-surface tests.
-export type { CmdResult } from "./commands/_shared.js";
 
 export {
   cmdAdd,

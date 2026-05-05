@@ -17,10 +17,7 @@ export function registerBandwidthRoutes({ app, deps }: RouteContext): void {
     const upCap = probeRec.up_cap_mbps;
 
     await deps.stateStore.update((s) => {
-      (s as Record<string, unknown>).last_bandwidth_probe = probeRec as unknown as Record<
-        string,
-        unknown
-      >;
+      s.last_bandwidth_probe = probeRec;
       s.last_bandwidth_probe_at = Date.now() / 1000;
     });
 
@@ -69,7 +66,7 @@ export function registerBandwidthRoutes({ app, deps }: RouteContext): void {
     const declaration = await deps.declarationStore.load();
     const state = await deps.stateStore.load();
     const config = bandwidthConfigFrom(declaration);
-    const probe = (state.last_bandwidth_probe ?? null) as Record<string, unknown> | null;
+    const probe = state.last_bandwidth_probe ?? null;
     return withMeta("GET", "/api/bandwidth", {
       ok: true,
       config,

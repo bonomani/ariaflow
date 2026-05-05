@@ -110,7 +110,7 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
     // running is derived from "last probe used networkquality recently"
     // — the only honest signal we have without re-running the probe.
     const nq = installNs.networkqualityStatus();
-    const probe = (state.last_bandwidth_probe ?? null) as Record<string, unknown> | null;
+    const probe = state.last_bandwidth_probe ?? null;
     const lastProbeAt = Number(state.last_bandwidth_probe_at ?? 0);
     const probeFresh = lastProbeAt > 0 && Date.now() / 1000 - lastProbeAt < 3600;
     const nqRunning = nq.installed

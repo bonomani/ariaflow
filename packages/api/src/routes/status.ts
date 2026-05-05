@@ -52,7 +52,7 @@ export function registerStatusRoute({ app, deps, metrics }: RouteContext): void 
       // top-level `bandwidth` key (mirroring /api/bandwidth's BG-21
       // shape) so the dashboard's Cap chip works on the Dashboard tab
       // without first visiting Bandwidth.
-      const probe = (state.last_bandwidth_probe ?? null) as Record<string, unknown> | null;
+      const probe = state.last_bandwidth_probe ?? null;
       const bandwidth = probe
         ? { ...probe, last_probe_at: state.last_bandwidth_probe_at ?? null }
         : null;
