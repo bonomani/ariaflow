@@ -11,9 +11,9 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (2)
+## Open (1)
 
-### BG-43: Expose restart + update actions for ariaflow-server
+### BG-43: Expose restart + update actions for ariaflow-server (cross-platform)
 
 **Paired frontend gap:** none (FE will wire buttons once backend
 ships the routes)
@@ -21,79 +21,79 @@ ships the routes)
 The dashboard's System Health → Components → ariaflow-server row
 currently has **no action buttons** because the only generic
 lifecycle action the backend supports for that target would be
-`uninstall` — and uninstalling the backend the dashboard is
-talking to is a foot-gun (FE commit d30fa5d removed it).
+`uninstall` — a foot-gun on the host process (FE commit d30fa5d
+removed it). The legitimate actions are **Restart** and **Update**.
+Implementing them needs platform-aware detection of who runs and
+who installs the backend, since neither action is something the
+app can do to itself reliably.
 
-The two operationally legitimate actions are:
+#### Two new axes on `/api/lifecycle.ariaflow-server.result`
 
-- **Restart** — bounce the backend cleanly. Useful after a
-  config change, after BG-41-class stuck states, or to pick up
-  a new aria2c binary. Implementation could fork a new process
-  and exit, or signal a supervisor (launchd/systemd if managed
-  there).
-- **Update** — pull the latest release. Surfaces a button on the
-  row when `current === false` (i.e. installed version doesn't
-  match `expected_version`). Implementation depends on the
-  install medium (Homebrew bottle pull, pipx upgrade, npm
-  install -g, or git-source rebuild via the dev path).
+Same shape as BG-29's `managed_by` for aria2:
 
-Concretely:
+```ts
+managed_by:    "launchd" | "systemd" | "docker" | "external" | null
+installed_via: "homebrew" | "pipx" | "npm" | "source" | null
+```
+
+Auto-detection at startup:
+
+| Axis | Detection |
+|---|---|
+| `managed_by="launchd"` | `~/Library/LaunchAgents/com.ariaflow-server.plist` exists AND own pid is a child of `launchd` |
+| `managed_by="systemd"` | `systemctl --user is-active ariaflow-server` returns `active`, OR `/proc/1/comm == "systemd"` and unit file exists |
+| `managed_by="docker"` | `/.dockerenv` exists OR `/proc/1/cgroup` contains `docker` |
+| `managed_by="external"` | none of the above, parent pid is not init |
+| `managed_by=null` | unknown/dev session (e.g. foregrounded `pnpm serve`) |
+| `installed_via="homebrew"` | `process.argv[0]` resolves under `$(brew --prefix)` |
+| `installed_via="pipx"` | resolves under `~/.local/pipx/venvs/` |
+| `installed_via="npm"` | resolves under `$(npm prefix -g)/lib/node_modules/` |
+| `installed_via="source"` | resolves to a path inside a git working tree |
+| `installed_via=null` | unknown |
+
+#### Two new lifecycle actions
 
 ```
 POST /api/lifecycle/ariaflow-server/restart  → 202 Accepted, then exit
-POST /api/lifecycle/ariaflow-server/update   → kicks off package-manager update
+POST /api/lifecycle/ariaflow-server/update   → kicks off package-manager update, then 202
 ```
 
-Today both return `400 unsupported_action` (lifecycle.ts:240).
-The FE will surface them automatically once they're implemented:
-add `'restart'` and `'update'` to the actions returned by
-`lifecycleActionsFor('ariaflow-server', …)` in
-`src/ariaflow_dashboard/static/ts/lifecycle.ts:158-178`. Update
-gates on `current === false`; Restart is always available when
-the row is reachable.
+Restart implementation (per `managed_by`):
 
-Restart is the higher-value one — it's what the operator wants
-when something looks stuck and they don't have shell access.
+| `managed_by` | Restart implementation |
+|---|---|
+| `launchd` | `launchctl kickstart -k gui/$UID/com.ariaflow-server` |
+| `systemd` | `systemctl --user restart ariaflow-server` |
+| `docker` | exit with non-zero — orchestrator restarts |
+| `external` | reject with `409 manual_restart_required` |
+| `null` | reject with `409 unknown_supervisor` |
 
-**Paired frontend gap:** none (infra/correctness — FE only displays
-the state)
+Update implementation (per `installed_via`):
 
-Reproducible on dev backend at `v0.0.0` after a clean restart:
-`POST /api/scheduler/start` is accepted (`state.scheduler_intent
-= "running"`), but `state.running` never flips to `true`. The
-BG-40 derivation locks at `"starting"`. Observed live for 17+
-minutes with `Requests=87` flowing through the API (so the
-Fastify side is healthy), `Errors=0`, and
-`state.session_last_seen_at` not advancing.
+| `installed_via` | Update implementation |
+|---|---|
+| `homebrew` | `brew upgrade ariaflow-server` |
+| `pipx` | `pipx upgrade ariaflow-server` |
+| `npm` | `npm install -g @ariaflow/cli@latest` |
+| `source` | reject with `409 source_install` (operator runs `git pull && pnpm build`) |
+| `null` | reject with `409 unknown_installer` |
 
-Symptoms:
-- `/api/scheduler` returns `status: "starting"`, `running: false`,
-  `paused: false` indefinitely.
-- `state.session_last_seen_at` does not advance — the heartbeat
-  the scheduler tick is supposed to stamp never fires.
-- No errors logged; the backend appears healthy from every other
-  angle.
+#### What the FE will do
 
-Likely causes (backend to investigate):
-- `runSchedulerLoop` may not be invoked from `cmdServe` after the
-  R-S split (`_scheduler_controller.ts`) — the controller fires
-  `callStartScheduler` but the actual loop registration may have
-  been dropped during the refactor.
-- Or the loop crashes silently on first tick and the exception
-  is swallowed somewhere in the controller wrapper.
+- Add `'restart'` and `'update'` cases to
+  `lifecycleActionsFor('ariaflow-server', …)` in
+  `src/ariaflow_dashboard/static/ts/lifecycle.ts:158-178`.
+- **Restart** button: shown when `managed_by` is one of
+  `launchd|systemd|docker`. Disabled with tooltip otherwise.
+- **Update** button: shown when `current === false` AND
+  `installed_via` is one of `homebrew|pipx|npm`. Hidden when
+  versions match.
+- Tooltip on disabled cases: "managed externally — restart via
+  `<launchctl|systemctl|docker>`".
 
-What the FE needs from the fix:
-- `state.running` flips to `true` shortly after `intent="running"`
-  in the absence of an explicit failure.
-- If startup *does* fail, surface a hard failure: either flip
-  `intent` back to `"stopped"` with a logged reason, or publish a
-  `wait_reason` value (e.g. `"loop_failed_to_start"`) so the FE
-  can display it instead of an indefinite "starting".
-
-The FE has been updated (commit 87a958f / v0.1.458) so the Stop
-button is visible during `starting` too — operators can clear a
-stuck intent without restarting the backend. That's a workaround,
-not the fix.
+Restart is the higher-value half — it's what the operator wants
+when BG-41-class stuck states or config changes happen and they
+don't have shell access.
 
 ## Explicit non-requests (do not implement)
 
@@ -106,6 +106,7 @@ not the fix.
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-41 | Scheduler stuck in `starting` indefinitely after restart. Resolved as part of the wire-shape sweep — `afbcf93` (toWireState picks declared fields explicitly) plus the scheduler-controller fix verified live: state.running flips to true shortly after intent='running', heartbeat advances. FE workaround (Stop visible during 'starting') stays as defense in depth | 2026-05-05 |
 | BG-42 | (1) `GET /favicon.ico` registered in `routes/meta.ts` returning 204 — silences the per-browser-session 404 that was inflating `health.errors_total`. (2) `health.errors_recent` ring buffer added to `ServerMetrics` (`routes/_context.ts`); `onResponse` hook in `server.ts` pushes `{at, method, path, status}` for every 4xx/5xx, capped at `ERRORS_RECENT_MAX=20` (older entries roll off). Surfaced on `/api/status.health.errors_recent`. `path` prefers Fastify's matched `routerPath` ("/api/downloads/:id") and falls back to raw `req.url` when not yet matched | 2026-05-05 |
 | BG-40 | Richer scheduler status enum + wait_reason. New `state.scheduler_intent` (`"stopped"\|"running"`) is stamped by `/api/scheduler/{start,stop,resume}` and lets `deriveSchedulerStatus(state)` (in `packages/core/src/scheduler/status.ts`) return the 5-state enum: `stopped\|starting\|idle\|running\|paused`. `deriveWaitReason()` classifies idle reasons in priority order: `aria2_unreachable\|preflight_blocked\|disk_full\|bandwidth_probe_pending\|queue_empty\|null`. `GET /api/scheduler` now returns `{status, wait_reason, running, paused, ...}`; `/api/status.state` mirrors `scheduler_status` + `wait_reason` so the dashboard's System Health card avoids a second fetch. 13 pure-helper tests in `status.test.ts` cover every truth-table branch; server tests assert the new shape | 2026-05-05 |
 | BG-39 | `/api/sessions/history` registered in the freshness contract (`swr`, ttl 30s) and the handler stamps via `withMeta`, matching `/api/sessions`. FE can drop the synthetic `LOCAL_METAS` mirror | 2026-05-05 |
