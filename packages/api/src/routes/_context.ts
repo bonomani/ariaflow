@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { errorPayload, validateItemId } from "@ariaflow/core";
+import { errorPayload, validateItemId, type QueueItemRecord } from "@ariaflow/core";
 import type { ServerDeps } from "../server.js";
 
 /**
@@ -77,6 +77,27 @@ export function sendRpcError(reply: FastifyReply, err: unknown): FastifyReply {
  */
 export function sendNotFound(reply: FastifyReply, message = "item not found"): FastifyReply {
   return reply.code(404).send(errorPayload("not_found", message));
+}
+
+/**
+ * Validate the :id param, load the queue, and resolve the matching item.
+ * On any failure (bad UUID, item missing) the 400/404 envelope is sent
+ * and the helper returns null. Caller still gets `items` so it can save
+ * back after mutating the row.
+ */
+export async function loadItemOr404(
+  deps: ServerDeps,
+  id: string,
+  reply: FastifyReply,
+): Promise<{ items: QueueItemRecord[]; item: QueueItemRecord } | null> {
+  if (!validateIdParam(id, reply)) return null;
+  const items = await deps.queueStore.load();
+  const item = items.find((i) => i.id === id);
+  if (!item) {
+    sendNotFound(reply);
+    return null;
+  }
+  return { items, item };
 }
 
 /**
