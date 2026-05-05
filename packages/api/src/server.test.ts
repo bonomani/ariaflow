@@ -1710,7 +1710,7 @@ describe("POST /api/lifecycle/:target/:action", () => {
 });
 
 describe("GET /api/lifecycle", () => {
-  it("returns BG-20 contract: ariaflow-server / aria2 / networkquality / aria2-launchd", async () => {
+  it("returns BG-20 contract: ariaflow-server / aria2 / networkquality", async () => {
     const res = await app.inject({ method: "GET", url: "/api/lifecycle" });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -1733,13 +1733,9 @@ describe("GET /api/lifecycle", () => {
     expect(["ready", "missing"]).toContain(body.networkquality.result.reason);
     expect(body.networkquality.result).toHaveProperty("outcome");
 
-    // aria2-launchd: always emitted; reason reflects whether the
-    // platform's unit/plist exists on disk.
-    expect(body["aria2-launchd"].result).toHaveProperty("reason");
-    expect(["match", "missing", "stopped"]).toContain(body["aria2-launchd"].result.reason);
-
-    // BG-44 phase 1: aria2.result.auto_start sub-object surfaces the
-    // auto-start mechanism alongside the legacy aria2-launchd row.
+    // BG-44 phase 3: standalone aria2-launchd row retired; auto-start
+    // info now lives entirely on aria2.result.auto_start.
+    expect(body["aria2-launchd"]).toBeUndefined();
     expect(body.aria2.result.auto_start).toMatchObject({
       installed: expect.any(Boolean),
     });
@@ -1759,12 +1755,10 @@ describe("GET /api/lifecycle", () => {
       expected_running: false,
       managed_by: null, // not running in tests
     });
-    // ariaflow-server / networkquality / aria2-launchd: opinion-free
-    // on expected_running so the dashboard treats them as always-on
-    // (or informational, in launchd's case).
+    // ariaflow-server / networkquality: opinion-free on
+    // expected_running so the dashboard treats them as always-on.
     expect(body["ariaflow-server"].result.expected_running).toBeNull();
     expect(body.networkquality.result.expected_running).toBeNull();
-    expect(body["aria2-launchd"].result.expected_running).toBeNull();
   });
 
   it("BG-29: queued work flips aria2.expected_running to true", async () => {
@@ -1801,11 +1795,6 @@ describe("GET /api/lifecycle", () => {
     expect(typeof body.networkquality.result.installed).toBe("boolean");
     // running is null (installed but no recent probe) or false (not installed).
     expect([null, true, false]).toContain(body.networkquality.result.running);
-
-    // aria2-launchd: it's a service registration, installed/current null.
-    expect(body["aria2-launchd"].result.installed).toBeNull();
-    expect(body["aria2-launchd"].result.current).toBeNull();
-    expect(typeof body["aria2-launchd"].result.running).toBe("boolean");
   });
 
   it("surfaces the open session_id once one exists", async () => {

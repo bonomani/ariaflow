@@ -6,7 +6,6 @@ import {
   detectAriaflowInstalledVia,
   detectAriaflowManagedBy,
   detectLaunchdLabel,
-  detectServiceTarget,
   errorPayload,
   findAria2c,
   install as installNs,
@@ -33,10 +32,9 @@ interface AutoStart {
 }
 
 /**
- * Phase 1 of the proposed BG-44 consolidation: surface aria2's
- * auto-start mechanism on the aria2 row itself. The standalone
- * `aria2-launchd` row is unchanged for now (back-compat), giving the
- * frontend a deprecation cycle to migrate before the row is removed.
+ * BG-44: surface aria2's auto-start mechanism on the aria2 row itself
+ * (`auto_start` sub-object). Phase 3 retired the standalone
+ * `aria2-launchd` row; FE migrated to reading this in v0.1.466.
  *
  * `target` is platform-detected (no auto-start mechanism on
  * Windows / unknown → null). `installed` checks for the actual file.
@@ -151,9 +149,7 @@ function buildAria2Row(
       running: probe.running,
       expected_running: expectedRunning,
       managed_by: managedBy,
-      // Phase 1 of BG-44 consolidation: auto-start is now a
-      // sub-object on the aria2 row. The standalone aria2-launchd
-      // row is still emitted for back-compat (FE migration window).
+      // BG-44: auto-start mechanism as a sub-object on the aria2 row.
       auto_start: detectAria2AutoStart(),
       reason: probe.running ? "match" : probe.installed ? "stopped" : "missing",
       outcome: probe.running
@@ -196,42 +192,6 @@ function buildNetworkqualityRow(state: ServerState): ComponentRow {
       observation: nq.installed && nq.usable ? "ok" : "failed",
       message: nq.message,
       ...(nq.command ? { command: nq.command } : {}),
-    },
-  };
-}
-
-/**
- * aria2-launchd / aria2-systemd: a service registration, not an
- * installable binary — installed/current are null. running proxies
- * through aria2's RPC reachability: launchd's job is to keep aria2 up,
- * so if RPC works the unit is doing its job.
- */
-function buildAria2LaunchdRow(aria2Running: boolean): ComponentRow {
-  const target = detectServiceTarget();
-  const home = homedir();
-  const installedPath =
-    target === "aria2-launchd"
-      ? `${home}/Library/LaunchAgents/com.ariaflow-server.aria2.plist`
-      : target === "aria2-systemd"
-        ? `${home}/.config/systemd/user/ariaflow-server-aria2.service`
-        : null;
-  const installedHere = installedPath ? existsSync(installedPath) : false;
-  const running = installedHere ? aria2Running : false;
-  return {
-    result: {
-      installed: null,
-      current: null,
-      running,
-      expected_running: null,
-      managed_by: installedHere ? "launchd" : null,
-      reason: installedHere ? (aria2Running ? "match" : "stopped") : "missing",
-      outcome: installedHere
-        ? aria2Running
-          ? "loaded"
-          : "registered · not running"
-        : "not installed",
-      observation: installedHere && aria2Running ? "ok" : "unknown",
-      ...(installedPath ? { path: installedPath } : {}),
     },
   };
 }
@@ -380,7 +340,6 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
       "ariaflow-server": buildAriaflowServerRow(deps),
       aria2: buildAria2Row(aria2Probe, state, items),
       networkquality: buildNetworkqualityRow(state),
-      "aria2-launchd": buildAria2LaunchdRow(aria2Probe.running),
       session_id: state.session_id,
       session_started_at: state.session_started_at,
       session_last_seen_at: state.session_last_seen_at,

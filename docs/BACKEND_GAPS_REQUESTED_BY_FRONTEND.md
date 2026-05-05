@@ -11,7 +11,7 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (2)
+## Open (1)
 
 ### BG-45: Persist auto-start and auto-update as declaration preferences
 
@@ -71,54 +71,6 @@ package-manager "is there a newer version" check has its own
 detection per installer (`brew outdated`, `pipx list --outdated`,
 `npm outdated -g`). Worth phasing.
 
-### BG-44: Consolidate aria2-launchd row into aria2.auto_start
-
-**Paired frontend gap:** none (FE migrates rendering off
-aria2-launchd; backend phases gated by FE rollout)
-
-The `/api/lifecycle` response had two cards for one component:
-`aria2` (binary + RPC + version) and `aria2-launchd` (plist
-installed yes/no). After BG-29 added `managed_by` to the aria2
-row, the standalone aria2-launchd row mostly duplicated 'is the
-auto-start plist installed' which already shows up indirectly as
-`managed_by='launchd'`.
-
-**Phase 1 — backend additive (✅ shipped, v0.1.274, commit 82eee8c).**
-Surface a structured sub-object on `aria2.result.auto_start`:
-
-```ts
-auto_start = {
-  installed: bool,                      // plist / unit file present
-  target: 'launchd' | 'systemd' | null, // platform-detected
-  path: string | null,                  // file path for diagnostics
-}
-```
-
-The standalone `aria2-launchd` row stays emitted for one
-deprecation window so the FE has time to migrate.
-
-**Phase 2 — FE migrates rendering (✅ shipped, ariaflow-dashboard
-commit 9a7a801, in v0.1.466).** The lifecycle template now reads
-`aria2.result.auto_start` and renders a sub-section under the
-aria2 row (loaded badge, mechanism + path chips, Load/Unload
-buttons). The standalone `aria2-launchd` row is no longer
-included in `lifecycleRows`. Action targets still POST to
-`/api/lifecycle/aria2-launchd/{install,uninstall}` until phase 3.
-
-**Phase 3 — backend retires the standalone row.** Once phase 2 is
-in production for a release or two, drop:
-- `data['aria2-launchd']` from the `/api/lifecycle` response
-- and (optionally) the `'aria2-launchd'` action target on
-  `POST /api/lifecycle/:target/:action`, replacing it with
-  `aria2/auto_start_install` and `aria2/auto_start_uninstall`
-  (or any naming the backend prefers).
-
-If phase 3 renames the action targets, the FE will need a
-follow-up commit to update the two `lifecycleAction(...)` calls
-in `tab_lifecycle.html`. Backwards-compat keep-alive (accept
-both old and new for one release) would be safer than a hard
-cutover.
-
 ## Explicit non-requests (do not implement)
 
 | Topic | Decision | Reason |
@@ -130,6 +82,7 @@ cutover.
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-44 | Phase 3 (backend retires the standalone row). `data['aria2-launchd']` dropped from `/api/lifecycle`; auto-start info lives entirely on `aria2.result.auto_start` (shipped in phase 1). Action targets `aria2-launchd` / `aria2-systemd` / `aria2-service` for `{install,uninstall}` kept alive for back-compat (no rename). `buildAria2LaunchdRow` and the unused `detectServiceTarget` import removed. Tests updated to assert `body['aria2-launchd']` is undefined and that `auto_start` shape stays correct | 2026-05-05 |
 | BG-43 | Two new axes on `/api/lifecycle.ariaflow-server.result`: `managed_by` (launchd/systemd/docker/external/null) and `installed_via` (homebrew/pipx/npm/source/null), auto-detected from `/.dockerenv`, `~/Library/LaunchAgents/*.plist`, `INVOCATION_ID`, ppid, `process.argv[1]` path, etc. (see `packages/core/src/install/ariaflow_self.ts`). Two new lifecycle actions: `POST /api/lifecycle/ariaflow-server/restart` dispatches `launchctl kickstart -k gui/UID/<label>` (launchd) / `systemctl --user restart ariaflow-server` (systemd) / `process.exit(0)` (docker) / 409 (external/null). `POST /api/lifecycle/ariaflow-server/update` dispatches `brew upgrade ariaflow-server` (homebrew) / `pipx upgrade ariaflow-server` (pipx) / `npm install -g @ariaflow/cli@latest` (npm) / 409 (source/null). Subprocesses spawned detached + unref()'d so the response isn't blocked; side effects fire on `reply.raw.on('finish')` after the 202 ack flushes. 7 new pure-helper tests for installed_via detection. Verified live on v0.1.273: `managed_by="launchd"`, `installed_via="homebrew"` | 2026-05-05 |
 | BG-41 | Scheduler stuck in `starting` indefinitely after restart. Resolved as part of the wire-shape sweep — `afbcf93` (toWireState picks declared fields explicitly) plus the scheduler-controller fix verified live: state.running flips to true shortly after intent='running', heartbeat advances. FE workaround (Stop visible during 'starting') stays as defense in depth | 2026-05-05 |
 | BG-42 | (1) `GET /favicon.ico` registered in `routes/meta.ts` returning 204 — silences the per-browser-session 404 that was inflating `health.errors_total`. (2) `health.errors_recent` ring buffer added to `ServerMetrics` (`routes/_context.ts`); `onResponse` hook in `server.ts` pushes `{at, method, path, status}` for every 4xx/5xx, capped at `ERRORS_RECENT_MAX=20` (older entries roll off). Surfaced on `/api/status.health.errors_recent`. `path` prefers Fastify's matched `routerPath` ("/api/downloads/:id") and falls back to raw `req.url` when not yet matched | 2026-05-05 |
