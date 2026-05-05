@@ -17,12 +17,12 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
   app.get("/api/aria2/option_tiers", async () => {
     const declaration = await deps.declarationStore.load();
     const unsafe = declaration.uic.preferences.find((p) => p.name === "aria2_unsafe_options");
-    return {
+    return withMeta("GET", "/api/aria2/option_tiers", {
       ok: true,
       managed: [...MANAGED_ARIA2_OPTIONS].sort(),
       safe: [...SAFE_ARIA2_OPTIONS].sort(),
       unsafe_enabled: Boolean(unsafe?.value),
-    };
+    });
   });
 
   // BG-22: the dashboard reads `aria2Options[opt]` straight from the

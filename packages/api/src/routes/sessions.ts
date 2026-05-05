@@ -5,9 +5,11 @@ import type { RouteContext } from "./_context.js";
 export function registerSessionRoutes({ app, deps }: RouteContext): void {
   app.get("/api/sessions/current", async () => {
     const state = await deps.stateStore.load();
-    if (!state.session_id) return { ok: true, session: null };
+    if (!state.session_id) {
+      return withMeta("GET", "/api/sessions/current", { ok: true, session: null });
+    }
     const stats = await deps.sessionService.stats();
-    return { ok: true, session: toWireState(state), stats };
+    return withMeta("GET", "/api/sessions/current", { ok: true, session: toWireState(state), stats });
   });
 
   // openapi.yaml documents /api/sessions (= current session) and
@@ -23,7 +25,7 @@ export function registerSessionRoutes({ app, deps }: RouteContext): void {
 
   app.get("/api/sessions/stats", async () => {
     const stats = await deps.sessionService.stats();
-    return { ok: true, stats };
+    return withMeta("GET", "/api/sessions/stats", { ok: true, stats });
   });
 
   app.post("/api/sessions/start", async () => {

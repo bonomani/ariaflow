@@ -28,28 +28,31 @@ export function registerDeclarationRoutes({ app, deps }: RouteContext): void {
       queue_readable: true,
       paused: state.paused,
     });
-    return { ok: true, ...result };
+    return withMeta("GET", "/api/preflight", { ok: true, ...result });
   });
 
   app.get("/api/active", async () => {
     const state = await deps.stateStore.load();
     if (!deps.aria2) {
-      return { ok: true, active: null, reason: "aria2_unavailable" };
+      return withMeta("GET", "/api/active", { ok: true, active: null, reason: "aria2_unavailable" });
     }
     const progress = await getActiveProgress(deps.aria2, state);
-    if (progress) return { ok: true, active: progress };
+    if (progress) return withMeta("GET", "/api/active", { ok: true, active: progress });
     // Fall back to picking the best candidate from tellActive
     try {
       const infos = await deps.aria2.call<unknown[]>("aria2.tellActive");
       const ranked = rankActiveInfos(infos as Parameters<typeof rankActiveInfos>[0]);
       if (ranked.length > 0) {
         const top = ranked[0]!;
-        return { ok: true, active: buildTransferSummary(top, null, { recovered: true }) };
+        return withMeta("GET", "/api/active", {
+          ok: true,
+          active: buildTransferSummary(top, null, { recovered: true }),
+        });
       }
     } catch {
       /* aria2 unreachable — fall through */
     }
-    return { ok: true, active: null };
+    return withMeta("GET", "/api/active", { ok: true, active: null });
   });
 
   const saveDeclaration = async (

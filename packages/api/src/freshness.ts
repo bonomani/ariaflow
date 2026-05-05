@@ -118,6 +118,24 @@ export function registerDefaultFreshness(): void {
     revalidate_on: ["POST /api/bandwidth/probe"],
   });
   registerFreshness("GET", "/api/aria2/global_option", { freshness: "cold" });
+  registerFreshness("GET", "/api/aria2/option_tiers", { freshness: "cold" });
+  registerFreshness("GET", "/api/active", {
+    freshness: "live",
+    transport: "sse",
+    transport_topics: ["items", "scheduler"],
+  });
+  registerFreshness("GET", "/api/preflight", {
+    freshness: "on-action",
+    revalidate_on: [
+      "PUT /api/declaration",
+      "PATCH /api/declaration/preferences",
+      "POST /api/scheduler/start",
+      "POST /api/scheduler/pause",
+      "POST /api/scheduler/resume",
+    ],
+  });
+  registerFreshness("GET", "/api/sessions/current", { freshness: "swr", ttl_s: 30 });
+  registerFreshness("GET", "/api/sessions/stats", { freshness: "swr", ttl_s: 30 });
   registerFreshness("GET", "/api/log", { freshness: "swr", ttl_s: 10 });
   // BG-34: per-tab loader endpoints. Classes follow the frontend's
   // suggestions (see docs/BACKEND_GAPS_REQUESTED_BY_FRONTEND.md). Choice

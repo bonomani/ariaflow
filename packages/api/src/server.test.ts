@@ -229,7 +229,7 @@ describe("GET /api/active", () => {
 describe("session lifecycle endpoints", () => {
   it("/api/sessions/current returns null before any session is open", async () => {
     const res = await app.inject({ method: "GET", url: "/api/sessions/current" });
-    expect(res.json()).toEqual({ ok: true, session: null });
+    expect(res.json()).toMatchObject({ ok: true, session: null });
   });
 
   it("opens a session via POST and reports it via /current with stats", async () => {
