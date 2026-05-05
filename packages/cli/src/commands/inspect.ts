@@ -69,7 +69,7 @@ export async function cmdProbe(ctx: CliContext): Promise<CmdResult> {
  * a listen call.
  */
 export async function cmdOpenapi(ctx: CliContext): Promise<CmdResult> {
-  const app = buildServer({
+  const app = await buildServer({
     queueOps: ctx.queueOps,
     queueStore: ctx.queue,
     archiveStore: ctx.archive,

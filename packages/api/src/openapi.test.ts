@@ -17,7 +17,7 @@ import { buildServer } from "./server.js";
 import { generateOpenApi } from "./openapi.js";
 
 let dir: string;
-let app: ReturnType<typeof buildServer>;
+let app: Awaited<ReturnType<typeof buildServer>>;
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), "ariaflow-oa-"));
@@ -30,7 +30,7 @@ beforeEach(async () => {
   const sessions = new SessionService(lock, state, queue, archive, env);
   const declaration = new DeclarationStore(lock, env);
   const queueOps = new QueueOps(queue, sessions, declaration, actions);
-  app = buildServer({
+  app = await buildServer({
     queueOps,
     queueStore: queue,
     declarationStore: declaration,
@@ -38,6 +38,7 @@ beforeEach(async () => {
     sessionService: sessions,
     actionLog: actions,
     cwd: dir,
+    version: "0.1.0",
   });
   await app.ready();
 });
@@ -47,14 +48,19 @@ afterEach(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-describe("generateOpenApi", () => {
-  it("emits a 3.0.3 doc with our routes mapped to tags", () => {
-    const doc = generateOpenApi(app, { title: "ariaflow", version: "0.1.0" });
-    expect(doc.openapi).toBe("3.0.3");
-    expect(doc.info).toEqual({ title: "ariaflow", version: "0.1.0" });
+describe("generateOpenApi (R-J: backed by @fastify/swagger)", () => {
+  it("emits a 3.0 doc with info populated from buildServer deps.version", () => {
+    const doc = generateOpenApi(app);
+    expect(doc.openapi).toMatch(/^3\.0/);
+    expect(doc.info.title).toBe("Ariaflow API");
+    expect(doc.info.version).toBe("0.1.0");
+  });
+
+  it("includes the routes registered by buildServer", () => {
+    const doc = generateOpenApi(app);
     expect(doc.paths["/api/downloads"]).toBeTruthy();
-    expect(doc.paths["/api/downloads"]!.post).toBeTruthy();
     expect(doc.paths["/api/declaration"]).toBeTruthy();
+    expect(doc.paths["/api/scheduler"]).toBeTruthy();
   });
 
   it("converts Fastify :id syntax to OpenAPI {id}", () => {
@@ -62,15 +68,5 @@ describe("generateOpenApi", () => {
     const keys = Object.keys(doc.paths);
     expect(keys.some((k) => k.includes("{id}"))).toBe(true);
     expect(keys.some((k) => k.includes(":id"))).toBe(false);
-  });
-
-  it("tags by longest-matching prefix", () => {
-    const doc = generateOpenApi(app);
-    const downloads = doc.paths["/api/downloads"]!.get!;
-    expect(downloads.tags).toEqual(["Queue"]);
-    const sessionsCurrent = doc.paths["/api/sessions/current"]!.get!;
-    expect(sessionsCurrent.tags).toEqual(["Sessions"]);
-    const decl = doc.paths["/api/declaration"]!.get!;
-    expect(decl.tags).toEqual(["Config"]);
   });
 });

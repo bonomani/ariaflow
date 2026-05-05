@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyCors from "@fastify/cors";
+import fastifySwagger from "@fastify/swagger";
 import { errorPayload } from "@ariaflow/core";
 import type {
   ActionLog,
@@ -82,8 +83,26 @@ export interface ServerDeps {
  * the cross-cutting wiring: CORS, hooks, metrics, freshness registry,
  * and registering each group on the Fastify instance.
  */
-export function buildServer(deps: ServerDeps): FastifyInstance {
+export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: deps.logger ?? false });
+
+  // R-J: @fastify/swagger plugin. Must be awaited BEFORE any routes
+  // are registered so its onRoute hook is in place when routes fire.
+  await app.register(fastifySwagger, {
+    openapi: {
+      openapi: "3.0.3",
+      info: {
+        title: "Ariaflow API",
+        description:
+          "Headless download engine API. Manages queue state, sessions, runs, and policy on top of aria2.",
+        version: deps.version ?? "0.0.0",
+        license: { name: "MIT" },
+      },
+      servers: [
+        { url: "http://127.0.0.1:8000", description: "Local development" },
+      ],
+    },
+  });
 
   // BG-31: per-endpoint freshness contract. Stamps `meta` on a curated
   // subset of GETs and exposes the registry at /api/_meta. Idempotent.

@@ -150,7 +150,7 @@ export async function cmdServe(
     ...(opts.schedulerIntervalMs !== undefined ? { intervalMs: opts.schedulerIntervalMs } : {}),
   });
 
-  const app = buildServer({
+  const app = await buildServer({
     queueOps: ctx.queueOps,
     queueStore: ctx.queue,
     archiveStore: ctx.archive,

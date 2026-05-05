@@ -1,7 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { errorPayload } from "@ariaflow/core";
+import { stringify as yamlStringify } from "yaml";
 import { listFreshness, withMeta } from "../freshness.js";
-import { generateOpenApi } from "../openapi.js";
 import type { RouteContext } from "./_context.js";
 
 const SWAGGER_UI_HTML = `<!DOCTYPE html>
@@ -68,28 +66,15 @@ export function registerMetaRoutes({ app, deps }: RouteContext): void {
     openapi: "/api/openapi.yaml",
   }));
 
+  // R-J: openapi.yaml is now generated from the registered route
+  // schemas by @fastify/swagger (see server.ts). The hand-authored
+  // openapi.yaml file is retired; this serializes the live doc to YAML
+  // on demand. BG-37 (info.version stamping) is preserved by passing
+  // deps.version into swagger's openapi.info at registration time.
   app.get("/api/openapi.yaml", async (_req, reply) => {
-    const yamlPath = deps.openapiYamlPath;
-    if (!yamlPath) {
-      return reply
-        .code(404)
-        .send(errorPayload("not_found", "openapi.yaml path not configured"));
-    }
-    if (!existsSync(yamlPath)) {
-      return reply
-        .code(404)
-        .send(errorPayload("not_found", "openapi.yaml not found on disk"));
-    }
     reply.type("application/yaml");
-    // BG-37: rewrite info.version to match /api/version so the published
-    // contract artifact never drifts from the running release.
-    const raw = readFileSync(yamlPath, "utf8");
-    const runtimeVersion = deps.version ?? "0.0.0";
-    const stamped = raw.replace(
-      /^(info:[\s\S]*?\n {2}version:)[^\n]*/m,
-      `$1 ${runtimeVersion}`,
-    );
-    return reply.send(stamped);
+    const doc = (app as unknown as { swagger: () => Record<string, unknown> }).swagger();
+    return reply.send(yamlStringify(doc));
   });
 
   app.get("/api/docs", async (_req, reply) => {
@@ -98,6 +83,6 @@ export function registerMetaRoutes({ app, deps }: RouteContext): void {
   });
 
   app.get("/api/openapi", async () => {
-    return generateOpenApi(app);
+    return (app as unknown as { swagger: () => Record<string, unknown> }).swagger();
   });
 }
