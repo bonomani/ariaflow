@@ -75,7 +75,6 @@ export {
 export { parseAddItems, type ParsedAddItem } from "./routes/parse-add.js";
 
 // Bandwidth / scheduler / transfers / reconcile / discovery / bonjour / install
-export * as bandwidth from "./bandwidth/probe.js";
 export * as bandwidthUnits from "./bandwidth/units.js";
 export { bandwidthConfigFrom, type BandwidthConfig } from "./bandwidth/config.js";
 export { runBandwidthProbe, type ResolvedProbe } from "./bandwidth/run.js";
@@ -130,13 +129,11 @@ export {
   type SchedulerLoopIteration,
   type SchedulerLoopOptions,
 } from "./scheduler/loop.js";
-export * as transfers from "./transfers/helpers.js";
 export {
   buildTransferSummary,
   rankActiveInfos,
   type TransferSummary,
 } from "./transfers/progress.js";
-export * as reconcile from "./reconcile/merge.js";
 export { planCleanup } from "./reconcile/cleanup.js";
 export { planAutoCleanup } from "./state/archivable.js";
 export { queueItemForActiveInfo } from "./reconcile/match.js";
@@ -152,7 +149,6 @@ export {
   type AdvertiseHandle,
   type AdvertiseOptions,
 } from "./bonjour/advertise.js";
-export * as platform from "./platform/detect.js";
 export * as install from "./install/networkquality.js";
 export {
   detectAriaflowManagedBy,

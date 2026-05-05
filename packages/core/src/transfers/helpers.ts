@@ -1,6 +1,6 @@
 import { prefValue, type Declaration } from "../contracts/declaration.js";
 
-export type DedupActiveTransferAction = "pause" | "remove" | "ignore";
+type DedupActiveTransferAction = "pause" | "remove" | "ignore";
 
 /**
  * Resolve the `duplicate_active_transfer_action` preference. Defaults
