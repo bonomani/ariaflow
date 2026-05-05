@@ -79,9 +79,8 @@ export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
 
     // BG-28(b): mirror aria2's tellStatus camelCase keys onto the row
     // (the dashboard reads `item.downloadSpeed` etc directly from
-    // /api/status.items[]). Snake-case aliases stay for any internal
-    // caller that depended on them. Mutations here mark the row dirty
-    // so the queue store actually persists the refresh.
+    // /api/status.items[]). Mutations here mark the row dirty so the
+    // queue store actually persists the refresh.
     const setField = (key: string, value: unknown): void => {
       if (value === undefined) return;
       if (item[key] !== value) {
@@ -96,9 +95,6 @@ export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
     setField("totalLength", info.totalLength);
     setField("connections", infoRec.connections);
     setField("numSeeders", infoRec.numSeeders);
-    setField("download_speed", info.downloadSpeed);
-    setField("completed_length", info.completedLength);
-    setField("total_length", info.totalLength);
     item.live_status = live;
 
     if (live === "complete") {

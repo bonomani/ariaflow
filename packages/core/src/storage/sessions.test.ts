@@ -101,12 +101,12 @@ describe("SessionService", () => {
     const s = await sessions.ensure();
     const sid = s.session_id!;
     await queue.save([
-      { id: "1", url: "u", status: "active", session_id: sid, completed_length: 100 },
+      { id: "1", url: "u", status: "active", session_id: sid, completedLength: 100 },
       { id: "2", url: "u", status: "queued", session_id: sid },
       { id: "3", url: "u", status: "active", session_id: "other" },
     ]);
     await archive.save([
-      { id: "4", url: "u", status: "complete", session_id: sid, completed_length: 50 },
+      { id: "4", url: "u", status: "complete", session_id: sid, completedLength: 50 },
     ]);
     const stats = await sessions.stats();
     expect(stats.items_total).toBe(3);

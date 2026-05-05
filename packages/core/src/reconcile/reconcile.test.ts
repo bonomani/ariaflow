@@ -52,24 +52,24 @@ describe("queueItemPreference / comparePreference", () => {
     expect(comparePreference(item({ status: "active" }), item({ status: "queued" }))).toBe(1);
     expect(comparePreference(item({ status: "queued" }), item({ status: "complete" }))).toBe(1);
   });
-  it("breaks ties by completed_length", () => {
+  it("breaks ties by completedLength", () => {
     expect(
       comparePreference(
-        item({ status: "active", completed_length: 100 }),
-        item({ status: "active", completed_length: 50 }),
+        item({ status: "active", completedLength: 100 }),
+        item({ status: "active", completedLength: 50 }),
       ),
     ).toBe(1);
   });
   it("rewards rows that have a gid", () => {
     expect(
       comparePreference(
-        item({ status: "queued", completed_length: 0, gid: "G" }),
-        item({ status: "queued", completed_length: 0 }),
+        item({ status: "queued", completedLength: 0, gid: "G" }),
+        item({ status: "queued", completedLength: 0 }),
       ),
     ).toBe(1);
   });
   it("preference tuple shape is stable", () => {
-    expect(queueItemPreference(item({ status: "active", gid: "G", completed_length: 5 }))).toEqual(
+    expect(queueItemPreference(item({ status: "active", gid: "G", completedLength: 5 }))).toEqual(
       [3, 5, 1, 0],
     );
   });
@@ -91,12 +91,12 @@ describe("mergeQueueRows", () => {
     expect(p.output).toBe("keep");
   });
 
-  it("takes the larger numeric value (download_speed/completed_length/total_length)", () => {
-    const p = item({ completed_length: 10, total_length: 100 });
-    const c = item({ completed_length: 50, total_length: 80 });
+  it("takes the larger numeric value (downloadSpeed/completedLength/totalLength)", () => {
+    const p = item({ completedLength: 10, totalLength: 100 });
+    const c = item({ completedLength: 50, totalLength: 80 });
     mergeQueueRows(p, c);
-    expect(p.completed_length).toBe(50);
-    expect(p.total_length).toBe(100);
+    expect(p.completedLength).toBe(50);
+    expect(p.totalLength).toBe(100);
   });
 
   it("skips recovery_session_id once primary is terminal", () => {
@@ -140,14 +140,14 @@ describe("planCleanup", () => {
       url: "http://a",
       status: "active",
       gid: "G",
-      completed_length: 50,
+      completedLength: 50,
     });
     const out = planCleanup([a, b]);
     expect(out.removed).toBe(1);
     expect(out.changed).toBe(true);
     expect(out.items).toHaveLength(1);
     expect(out.items[0]!.id).toBe("2");
-    expect(out.items[0]!.completed_length).toBe(50);
+    expect(out.items[0]!.completedLength).toBe(50);
   });
 
   it("dedupes by url when gids differ", () => {

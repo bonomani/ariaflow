@@ -142,8 +142,8 @@ describe("pollActiveItems", () => {
     expect(r.updated.length).toBeLessThanOrEqual(1);
     const items = await queue.load();
     expect(items[0]!.status).toBe("active"); // unchanged
-    expect((items[0] as Record<string, unknown>).download_speed).toBe("42");
-    expect((items[0] as Record<string, unknown>).completed_length).toBe("250");
+    expect((items[0] as Record<string, unknown>).downloadSpeed).toBe("42");
+    expect((items[0] as Record<string, unknown>).completedLength).toBe("250");
     expect(items[0]!.live_status).toBe("active");
     // sanity: id round-trip
     expect(id).toMatch(/^[0-9a-f-]{36}$/);

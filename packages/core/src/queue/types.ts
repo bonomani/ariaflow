@@ -55,7 +55,6 @@ export interface QueueItemRecord {
   error_at?: string | null;
   removed_at?: string | null;
   session_history?: Array<Record<string, string>> | null;
-  completed_length?: string | number | null;
   /**
    * Recovery / retry bookkeeping. Set by the scheduler reconcile +
    * retry passes when an item is adopted from a stale aria2 session

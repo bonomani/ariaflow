@@ -39,7 +39,7 @@ export function mergeActiveStatus(status: string | null | undefined): string {
 
 /**
  * Tuple used to choose which of two duplicate rows survives during
- * cleanup. Lexicographic comparison: status_rank, completed_length,
+ * cleanup. Lexicographic comparison: status_rank, completedLength,
  * has_gid, recovered. Higher tuple wins.
  */
 export function queueItemPreference(
@@ -56,7 +56,7 @@ export function queueItemPreference(
   const status = String(item.status ?? "");
   return [
     ranks[status] ?? 0,
-    coerceFloat(item.completed_length) ?? 0,
+    coerceFloat((item as Record<string, unknown>).completedLength) ?? 0,
     item.gid ? 1 : 0,
     item.recovered ? 1 : 0,
   ];
@@ -85,7 +85,7 @@ const STRING_KEYS = [
 ] as const;
 
 const RECOVERY_KEYS = ["recovery_session_id", "recovered_at"] as const;
-const NUMERIC_KEYS = ["download_speed", "completed_length", "total_length"] as const;
+const NUMERIC_KEYS = ["downloadSpeed", "completedLength", "totalLength"] as const;
 
 /**
  * Merge two duplicate queue rows in place: empty primary fields are
@@ -111,7 +111,7 @@ export function mergeQueueRows(primary: QueueItemRecord, candidate: QueueItemRec
     }
   }
   // NUMERIC_KEYS reach for loosely-typed numeric/string-numeric fields
-  // (download_speed isn't on the typed surface); index-signature access
+  // (downloadSpeed isn't on the typed surface); index-signature access
   // gives us `unknown`, so coerce + write through the index.
   const p = primary as Record<string, unknown>;
   const c = candidate as Record<string, unknown>;
