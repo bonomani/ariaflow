@@ -20,26 +20,7 @@ let app: Awaited<ReturnType<typeof buildServer>>;
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), "ariaflow-api-"));
-  const env = { ARIAFLOW_DIR: dir };
-  const lock = new StorageLock(storageLockPath(env));
-  const state = new StateStore(lock, env);
-  const queue = new QueueStore(lock, env);
-  const archive = new ArchiveStore(lock, env);
-  const actions = new ActionLog(lock, state, env);
-  const sessions = new SessionService(lock, state, queue, archive, env);
-  const declaration = new DeclarationStore(lock, env);
-  const queueOps = new QueueOps(queue, sessions, declaration, actions);
-  app = await buildServer({
-    queueOps,
-    queueStore: queue,
-    declarationStore: declaration,
-    stateStore: state,
-    sessionService: sessions,
-    actionLog: actions,
-    archiveStore: archive,
-    cwd: dir,
-    runBandwidthProbe: stubBandwidthProbe,
-  });
+  app = (await makeWiredServer(dir)).app;
 });
 
 afterEach(async () => {
