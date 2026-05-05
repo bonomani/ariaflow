@@ -11,7 +11,54 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-48: Rename `ucc` action verb + endpoint to `contract`
+
+**Paired frontend gap:** FE-38 (display-only alias `actionDisplay()` already
+ships; will be removed once backend rename lands)
+
+**Why:** "UCC" is an opaque acronym in the UI. The FE already
+relabels every appearance to "contract" (section header, button,
+activity-log rows, filter dropdown) via a small alias map, but the
+wire still surfaces `ucc` in:
+
+- `POST /api/scheduler/ucc`
+- action-log `entry.action === 'ucc'`
+- `meta.contract` field on the trace response (already named
+  contract — confirms the operator-facing word)
+- `/api/_meta` registry path
+
+So we have a name split: backend says "ucc", everything user-facing
+says "contract". The alias closes the gap on the FE side, but it's
+brittle — every new tool, log filter, or external dashboard hitting
+the API has to re-learn the same mapping.
+
+**Requested:**
+
+1. Add a parallel `POST /api/scheduler/contract` endpoint that
+   does exactly what `/ucc` does today.
+2. Have the action log emit `action: "contract"` for new runs.
+3. Mark `/api/scheduler/ucc` as deprecated in the OpenAPI spec
+   (back-compat — keep accepting it for one release, then drop).
+4. Update `meta.contract` (already correctly named) to also live as
+   `meta.kind: "contract"` if that field structure makes sense to
+   you — pure-cosmetic detail, not blocking.
+
+**FE follow-up after this lands:** drop `actionDisplay()` and the
+`'ucc' → 'contract'` mapping; FE-38 closes.
+
+**Naming notes:** "contract" matches the existing `meta.contract`
+field, the section subhead "Contract execution trace", and the
+operator's mental model ("did the contract converge?"). Other
+candidates considered and rejected: "selfcheck" (too generic),
+"audit" (audit log already overloaded in the project), "verify"
+(implies a one-shot pass/fail rather than the steady-state-reach
+semantics that UCC actually has).
+
+---
+
+
 
 <details>
 <summary>BG-47 (resolved) — original frontend brief retained for context</summary>
