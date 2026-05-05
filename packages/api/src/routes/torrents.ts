@@ -22,7 +22,7 @@ export function registerTorrentsRoutes({ app, deps }: RouteContext): void {
         });
       }
     }
-    return withMeta("GET", "/api/torrents", { torrents: seeds, count: seeds.length });
+    return withMeta("GET", "/api/torrents", { ok: true, torrents: seeds, count: seeds.length });
   });
 
   app.post<{ Params: { infohash: string } }>(

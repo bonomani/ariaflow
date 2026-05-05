@@ -269,7 +269,7 @@ describe("session lifecycle endpoints", () => {
 
   it("history is empty by default", async () => {
     const res = await app.inject({ method: "GET", url: "/api/sessions/history" });
-    expect(res.json()).toEqual({ ok: true, history: [] });
+    expect(res.json()).toMatchObject({ ok: true, history: [] });
   });
 });
 
@@ -1223,6 +1223,7 @@ describe("torrent serving routes", () => {
     const res = await app.inject({ method: "GET", url: "/api/torrents" });
     expect(res.statusCode).toBe(200);
     const body = res.json();
+    expect(body.ok).toBe(true);
     expect(body.count).toBe(1);
     expect(body.torrents[0]).toMatchObject({
       infohash: "abc",

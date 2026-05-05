@@ -42,6 +42,9 @@ export function registerSessionRoutes({ app, deps }: RouteContext): void {
   });
 
   app.get("/api/sessions/history", async () => {
-    return { ok: true, history: await deps.sessionService.loadHistory() };
+    return withMeta("GET", "/api/sessions/history", {
+      ok: true,
+      history: await deps.sessionService.loadHistory(),
+    });
   });
 }
