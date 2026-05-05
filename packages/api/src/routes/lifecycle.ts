@@ -1,7 +1,11 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
+import { spawn } from "node:child_process";
 import {
   ACTIONS,
+  detectAriaflowInstalledVia,
+  detectAriaflowManagedBy,
+  detectLaunchdLabel,
   detectServiceTarget,
   errorPayload,
   findAria2c,
@@ -9,6 +13,8 @@ import {
   installAria2Service,
   uninstallAria2Service,
   type Aria2Client,
+  type AriaflowInstalledVia,
+  type AriaflowManagedBy,
   type QueueItemRecord,
   type ServerState,
 } from "@ariaflow/core";
@@ -24,10 +30,18 @@ interface ComponentRow {
 }
 
 /**
- * BG-20 + BG-27 + BG-29: ariaflow-server itself. We're answering the
- * request, so all three axes are true and the version IS the
- * expected version. expected_running / managed_by stay null —
- * informational row, no daemon-style opinion to express.
+ * BG-20 + BG-27 + BG-29 + BG-43: ariaflow-server itself. We're
+ * answering the request, so the three install/current/running axes
+ * are all true and the version IS the expected version.
+ *
+ * BG-43 adds two orthogonal axes the dashboard reads to decide
+ * whether to show Restart / Update buttons:
+ *   managed_by    — who supervises this process (launchd, systemd,
+ *                   docker, external, null) — drives Restart
+ *   installed_via — where the binary came from (homebrew, pipx,
+ *                   npm, source, null) — drives Update
+ * Both auto-detected at request time from process state +
+ * filesystem signals (see core/install/ariaflow_self.ts).
  */
 function buildAriaflowServerRow(deps: ServerDeps): ComponentRow {
   const expectedVersion = deps.version ?? "0.0.0";
@@ -37,7 +51,8 @@ function buildAriaflowServerRow(deps: ServerDeps): ComponentRow {
       current: true,
       running: true,
       expected_running: null,
-      managed_by: null,
+      managed_by: detectAriaflowManagedBy(),
+      installed_via: detectAriaflowInstalledVia(),
       reason: "match",
       outcome: "installed · current",
       message: null,
@@ -188,6 +203,133 @@ const ARIA2_SERVICE_TARGETS = new Set([
   "aria2-service",
 ]);
 
+interface ActionDispatchResult {
+  status: 202 | 409;
+  body: Record<string, unknown>;
+  /** Optional post-response side effect (process.exit, spawn, etc.). */
+  after?: () => void;
+}
+
+/**
+ * BG-43: dispatch /api/lifecycle/ariaflow-server/restart per detected
+ * supervisor. The actual restart happens after the response is sent
+ * so the operator gets the 202 ack before launchctl/systemd kills us.
+ */
+function dispatchAriaflowRestart(): ActionDispatchResult {
+  const managedBy: AriaflowManagedBy = detectAriaflowManagedBy();
+  if (managedBy === "launchd") {
+    const label = detectLaunchdLabel();
+    if (!label) {
+      return {
+        status: 409,
+        body: { error: "no_launchd_plist", managed_by: managedBy },
+      };
+    }
+    const target = `gui/${process.getuid?.() ?? 0}/${label}`;
+    return {
+      status: 202,
+      body: { ok: true, action: "restart", managed_by: "launchd", launchctl_target: target },
+      // Detached so the parent doesn't block waiting for kickstart's
+      // pipe; kickstart -k bounces us, the OS sends SIGTERM, fastify
+      // is mid-flight returning the 202.
+      after: () => {
+        spawn("launchctl", ["kickstart", "-k", target], {
+          detached: true,
+          stdio: "ignore",
+        }).unref();
+      },
+    };
+  }
+  if (managedBy === "systemd") {
+    return {
+      status: 202,
+      body: { ok: true, action: "restart", managed_by: "systemd" },
+      after: () => {
+        spawn("systemctl", ["--user", "restart", "ariaflow-server"], {
+          detached: true,
+          stdio: "ignore",
+        }).unref();
+      },
+    };
+  }
+  if (managedBy === "docker") {
+    return {
+      status: 202,
+      body: { ok: true, action: "restart", managed_by: "docker", note: "exiting; orchestrator will restart" },
+      after: () => setImmediate(() => process.exit(0)),
+    };
+  }
+  if (managedBy === "external") {
+    return {
+      status: 409,
+      body: {
+        error: "manual_restart_required",
+        managed_by: "external",
+        message: "process is foregrounded by a shell, no supervisor to ask",
+      },
+    };
+  }
+  return {
+    status: 409,
+    body: {
+      error: "unknown_supervisor",
+      managed_by: null,
+      message: "could not detect a supervisor for this process",
+    },
+  };
+}
+
+/**
+ * BG-43: dispatch /api/lifecycle/ariaflow-server/update per detected
+ * installer. The package manager runs detached; the running process
+ * keeps serving until the next restart picks up the new version.
+ */
+function dispatchAriaflowUpdate(): ActionDispatchResult {
+  const installedVia: AriaflowInstalledVia = detectAriaflowInstalledVia();
+  const detached = (cmd: string, args: string[]) =>
+    spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
+
+  if (installedVia === "homebrew") {
+    return {
+      status: 202,
+      body: { ok: true, action: "update", installed_via: "homebrew" },
+      after: () => detached("brew", ["upgrade", "ariaflow-server"]),
+    };
+  }
+  if (installedVia === "pipx") {
+    return {
+      status: 202,
+      body: { ok: true, action: "update", installed_via: "pipx" },
+      after: () => detached("pipx", ["upgrade", "ariaflow-server"]),
+    };
+  }
+  if (installedVia === "npm") {
+    return {
+      status: 202,
+      body: { ok: true, action: "update", installed_via: "npm" },
+      after: () => detached("npm", ["install", "-g", "@ariaflow/cli@latest"]),
+    };
+  }
+  if (installedVia === "source") {
+    return {
+      status: 409,
+      body: {
+        error: "source_install",
+        installed_via: "source",
+        message: "running from a git checkout — operator runs git pull && pnpm build",
+      },
+    };
+  }
+  return {
+    status: 409,
+    body: {
+      error: "unknown_installer",
+      installed_via: null,
+      message: "could not detect an installer for this process",
+    },
+  };
+}
+
 export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
   app.get("/api/lifecycle", async () => {
     const state = await deps.stateStore.load();
@@ -217,6 +359,44 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
 
       const beforeState = await deps.stateStore.load();
       const before = { lifecycle: { state: beforeState } };
+
+      // BG-43: ariaflow-server/{restart,update} dispatch via supervisor /
+      // installer detection. Returns 202 on success and runs the side
+      // effect (launchctl/systemctl/docker exit/brew upgrade/...) AFTER
+      // the response is sent so the operator gets the ack before any
+      // bounce. Dry-run returns the plan without executing.
+      if (target === "ariaflow-server" && (action === "restart" || action === "update")) {
+        const dispatch =
+          action === "restart" ? dispatchAriaflowRestart() : dispatchAriaflowUpdate();
+        await deps.actionLog.record({
+          action: ACTIONS.systemLifecycle,
+          target: target || "system",
+          outcome: dispatch.status === 202 ? "changed" : "blocked",
+          reason: action,
+          before,
+          after: { target, action, dry_run: dryRun, ...dispatch.body },
+          detail: { target, action, dry_run: dryRun, ...dispatch.body },
+        });
+        if (dispatch.status === 202 && !dryRun && dispatch.after) {
+          // Schedule the side effect after the reply flushes.
+          reply.raw.on("finish", () => {
+            try {
+              dispatch.after?.();
+            } catch (err) {
+              // Don't crash the server on a failed restart subprocess.
+              console.error("BG-43 lifecycle action side effect failed:", err);
+            }
+          });
+        }
+        return reply.code(dispatch.status).send({
+          ok: dispatch.status === 202,
+          target,
+          action,
+          dry_run: dryRun,
+          ...dispatch.body,
+        });
+      }
+
       try {
         let result: Record<string, unknown>;
         if (ARIA2_SERVICE_TARGETS.has(target) && action === "install") {

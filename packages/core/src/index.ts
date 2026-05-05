@@ -158,6 +158,13 @@ export {
 export * as platform from "./platform/detect.js";
 export * as install from "./install/networkquality.js";
 export {
+  detectAriaflowManagedBy,
+  detectAriaflowInstalledVia,
+  detectLaunchdLabel,
+  type AriaflowManagedBy,
+  type AriaflowInstalledVia,
+} from "./install/ariaflow_self.js";
+export {
   versionFromTag,
   tarballUrl,
   downloadSha256,
