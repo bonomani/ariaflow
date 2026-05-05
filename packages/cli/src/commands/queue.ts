@@ -1,5 +1,5 @@
 import { existsSync, unlinkSync } from "node:fs";
-import { allowedActions, planAutoCleanup, summarizeQueue } from "@ariaflow/core";
+import { ACTIONS, TARGETS, allowedActions, planAutoCleanup, summarizeQueue } from "@ariaflow/core";
 import type { CliContext } from "../context.js";
 import { fail, json, ok, requireArg, type CmdResult } from "./_shared.js";
 
@@ -97,8 +97,8 @@ export async function cmdSeedStop(
   delete item.distribute_seed_gid;
   await ctx.queue.save(items);
   await ctx.actions.record({
-    action: "seed_stopped",
-    target: "queue_item",
+    action: ACTIONS.queueSeedStopped,
+    target: TARGETS.queueItem,
     outcome: "changed",
     reason: "cli_stop_seed",
     detail: { item_id: item.id, infohash },
@@ -142,8 +142,8 @@ export async function cmdCleanup(
   await ctx.archive.save([...archived, ...stamped]);
   await ctx.queue.save(plan.keep as never);
   await ctx.actions.record({
-    action: "auto_cleanup",
-    target: "queue",
+    action: ACTIONS.queueAutoCleanup,
+    target: TARGETS.queue,
     outcome: "changed",
     reason: "cli_cleanup",
     before: { total: items.length },

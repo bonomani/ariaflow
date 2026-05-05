@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
+  ACTIONS,
+  TARGETS,
   advertiseHttpService,
   Aria2Client,
   callStartScheduler,
@@ -176,8 +178,8 @@ export async function cmdServe(
     : advertiseHttpService({ port, path: "/api" });
   if (mdnsHandle && mdnsHandle.backend) {
     await ctx.actions.record({
-      action: "bonjour_register",
-      target: "system",
+      action: ACTIONS.systemBonjourRegister,
+      target: TARGETS.system,
       outcome: "changed",
       reason: "registered",
       detail: { backend: mdnsHandle.backend, port, path: "/api" },

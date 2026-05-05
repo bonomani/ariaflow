@@ -1,3 +1,4 @@
+import { ACTIONS, TARGETS } from "@ariaflow/core";
 import type { CliContext } from "../context.js";
 import { fail, json, ok, requireArg, type CmdResult } from "./_shared.js";
 
@@ -20,8 +21,8 @@ export async function cmdSetPref(
   pref.value = value;
   await ctx.declaration.save(declaration);
   await ctx.actions.record({
-    action: "patch_preferences",
-    target: "declaration",
+    action: ACTIONS.declarationPatch,
+    target: TARGETS.declaration,
     outcome: "changed",
     reason: "cli_set_pref",
     detail: { applied: { [name]: { before, after: value } } },

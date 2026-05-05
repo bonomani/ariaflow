@@ -1,5 +1,7 @@
 import type { FastifyReply } from "fastify";
 import {
+  ACTIONS,
+  TARGETS,
   allowedActions,
   aria2,
   callStartScheduler,
@@ -120,8 +122,8 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
       await deps.archiveStore.save([...archived, ...stamped]);
       await deps.queueStore.save(plan.keep as never);
       await deps.actionLog.record({
-        action: "auto_cleanup",
-        target: "queue",
+        action: ACTIONS.queueAutoCleanup,
+        target: TARGETS.queue,
         outcome: "changed",
         reason: "stale_items_archived",
         before: { total: items.length },
@@ -187,8 +189,8 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
     item.priority = Math.trunc(priority);
     await deps.queueStore.save(items);
     await deps.actionLog.record({
-      action: "set_priority",
-      target: "queue_item",
+      action: ACTIONS.queueSetPriority,
+      target: TARGETS.queueItem,
       outcome: "changed",
       reason: "api_request",
       detail: { item_id: item.id, priority: item.priority },
@@ -212,8 +214,8 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
     item.live_status = null;
     await deps.queueStore.save(items);
     await deps.actionLog.record({
-      action: "retry",
-      target: "queue_item",
+      action: ACTIONS.queueRetry,
+      target: TARGETS.queueItem,
       outcome: "changed",
       reason: "api_request",
       before: { item: before },
@@ -261,8 +263,8 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
     item.selected_files = indices;
     await deps.queueStore.save(items);
     await deps.actionLog.record({
-      action: "select_files",
-      target: "queue_item",
+      action: ACTIONS.queueSelectFiles,
+      target: TARGETS.queueItem,
       outcome: "changed",
       reason: "user_select_files",
       detail: { item_id: item.id, before, after: indices },

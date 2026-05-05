@@ -1,4 +1,6 @@
 import {
+  ACTIONS,
+  TARGETS,
   Aria2Client,
   bandwidthConfigFrom,
   deduplicateActiveTransfers,
@@ -88,8 +90,8 @@ export function createSchedulerController(
             s.last_bandwidth_probe_at = Date.now() / 1000;
           });
           await ctx.actions.record({
-            action: "probe",
-            target: "bandwidth",
+            action: ACTIONS.bandwidthProbe,
+            target: TARGETS.bandwidth,
             outcome: fresh.source === "networkquality" ? "changed" : "unchanged",
             reason: "scheduler_preloop",
             detail: fresh as unknown as Record<string, unknown>,

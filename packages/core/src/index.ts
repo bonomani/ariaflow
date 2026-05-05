@@ -15,6 +15,12 @@ export { readJson, writeJson } from "./storage/json.js";
 export { StateStore, type ServerState } from "./storage/state.js";
 export { QueueStore, ArchiveStore } from "./storage/queue.js";
 export { ActionLog } from "./storage/action-log.js";
+export {
+  ACTIONS,
+  TARGETS,
+  type ActionName,
+  type ActionTarget,
+} from "./storage/actions.js";
 export { EventBus, type EventListener } from "./events/bus.js";
 export { DeclarationStore, declarationPath } from "./storage/declaration.js";
 export { SessionService } from "./storage/sessions.js";

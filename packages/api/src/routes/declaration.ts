@@ -1,5 +1,7 @@
 import type { FastifyReply } from "fastify";
 import {
+  ACTIONS,
+  TARGETS,
   buildTransferSummary,
   errorPayload,
   evaluatePreflight,
@@ -120,8 +122,8 @@ export function registerDeclarationRoutes({ app, deps }: RouteContext): void {
     }
     const saved = await deps.declarationStore.save(declaration);
     await deps.actionLog.record({
-      action: "patch_preferences",
-      target: "declaration",
+      action: ACTIONS.declarationPatch,
+      target: TARGETS.declaration,
       outcome: "changed",
       reason: "user_patch_preferences",
       after: { applied },

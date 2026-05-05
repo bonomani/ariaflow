@@ -1,5 +1,7 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import {
+  ACTIONS,
+  TARGETS,
   aria2,
   errorPayload,
   MANAGED_ARIA2_OPTIONS,
@@ -81,8 +83,8 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
       await aria2.changeGlobalOption(deps.aria2!, validated.options);
       const after = await aria2.getGlobalOption(deps.aria2!);
       await deps.actionLog.record({
-        action: "change_options",
-        target: "aria2",
+        action: ACTIONS.aria2ChangeOptions,
+        target: TARGETS.aria2,
         outcome: "changed",
         reason: "user_change_options",
         before: { options: before },

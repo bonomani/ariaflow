@@ -1,4 +1,6 @@
 import {
+  ACTIONS,
+  TARGETS,
   aria2,
   bandwidthConfigFrom,
   bandwidthUnits,
@@ -40,8 +42,8 @@ export function registerBandwidthRoutes({ app, deps }: RouteContext): void {
     }
 
     await deps.actionLog.record({
-      action: "probe",
-      target: "bandwidth",
+      action: ACTIONS.bandwidthProbe,
+      target: TARGETS.bandwidth,
       outcome: probeRec.source === "networkquality" ? "changed" : "unchanged",
       reason: "manual_probe",
       detail: probeRec as unknown as Record<string, unknown>,

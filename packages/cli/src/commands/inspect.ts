@@ -1,4 +1,6 @@
 import {
+  ACTIONS,
+  TARGETS,
   bandwidthConfigFrom,
   deriveSchedulerStatus,
   runBandwidthProbe,
@@ -50,8 +52,8 @@ export async function cmdProbe(ctx: CliContext): Promise<CmdResult> {
     s.last_bandwidth_probe_at = Date.now() / 1000;
   });
   await ctx.actions.record({
-    action: "probe",
-    target: "bandwidth",
+    action: ACTIONS.bandwidthProbe,
+    target: TARGETS.bandwidth,
     outcome: probe.source === "networkquality" ? "changed" : "unchanged",
     reason: "cli_probe",
     detail: probe as unknown as Record<string, unknown>,

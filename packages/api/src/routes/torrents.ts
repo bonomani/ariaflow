@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, unlinkSync } from "node:fs";
-import { aria2, errorPayload } from "@ariaflow/core";
+import { ACTIONS, TARGETS, aria2, errorPayload } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
 import type { RouteContext } from "./_context.js";
 
@@ -59,8 +59,8 @@ export function registerTorrentsRoutes({ app, deps }: RouteContext): void {
       delete item.distribute_seed_gid;
       await deps.queueStore.save(items);
       await deps.actionLog.record({
-        action: "seed_stopped",
-        target: "queue_item",
+        action: ACTIONS.queueSeedStopped,
+        target: TARGETS.queueItem,
         outcome: "changed",
         reason: "user_stop_seed",
         after: { item_id: item.id, infohash },

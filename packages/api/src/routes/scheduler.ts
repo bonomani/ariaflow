@@ -1,4 +1,6 @@
 import {
+  ACTIONS,
+  TARGETS,
   callStartScheduler,
   callStopScheduler,
   errorPayload,
@@ -31,8 +33,8 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
       s.paused = true;
     });
     await deps.actionLog.record({
-      action: "pause",
-      target: "scheduler",
+      action: ACTIONS.schedulerPause,
+      target: TARGETS.scheduler,
       outcome: "changed",
       reason: "api_request",
     });
@@ -60,8 +62,8 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
         diff: { failures: pf.hard_failures },
       };
       await deps.actionLog.record({
-        action: "ucc",
-        target: "queue",
+        action: ACTIONS.schedulerUcc,
+        target: TARGETS.queue,
         outcome: result.outcome,
         observation: result.observation,
         reason: result.reason,
@@ -94,8 +96,8 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
       },
     };
     await deps.actionLog.record({
-      action: "ucc",
-      target: "queue",
+      action: ACTIONS.schedulerUcc,
+      target: TARGETS.queue,
       outcome: result.outcome,
       observation: result.observation,
       reason: result.reason,
@@ -121,8 +123,8 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
       paused: stateBefore.paused,
     });
     await deps.actionLog.record({
-      action: "preflight",
-      target: "system",
+      action: ACTIONS.schedulerPreflight,
+      target: TARGETS.system,
       outcome: result.status === "pass" ? "converged" : "blocked",
       reason: result.status,
       before: { state: stateBefore, queue: summarizeQueue(queueBefore) },
@@ -141,8 +143,8 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
       s.paused = false;
     });
     await deps.actionLog.record({
-      action: "resume",
-      target: "scheduler",
+      action: ACTIONS.schedulerResume,
+      target: TARGETS.scheduler,
       outcome: "changed",
       reason: "api_request",
     });
@@ -185,8 +187,8 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
     const result = await callStartScheduler(deps.stateStore, () => start());
     const after = await deps.stateStore.load();
     await deps.actionLog.record({
-      action: "start",
-      target: "scheduler",
+      action: ACTIONS.schedulerStart,
+      target: TARGETS.scheduler,
       outcome: result.started ? "changed" : "unchanged",
       reason: result.reason,
     });
@@ -220,8 +222,8 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
     const result = await callStopScheduler(deps.stateStore, () => stop());
     const after = await deps.stateStore.load();
     await deps.actionLog.record({
-      action: "stop",
-      target: "scheduler",
+      action: ACTIONS.schedulerStop,
+      target: TARGETS.scheduler,
       outcome: result.stopped ? "changed" : "unchanged",
       reason: result.reason,
     });

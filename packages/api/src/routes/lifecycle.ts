@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import {
+  ACTIONS,
   detectServiceTarget,
   errorPayload,
   findAria2c,
@@ -245,7 +246,7 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
         }
 
         await deps.actionLog.record({
-          action: "lifecycle_action",
+          action: ACTIONS.systemLifecycle,
           target: target || "system",
           outcome: "changed",
           reason: action || "lifecycle_action",
@@ -257,7 +258,7 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         await deps.actionLog.record({
-          action: "lifecycle_action",
+          action: ACTIONS.systemLifecycle,
           target: target || "system",
           outcome: "failed",
           reason: "exception",
