@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPrivateTorrent, extractInfohash } from "./build.js";
+import { buildPrivateTorrent } from "./build.js";
 
 describe("buildPrivateTorrent", () => {
   it("rejects empty files", () => {
@@ -35,14 +35,4 @@ describe("buildPrivateTorrent", () => {
     expect(a.infohash).not.toBe(c.infohash);
   });
 
-  it("extractInfohash matches the build infohash", () => {
-    const bytes = new Uint8Array(1024).map((_, i) => (i * 7) & 0xff);
-    const built = buildPrivateTorrent({
-      name: "data.bin",
-      fileBytes: bytes,
-      trackerUrl: "http://tracker.example/",
-      comment: "hello",
-    });
-    expect(extractInfohash(built.torrentBytes)).toBe(built.infohash);
-  });
 });

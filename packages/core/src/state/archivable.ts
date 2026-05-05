@@ -1,10 +1,3 @@
-const TERMINAL_STATUSES = new Set([
-  "complete",
-  "error",
-  "failed",
-  "removed",
-]);
-
 const NON_COMPLETE_TERMINAL = new Set(["error", "failed", "removed"]);
 
 export interface QueueItem {
@@ -32,22 +25,6 @@ function itemTs(item: QueueItem, now: number): number {
     (item.completed_at ?? item.error_at ?? item.created_at ?? "") as string,
     now,
   );
-}
-
-/** Count items eligible for auto-archival given a max age in hours. */
-export function countArchivable(
-  items: QueueItem[],
-  opts: { maxDoneAgeHours?: number; now?: number } = {},
-): number {
-  const maxDoneAgeHours = opts.maxDoneAgeHours ?? 168;
-  const now = opts.now ?? Date.now() / 1000;
-  const cutoff = now - maxDoneAgeHours * 3600;
-  let n = 0;
-  for (const item of items) {
-    if (!TERMINAL_STATUSES.has(String(item.status ?? ""))) continue;
-    if (itemTs(item, now) < cutoff) n++;
-  }
-  return n;
 }
 
 interface ArchivePlan {

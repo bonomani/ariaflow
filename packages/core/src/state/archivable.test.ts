@@ -1,26 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { countArchivable, planAutoCleanup, type QueueItem } from "./archivable.js";
+import { planAutoCleanup, type QueueItem } from "./archivable.js";
 
 const NOW = 1_700_000_000; // fixed epoch seconds
 const hoursAgo = (h: number) => new Date((NOW - h * 3600) * 1000).toISOString();
-
-describe("countArchivable", () => {
-  it("counts only terminal items older than cutoff", () => {
-    const items: QueueItem[] = [
-      { status: "complete", completed_at: hoursAgo(200) },
-      { status: "complete", completed_at: hoursAgo(10) },
-      { status: "active", completed_at: hoursAgo(500) },
-      { status: "error", error_at: hoursAgo(300) },
-      { status: "queued" },
-    ];
-    expect(countArchivable(items, { maxDoneAgeHours: 168, now: NOW })).toBe(2);
-  });
-
-  it("returns 0 when nothing is old enough", () => {
-    const items: QueueItem[] = [{ status: "complete", completed_at: hoursAgo(1) }];
-    expect(countArchivable(items, { now: NOW })).toBe(0);
-  });
-});
 
 describe("planAutoCleanup", () => {
   it("archives stale terminals, keeps fresh ones", () => {
