@@ -11,9 +11,49 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
 
-_None._
+### BG-41: Scheduler stuck in `starting` indefinitely
+
+**Paired frontend gap:** none (infra/correctness — FE only displays
+the state)
+
+Reproducible on dev backend at `v0.0.0` after a clean restart:
+`POST /api/scheduler/start` is accepted (`state.scheduler_intent
+= "running"`), but `state.running` never flips to `true`. The
+BG-40 derivation locks at `"starting"`. Observed live for 17+
+minutes with `Requests=87` flowing through the API (so the
+Fastify side is healthy), `Errors=0`, and
+`state.session_last_seen_at` not advancing.
+
+Symptoms:
+- `/api/scheduler` returns `status: "starting"`, `running: false`,
+  `paused: false` indefinitely.
+- `state.session_last_seen_at` does not advance — the heartbeat
+  the scheduler tick is supposed to stamp never fires.
+- No errors logged; the backend appears healthy from every other
+  angle.
+
+Likely causes (backend to investigate):
+- `runSchedulerLoop` may not be invoked from `cmdServe` after the
+  R-S split (`_scheduler_controller.ts`) — the controller fires
+  `callStartScheduler` but the actual loop registration may have
+  been dropped during the refactor.
+- Or the loop crashes silently on first tick and the exception
+  is swallowed somewhere in the controller wrapper.
+
+What the FE needs from the fix:
+- `state.running` flips to `true` shortly after `intent="running"`
+  in the absence of an explicit failure.
+- If startup *does* fail, surface a hard failure: either flip
+  `intent` back to `"stopped"` with a logged reason, or publish a
+  `wait_reason` value (e.g. `"loop_failed_to_start"`) so the FE
+  can display it instead of an indefinite "starting".
+
+The FE has been updated (commit 87a958f / v0.1.458) so the Stop
+button is visible during `starting` too — operators can clear a
+stuck intent without restarting the backend. That's a workaround,
+not the fix.
 
 ## Explicit non-requests (do not implement)
 
