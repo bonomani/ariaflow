@@ -11,7 +11,65 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (2)
+
+### BG-45: Persist auto-start and auto-update as declaration preferences
+
+**Paired frontend gap:** FE-35 (toggle controls in Options tab,
+will be wired when backend ships the prefs)
+
+Today auto-start and auto-update are action-driven only:
+
+- aria2 auto-start is a one-shot Load/Unload click on the
+  System Health row (BG-44 phase 2). After a reboot or
+  reinstall, the operator has to click again.
+- Updates are a manual `POST /api/lifecycle/.../update` (BG-43)
+  per component. There's no scheduled check.
+
+The operator should be able to declare the desired state once,
+have it survive across restarts, and let a reconciliation loop
+keep reality in sync. Concretely, two new preferences in the
+declaration:
+
+```ts
+auto_start_aria2: boolean        // default: true on macOS/Linux, false otherwise
+auto_update: boolean             // default: false (operator opts in)
+auto_update_check_hours: number  // default: 24
+```
+
+**Reconciliation behavior** (backend):
+- On `cmdServe` startup, after loading the declaration, reconcile
+  aria2 supervisor plist to match `auto_start_aria2`. If `true`
+  and plist absent → install; if `false` and plist present →
+  uninstall.
+- If `auto_update=true`, schedule a check every
+  `auto_update_check_hours` hours: query the package manager
+  for an available newer version and, if found, dispatch the
+  same `update` action used by the manual button. Apply to
+  ariaflow-server itself, ariaflow-dashboard (via the dashboard's
+  /api/web/lifecycle endpoint), and aria2.
+- Action-log entries (`auto_start_reconciled`, `auto_update_check`,
+  `auto_update_applied`) so the operator can see what fired.
+
+**Wire shape**:
+- Read via `/api/declaration` (already in the FE preference flow).
+- Surface current reconciliation state via `/api/lifecycle.aria2.
+  result.auto_start.expected` (matches `installed` when reconciled
+  successfully, mismatches surface as a warn chip on the FE).
+
+**FE side** (will land in FE-35 once backend ships):
+- Two toggles in Options tab → Scheduler section (or a new
+  "Self-management" section): "Keep aria2 auto-start installed"
+  and "Auto-update (every N hours)".
+- Tied to `setPref('auto_start_aria2', …)` / `setPref('auto_update', …)`.
+- The Load/Unload buttons on the aria2 row stay as
+  "force-reconcile-now" affordances even when auto_start is on.
+
+This is a meaningful piece of work — reconciliation is a new
+loop, scheduled update checks are new infra, and the
+package-manager "is there a newer version" check has its own
+detection per installer (`brew outdated`, `pipx list --outdated`,
+`npm outdated -g`). Worth phasing.
 
 ### BG-44: Consolidate aria2-launchd row into aria2.auto_start
 
