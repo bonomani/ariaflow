@@ -416,11 +416,9 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
             },
           };
         } else {
-          return reply.code(400).send({
-            error: "unsupported_action",
-            target,
-            action,
-          });
+          return reply
+            .code(400)
+            .send(errorPayload("unsupported_action", `${target}/${action} not supported`, { target, action }));
         }
 
         await deps.actionLog.record({

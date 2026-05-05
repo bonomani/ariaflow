@@ -11,9 +11,46 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
 
-<!-- All current backend gaps are resolved. See the Resolved table below. -->
+### BG-46: Expose `installed_via` on `lifecycle.aria2.result`
+
+**Paired frontend gap:** FE-36 (chip already wired; just needs data)
+
+The FE lifecycle row for aria2 now renders both `Managed by` and
+`Installed via` chips, mirroring the dashboard's own row. Today the
+backend populates `managed_by` (typically `launchd` on macOS) but
+not `installed_via`, so the new chip stays hidden — even when aria2
+was clearly installed via Homebrew.
+
+**Why operators care:** `managed_by` and `installed_via` are
+separate axes. "Managed by launchd" answers *who supervises the
+process*; "Installed via brew" answers *which channel will deliver
+upgrades*. Operators reading just `Managed by launchd` ask
+"shouldn't this say brew?" — that's the confusion this solves.
+
+**Detection (already proven):** The same heuristics that BG-43
+applied to ariaflow-server work for aria2 — check whether the
+binary path resolves under a Homebrew prefix (`/opt/homebrew/...`,
+`/usr/local/Cellar/...`, `brew --prefix`-rooted path), under
+`pipx`'s venv layout, under a global `npm` prefix, or none of those
+(→ `source`/`null`).
+
+**Shape:** Add `installed_via?: 'homebrew'|'pipx'|'npm'|'source'|null`
+to `lifecycle.aria2.result`. No FE changes required when it lands —
+the chip is already conditional on the field's presence.
+
+**Also requested — Upgrade action for aria2:** A
+`POST /api/lifecycle/aria2/update` endpoint that dispatches
+`brew upgrade aria2` (homebrew) / `pipx upgrade …` / `npm i -g …`
+mirroring BG-43's behaviour for ariaflow-server. Once the backend
+declares this action in `lifecycle.aria2.actions`, the FE row will
+render the button automatically (it iterates `row.actions`). The
+operator question driving this: "why does ariaflow-server have an
+Update button but aria2 doesn't?" — same answer should hold for
+both.
+
+
 
 <details>
 <summary>BG-45 (resolved) — original frontend brief retained for context</summary>
