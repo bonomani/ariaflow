@@ -61,27 +61,28 @@ export function registerDeclarationRoutes({ app, deps }: RouteContext): void {
   ): Promise<unknown> => {
     const obj = requireObjectBody(body, reply, "expected an object");
     if (!obj) return;
-    const incoming = (obj.declaration as unknown) ?? obj;
-    if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+    const rawIncoming = obj.declaration ?? obj;
+    if (!rawIncoming || typeof rawIncoming !== "object" || Array.isArray(rawIncoming)) {
       return reply
         .code(400)
         .send(errorPayload("invalid_declaration", "declaration must be an object"));
     }
-    const meta = (incoming as { meta?: unknown }).meta;
-    const uic = (incoming as { uic?: unknown }).uic;
+    const incoming = rawIncoming as Record<string, unknown>;
+    const meta = incoming.meta;
+    const uic = incoming.uic as Record<string, unknown> | undefined;
     if (
       !meta ||
       typeof meta !== "object" ||
       !uic ||
       typeof uic !== "object" ||
-      !Array.isArray((uic as { preferences?: unknown }).preferences) ||
-      !Array.isArray((uic as { gates?: unknown }).gates)
+      !Array.isArray(uic.preferences) ||
+      !Array.isArray(uic.gates)
     ) {
       return reply
         .code(400)
         .send(errorPayload("invalid_declaration", "missing meta or uic.{gates,preferences}"));
     }
-    const saved = await deps.declarationStore.save(incoming as Declaration);
+    const saved = await deps.declarationStore.save(incoming as unknown as Declaration);
     return { ok: true, declaration: saved };
   };
 

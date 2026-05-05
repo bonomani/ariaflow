@@ -102,13 +102,14 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
     }
     const calls: Array<{ methodName: string; params?: unknown[] }> = [];
     for (let i = 0; i < rawCalls.length; i++) {
-      const c = rawCalls[i];
-      if (!c || typeof c !== "object" || Array.isArray(c)) {
+      const raw = rawCalls[i];
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
         return reply
           .code(400)
           .send(errorPayload("invalid_call", `calls[${i}] must be an object`, { index: i }));
       }
-      const methodName = (c as { methodName?: unknown }).methodName;
+      const c = raw as Record<string, unknown>;
+      const methodName = c.methodName;
       if (typeof methodName !== "string" || !methodName) {
         return reply
           .code(400)
@@ -118,7 +119,7 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
             }),
           );
       }
-      const params = (c as { params?: unknown }).params;
+      const params = c.params;
       if (params !== undefined && !Array.isArray(params)) {
         return reply
           .code(400)
