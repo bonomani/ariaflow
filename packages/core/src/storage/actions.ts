@@ -16,11 +16,8 @@ export const ACTIONS = {
   schedulerPreflight: "preflight",
   // BG-48: "contract" is the operator-facing word; "ucc" stays in
   // the codebase as the contract spec name (UCC v2.0) but the
-  // audit-log token is now "contract". Old enum left as an alias
-  // for one release of back-compat (see scheduler.ts).
+  // audit-log token is now "contract".
   schedulerContract: "contract",
-  /** @deprecated BG-48: use schedulerContract; both emit action="contract". */
-  schedulerUcc: "contract",
   // scheduler loop internals (target=scheduler)
   schedulerPre: "scheduler_pre",
   schedulerStopped: "scheduler_stopped",
