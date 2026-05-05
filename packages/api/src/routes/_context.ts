@@ -8,7 +8,7 @@ import type { ServerDeps } from "../server.js";
  * the dashboard's Errors chip can drill down into recent failures
  * instead of just showing a count.
  */
-export interface RecentError {
+interface RecentError {
   /** Epoch seconds when the response went out. */
   at: number;
   method: string;
