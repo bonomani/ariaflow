@@ -160,6 +160,7 @@ export * as install from "./install/networkquality.js";
 export {
   detectAriaflowManagedBy,
   detectAriaflowInstalledVia,
+  detectBinaryInstalledVia,
   detectLaunchdLabel,
   type AriaflowManagedBy,
   type AriaflowInstalledVia,

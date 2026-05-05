@@ -64,20 +64,38 @@ export function detectAriaflowInstalledVia(
   argvScript: string = process.argv[1] ?? "",
   env: NodeJS.ProcessEnv = process.env,
 ): AriaflowInstalledVia {
-  if (!argvScript) return null;
-  // Homebrew: under $(brew --prefix), typically /opt/homebrew or
-  // /usr/local. The Cellar path is the canonical install location.
+  return detectInstalledViaForPath(argvScript, env, "ariaflow-server");
+}
+
+/**
+ * BG-46: same axes as `detectAriaflowInstalledVia` but applied to an
+ * arbitrary binary path (e.g. the resolved `aria2c` location). The
+ * "source" verdict is suppressed — third-party binaries don't run from
+ * our checkout.
+ */
+export function detectBinaryInstalledVia(
+  binPath: string | null,
+  env: NodeJS.ProcessEnv = process.env,
+): AriaflowInstalledVia {
+  if (!binPath) return null;
+  const v = detectInstalledViaForPath(binPath, env, null);
+  return v === "source" ? null : v;
+}
+
+function detectInstalledViaForPath(
+  path: string,
+  env: NodeJS.ProcessEnv,
+  cellarName: string | null,
+): AriaflowInstalledVia {
+  if (!path) return null;
   const brewPrefix = env.HOMEBREW_PREFIX || (process.platform === "darwin" ? "/opt/homebrew" : "/home/linuxbrew/.linuxbrew");
-  if (argvScript.startsWith(`${brewPrefix}/`) || argvScript.includes("/Cellar/ariaflow-server/")) {
-    return "homebrew";
-  }
-  // pipx: ~/.local/pipx/venvs/...
-  if (argvScript.includes("/.local/pipx/venvs/")) return "pipx";
-  // global npm: $(npm prefix -g)/lib/node_modules/...
-  if (argvScript.includes("/lib/node_modules/")) return "npm";
-  // source: anything resolving inside a git working tree (we look up
-  // for a .git dir from the script's parent).
-  if (isInsideGitTree(argvScript)) return "source";
+  const cellarMatch = cellarName
+    ? path.includes(`/Cellar/${cellarName}/`)
+    : path.includes("/Cellar/");
+  if (path.startsWith(`${brewPrefix}/`) || cellarMatch) return "homebrew";
+  if (path.includes("/.local/pipx/venvs/")) return "pipx";
+  if (path.includes("/lib/node_modules/")) return "npm";
+  if (isInsideGitTree(path)) return "source";
   return null;
 }
 

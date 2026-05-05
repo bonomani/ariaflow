@@ -5,6 +5,7 @@ import {
   ACTIONS,
   detectAriaflowInstalledVia,
   detectAriaflowManagedBy,
+  detectBinaryInstalledVia,
   detectLaunchdLabel,
   errorPayload,
   findAria2c,
@@ -149,6 +150,10 @@ function buildAria2Row(
       running: probe.running,
       expected_running: expectedRunning,
       managed_by: managedBy,
+      // BG-46: same axis we surface for ariaflow-server. Detected from
+      // the resolved aria2c path; null when the binary's location
+      // doesn't match a known package manager.
+      installed_via: detectBinaryInstalledVia(probe.binPath),
       // BG-44: auto-start mechanism as a sub-object on the aria2 row.
       auto_start: detectAria2AutoStart(),
       reason: probe.running ? "match" : probe.installed ? "stopped" : "missing",
@@ -329,6 +334,53 @@ function dispatchAriaflowUpdate(): ActionDispatchResult {
   };
 }
 
+/**
+ * BG-46: dispatch /api/lifecycle/aria2/update per detected installer.
+ * Mirrors dispatchAriaflowUpdate but targets the aria2 package and
+ * never accepts a "source" verdict (third-party binary).
+ */
+function dispatchAria2Update(): ActionDispatchResult {
+  const installedVia = detectBinaryInstalledVia(findAria2c());
+  const detached = (cmd: string, args: string[]) =>
+    spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
+
+  if (installedVia === "homebrew") {
+    return {
+      status: 202,
+      body: { ok: true, action: "update", installed_via: "homebrew" },
+      after: () => detached("brew", ["upgrade", "aria2"]),
+    };
+  }
+  if (installedVia === "pipx") {
+    return {
+      status: 409,
+      body: {
+        error: "no_pipx_aria2",
+        installed_via: "pipx",
+        message: "aria2 is not distributed via pipx",
+      },
+    };
+  }
+  if (installedVia === "npm") {
+    return {
+      status: 409,
+      body: {
+        error: "no_npm_aria2",
+        installed_via: "npm",
+        message: "aria2 is not distributed via npm",
+      },
+    };
+  }
+  return {
+    status: 409,
+    body: {
+      error: "unknown_installer",
+      installed_via: null,
+      message: "could not detect an installer for the aria2 binary",
+    },
+  };
+}
+
 export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
   app.get("/api/lifecycle", async () => {
     const state = await deps.stateStore.load();
@@ -363,9 +415,16 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
       // effect (launchctl/systemctl/docker exit/brew upgrade/...) AFTER
       // the response is sent so the operator gets the ack before any
       // bounce. Dry-run returns the plan without executing.
-      if (target === "ariaflow-server" && (action === "restart" || action === "update")) {
+      if (
+        (target === "ariaflow-server" && (action === "restart" || action === "update")) ||
+        (target === "aria2" && action === "update")
+      ) {
         const dispatch =
-          action === "restart" ? dispatchAriaflowRestart() : dispatchAriaflowUpdate();
+          target === "aria2"
+            ? dispatchAria2Update()
+            : action === "restart"
+              ? dispatchAriaflowRestart()
+              : dispatchAriaflowUpdate();
         await deps.actionLog.record({
           action: ACTIONS.systemLifecycle,
           target: target || "system",
