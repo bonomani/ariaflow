@@ -7,174 +7,198 @@ import {
   install as installNs,
   installAria2Service,
   uninstallAria2Service,
+  type Aria2Client,
+  type QueueItemRecord,
+  type ServerState,
 } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
+import type { ServerDeps } from "../server.js";
 import type { RouteContext } from "./_context.js";
+
+const PENDING = new Set(["queued", "waiting", "active"]);
+const LAUNCHD_PLIST = `${homedir()}/Library/LaunchAgents/com.ariaflow-server.aria2.plist`;
+
+interface ComponentRow {
+  result: Record<string, unknown>;
+}
+
+/**
+ * BG-20 + BG-27 + BG-29: ariaflow-server itself. We're answering the
+ * request, so all three axes are true and the version IS the
+ * expected version. expected_running / managed_by stay null —
+ * informational row, no daemon-style opinion to express.
+ */
+function buildAriaflowServerRow(deps: ServerDeps): ComponentRow {
+  const expectedVersion = deps.version ?? "0.0.0";
+  return {
+    result: {
+      installed: true,
+      current: true,
+      running: true,
+      expected_running: null,
+      managed_by: null,
+      reason: "match",
+      outcome: "installed · current",
+      message: null,
+      observation: "ok",
+      completion: null,
+      version: expectedVersion,
+      expected_version: expectedVersion,
+    },
+  };
+}
+
+interface Aria2Probe {
+  binPath: string | null;
+  installed: boolean;
+  running: boolean;
+  version: string | null;
+  err: string | null;
+}
+
+async function probeAria2(client: Aria2Client | undefined): Promise<Aria2Probe> {
+  const binPath = findAria2c();
+  let running = false;
+  let version: string | null = null;
+  let err: string | null = null;
+  if (client) {
+    try {
+      const v = await client.call<{ version: string }>("aria2.getVersion");
+      running = true;
+      version = v.version;
+    } catch (e) {
+      err = e instanceof Error ? e.message : String(e);
+    }
+  }
+  return { binPath, installed: Boolean(binPath), running, version, err };
+}
+
+/**
+ * BG-20 + BG-27 + BG-29: aria2 row. Splits "binary on disk" (installed)
+ * from "RPC reachable" (running). expected_running mirrors the
+ * scheduler's wish; managed_by is "launchd" iff our launchd plist is
+ * present, else "external".
+ */
+function buildAria2Row(
+  probe: Aria2Probe,
+  state: ServerState,
+  items: QueueItemRecord[],
+): ComponentRow {
+  const current = probe.installed ? (probe.running ? true : null) : null;
+  const workPending = items.some((i) => PENDING.has(String(i.status ?? "")));
+  const expectedRunning =
+    Boolean(state.running) || Boolean(state.active_gid) || workPending;
+  const managedBy: "ariaflow" | "launchd" | "external" | null = probe.running
+    ? existsSync(LAUNCHD_PLIST)
+      ? "launchd"
+      : "external"
+    : null;
+  return {
+    result: {
+      installed: probe.installed,
+      current,
+      running: probe.running,
+      expected_running: expectedRunning,
+      managed_by: managedBy,
+      reason: probe.running ? "match" : probe.installed ? "stopped" : "missing",
+      outcome: probe.running
+        ? "installed · current"
+        : probe.installed
+          ? "stopped"
+          : "not installed",
+      observation: probe.running ? "ok" : "failed",
+      ...(probe.version ? { version: probe.version } : {}),
+      ...(probe.binPath ? { path: probe.binPath } : {}),
+      ...(probe.err ? { message: probe.err } : {}),
+    },
+  };
+}
+
+/**
+ * networkquality: system binary, no version policy → current=null.
+ * running is derived from "last probe used networkquality recently" —
+ * the only honest signal we have without re-running the probe.
+ */
+function buildNetworkqualityRow(state: ServerState): ComponentRow {
+  const nq = installNs.networkqualityStatus();
+  const probe = state.last_bandwidth_probe ?? null;
+  const lastProbeAt = Number(state.last_bandwidth_probe_at ?? 0);
+  const probeFresh = lastProbeAt > 0 && Date.now() / 1000 - lastProbeAt < 3600;
+  const running = nq.installed
+    ? probe?.source === "networkquality" && probeFresh
+      ? true
+      : null
+    : false;
+  return {
+    result: {
+      installed: Boolean(nq.installed),
+      current: null,
+      running,
+      expected_running: null,
+      managed_by: null,
+      reason: nq.reason,
+      outcome: nq.installed && nq.usable ? "installed · usable" : "unavailable",
+      observation: nq.installed && nq.usable ? "ok" : "failed",
+      message: nq.message,
+      ...(nq.command ? { command: nq.command } : {}),
+    },
+  };
+}
+
+/**
+ * aria2-launchd / aria2-systemd: a service registration, not an
+ * installable binary — installed/current are null. running proxies
+ * through aria2's RPC reachability: launchd's job is to keep aria2 up,
+ * so if RPC works the unit is doing its job.
+ */
+function buildAria2LaunchdRow(aria2Running: boolean): ComponentRow {
+  const target = detectServiceTarget();
+  const home = homedir();
+  const installedPath =
+    target === "aria2-launchd"
+      ? `${home}/Library/LaunchAgents/com.ariaflow-server.aria2.plist`
+      : target === "aria2-systemd"
+        ? `${home}/.config/systemd/user/ariaflow-server-aria2.service`
+        : null;
+  const installedHere = installedPath ? existsSync(installedPath) : false;
+  const running = installedHere ? aria2Running : false;
+  return {
+    result: {
+      installed: null,
+      current: null,
+      running,
+      expected_running: null,
+      managed_by: installedHere ? "launchd" : null,
+      reason: installedHere ? (aria2Running ? "match" : "stopped") : "missing",
+      outcome: installedHere
+        ? aria2Running
+          ? "loaded"
+          : "registered · not running"
+        : "not installed",
+      observation: installedHere && aria2Running ? "ok" : "unknown",
+      ...(installedPath ? { path: installedPath } : {}),
+    },
+  };
+}
+
+const ARIA2_SERVICE_TARGETS = new Set([
+  "aria2-launchd",
+  "aria2-systemd",
+  "aria2-service",
+]);
 
 export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
   app.get("/api/lifecycle", async () => {
     const state = await deps.stateStore.load();
-
-    // BG-20 + BG-27: every component record nests under `result`. BG-27
-    // adds three orthogonal axes — `installed` / `current` / `running`
-    // (each `bool | null`, with `null` for axes that don't apply) —
-    // alongside the BG-20 reason/outcome/message strings. The dashboard
-    // can drive headline rendering off the booleans and use the
-    // strings for detail rendering.
-
-    const expectedVersion = deps.version ?? "0.0.0";
-
-    // ariaflow-server: we're answering the request, so all three axes
-    // are true and the version IS the expected version.
-    const ariaflowServer = {
-      result: {
-        installed: true,
-        current: true,
-        running: true,
-        // BG-29: not on-demand and not externally managed; null = "no opinion".
-        expected_running: null,
-        managed_by: null,
-        reason: "match",
-        outcome: "installed · current",
-        message: null,
-        observation: "ok",
-        completion: null,
-        version: expectedVersion,
-        expected_version: expectedVersion,
-      },
-    };
-
-    // aria2: split "binary on disk" (installed) from "RPC reachable"
-    // (running). `current` only meaningful when installed=true; we
-    // don't ship an expected aria2 version so it stays null (true if
-    // RPC succeeds, since whatever's there is what we use).
-    const aria2BinPath = findAria2c();
-    const aria2Installed = Boolean(aria2BinPath);
-    let aria2Running = false;
-    let aria2Version: string | null = null;
-    let aria2Err: string | null = null;
-    if (deps.aria2) {
-      try {
-        const v = await deps.aria2.call<{ version: string }>("aria2.getVersion");
-        aria2Running = true;
-        aria2Version = v.version;
-      } catch (err) {
-        aria2Err = err instanceof Error ? err.message : String(err);
-      }
-    }
-    const aria2Current = aria2Installed ? (aria2Running ? true : null) : null;
-
-    // BG-29(a): aria2 is on-demand. expected_running = "would the
-    // scheduler want aria2 up right now?" — true while there's work
-    // pending or a tick is mid-dispatch. The dashboard's verdict
-    // truth-table reads this against `running` to distinguish a
-    // healthy idle from a genuine fault.
-    const queueItems = await deps.queueStore.load();
-    const PENDING = new Set(["queued", "waiting", "active"]);
-    const workPending = queueItems.some((i) => PENDING.has(String(i.status ?? "")));
-    const aria2ExpectedRunning =
-      Boolean(state.running) || Boolean(state.active_gid) || workPending;
-
-    // BG-29(b): managed_by = "who actually spawned the running aria2".
-    // We never fork aria2 ourselves today, so the "ariaflow" branch is
-    // unreachable in current code; a launchd plist on disk is the only
-    // signal we have for "auto-start (launchd)" — anything else is
-    // attributed to "external". null when not running.
-    const launchdPath = `${homedir()}/Library/LaunchAgents/com.ariaflow-server.aria2.plist`;
-    const launchdInstalled = existsSync(launchdPath);
-    const aria2ManagedBy: "ariaflow" | "launchd" | "external" | null = aria2Running
-      ? launchdInstalled
-        ? "launchd"
-        : "external"
-      : null;
-
-    const aria2Result: Record<string, unknown> = {
-      installed: aria2Installed,
-      current: aria2Current,
-      running: aria2Running,
-      expected_running: aria2ExpectedRunning,
-      managed_by: aria2ManagedBy,
-      reason: aria2Running ? "match" : aria2Installed ? "stopped" : "missing",
-      outcome: aria2Running
-        ? "installed · current"
-        : aria2Installed
-          ? "stopped"
-          : "not installed",
-      observation: aria2Running ? "ok" : "failed",
-      ...(aria2Version ? { version: aria2Version } : {}),
-      ...(aria2BinPath ? { path: aria2BinPath } : {}),
-      ...(aria2Err ? { message: aria2Err } : {}),
-    };
-
-    // networkquality: system binary, no version policy → current=null.
-    // running is derived from "last probe used networkquality recently"
-    // — the only honest signal we have without re-running the probe.
-    const nq = installNs.networkqualityStatus();
-    const probe = state.last_bandwidth_probe ?? null;
-    const lastProbeAt = Number(state.last_bandwidth_probe_at ?? 0);
-    const probeFresh = lastProbeAt > 0 && Date.now() / 1000 - lastProbeAt < 3600;
-    const nqRunning = nq.installed
-      ? probe?.source === "networkquality" && probeFresh
-        ? true
-        : null // installed but no recent probe → "unknown", not "stopped"
-      : false;
-    const networkquality = {
-      result: {
-        installed: Boolean(nq.installed),
-        current: null,
-        running: nqRunning,
-        // BG-29: on-demand probe, not a daemon — null on both axes.
-        expected_running: null,
-        managed_by: null,
-        reason: nq.reason, // "ready" | "missing"
-        outcome: nq.installed && nq.usable ? "installed · usable" : "unavailable",
-        observation: nq.installed && nq.usable ? "ok" : "failed",
-        message: nq.message,
-        ...(nq.command ? { command: nq.command } : {}),
-      },
-    };
-
-    // aria2-launchd / aria2-systemd: it's a service registration, not
-    // an installable binary — installed/current are null. running
-    // proxies through aria2's RPC reachability: launchd's job is to
-    // keep aria2 up, so if RPC works the unit is doing its job.
-    const target = detectServiceTarget();
-    const home = homedir();
-    const installedPath =
-      target === "aria2-launchd"
-        ? `${home}/Library/LaunchAgents/com.ariaflow-server.aria2.plist`
-        : target === "aria2-systemd"
-          ? `${home}/.config/systemd/user/ariaflow-server-aria2.service`
-          : null;
-    const installedHere = installedPath ? existsSync(installedPath) : false;
-    const launchdRunning = installedHere ? aria2Running : false;
-    const aria2Launchd = {
-      result: {
-        installed: null,
-        current: null,
-        running: launchdRunning,
-        // BG-29: informational row — keep `expected_running` null so
-        // the dashboard's verdict table treats it as "no opinion"
-        // instead of flagging an idle plist as faulty.
-        expected_running: null,
-        managed_by: installedHere ? "launchd" : null,
-        reason: installedHere ? (aria2Running ? "match" : "stopped") : "missing",
-        outcome: installedHere
-          ? aria2Running
-            ? "loaded"
-            : "registered · not running"
-          : "not installed",
-        observation: installedHere && aria2Running ? "ok" : "unknown",
-        ...(installedPath ? { path: installedPath } : {}),
-      },
-    };
+    const items = await deps.queueStore.load();
+    const aria2Probe = await probeAria2(deps.aria2);
 
     return withMeta("GET", "/api/lifecycle", {
       ok: true,
-      "ariaflow-server": ariaflowServer,
-      aria2: { result: aria2Result },
-      networkquality,
-      "aria2-launchd": aria2Launchd,
+      "ariaflow-server": buildAriaflowServerRow(deps),
+      aria2: buildAria2Row(aria2Probe, state, items),
+      networkquality: buildNetworkqualityRow(state),
+      "aria2-launchd": buildAria2LaunchdRow(aria2Probe.running),
       session_id: state.session_id,
       session_started_at: state.session_started_at,
       session_last_seen_at: state.session_last_seen_at,
@@ -190,11 +214,6 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
       const action = req.params.action;
       const dryRun = req.query?.dry_run === "1" || req.query?.dry_run === "true";
 
-      const ARIA2_SERVICE_TARGETS = new Set([
-        "aria2-launchd",
-        "aria2-systemd",
-        "aria2-service",
-      ]);
       const beforeState = await deps.stateStore.load();
       const before = { lifecycle: { state: beforeState } };
       try {

@@ -154,62 +154,42 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
     }
     const p = body as Record<string, unknown>;
     const gid = typeof p.gid === "string" && p.gid.trim() ? p.gid.trim() : null;
+
+    // Declarative table: each entry is one acceptable field on the
+    // request body. `requiresGid: true` means the field is silently
+    // ignored when no gid is provided (per-item limits need a target).
+    type LimitEntry = {
+      key: string;
+      requiresGid?: boolean;
+      apply: (value: number) => Promise<unknown>;
+    };
+    const a = deps.aria2!;
+    const limits: readonly LimitEntry[] = [
+      { key: "max_overall_download_limit", apply: (v) => aria2.setMaxOverallDownloadLimit(a, v) },
+      { key: "max_overall_upload_limit", apply: (v) => aria2.setMaxOverallUploadLimit(a, v) },
+      { key: "max_download_limit", requiresGid: true, apply: (v) => aria2.setMaxDownloadLimit(a, gid!, v) },
+      { key: "max_upload_limit", requiresGid: true, apply: (v) => aria2.setMaxUploadLimit(a, gid!, v) },
+      { key: "seed_ratio", apply: (v) => aria2.setSeedRatio(a, v) },
+      { key: "seed_time", apply: (v) => aria2.setSeedTime(a, v) },
+    ];
+
     const applied: Record<string, unknown> = {};
     const errors: string[] = [];
 
-    const num = (v: unknown): number => {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : NaN;
-    };
-
-    const tryRun = async (key: string, fn: () => Promise<unknown>) => {
+    for (const { key, requiresGid, apply } of limits) {
+      if (!(key in p)) continue;
+      if (requiresGid && !gid) continue;
+      const v = Number(p[key]);
+      if (!Number.isFinite(v)) {
+        errors.push(key);
+        continue;
+      }
       try {
-        await fn();
+        await apply(v);
         applied[key] = p[key];
       } catch {
         errors.push(key);
       }
-    };
-
-    if ("max_overall_download_limit" in p) {
-      const v = num(p.max_overall_download_limit);
-      if (Number.isFinite(v)) {
-        await tryRun("max_overall_download_limit", () =>
-          aria2.setMaxOverallDownloadLimit(deps.aria2!, v),
-        );
-      } else errors.push("max_overall_download_limit");
-    }
-    if ("max_overall_upload_limit" in p) {
-      const v = num(p.max_overall_upload_limit);
-      if (Number.isFinite(v)) {
-        await tryRun("max_overall_upload_limit", () =>
-          aria2.setMaxOverallUploadLimit(deps.aria2!, v),
-        );
-      } else errors.push("max_overall_upload_limit");
-    }
-    if ("max_download_limit" in p && gid) {
-      const v = num(p.max_download_limit);
-      if (Number.isFinite(v)) {
-        await tryRun("max_download_limit", () => aria2.setMaxDownloadLimit(deps.aria2!, gid, v));
-      } else errors.push("max_download_limit");
-    }
-    if ("max_upload_limit" in p && gid) {
-      const v = num(p.max_upload_limit);
-      if (Number.isFinite(v)) {
-        await tryRun("max_upload_limit", () => aria2.setMaxUploadLimit(deps.aria2!, gid, v));
-      } else errors.push("max_upload_limit");
-    }
-    if ("seed_ratio" in p) {
-      const v = num(p.seed_ratio);
-      if (Number.isFinite(v)) {
-        await tryRun("seed_ratio", () => aria2.setSeedRatio(deps.aria2!, v));
-      } else errors.push("seed_ratio");
-    }
-    if ("seed_time" in p) {
-      const v = num(p.seed_time);
-      if (Number.isFinite(v)) {
-        await tryRun("seed_time", () => aria2.setSeedTime(deps.aria2!, v));
-      } else errors.push("seed_time");
     }
 
     return { ok: errors.length === 0, applied, errors };
