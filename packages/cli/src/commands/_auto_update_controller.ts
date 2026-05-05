@@ -92,7 +92,7 @@ export function createAutoUpdateController(ctx: CliContext): AutoUpdateControlle
       await ctx.actions.record({
         action: ACTIONS.autoUpdateCheck,
         target: TARGETS.system,
-        outcome: result.available ? "changed" : "noop",
+        outcome: result.available ? "changed" : "unchanged",
         reason: installedVia ?? "unknown_installer",
         detail: { installed_via: installedVia, available: result.available, message: result.message },
       });

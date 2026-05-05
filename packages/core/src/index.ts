@@ -14,7 +14,7 @@ export {
 export { readJson, writeJson } from "./storage/json.js";
 export { StateStore, toWireState, type ServerState, type WireState } from "./storage/state.js";
 export { QueueStore, ArchiveStore } from "./storage/queue.js";
-export { ActionLog } from "./storage/action-log.js";
+export { ActionLog, type ActionOutcome } from "./storage/action-log.js";
 export {
   ACTIONS,
   TARGETS,

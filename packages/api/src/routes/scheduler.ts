@@ -70,7 +70,7 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
     if (pf.exit_code !== 0) {
       const result = {
         observation: "failed",
-        outcome: "failed",
+        outcome: "failed" as const,
         failure_class: "permanent",
         message: "preflight failed",
         reason: "gate_failed",
@@ -100,7 +100,7 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
     const queueAfter = await deps.queueStore.load();
     const result = {
       observation: "ok",
-      outcome: "converged",
+      outcome: "converged" as const,
       message: "queue processed",
       reason: "converged",
       observed_before: { items: queueBefore },

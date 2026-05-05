@@ -36,8 +36,8 @@ afterEach(() => {
 
 describe("ActionLog", () => {
   it("appends timestamped entries and reads them back", async () => {
-    await actions.record({ action: "test", target: "queue", outcome: "ok" });
-    await actions.record({ action: "test2", target: "queue", outcome: "ok" });
+    await actions.record({ action: "test", target: "queue", outcome: "changed" });
+    await actions.record({ action: "test2", target: "queue", outcome: "changed" });
     const entries = await actions.load();
     expect(entries).toHaveLength(2);
     expect(entries[0]!.action).toBe("test");
@@ -47,7 +47,7 @@ describe("ActionLog", () => {
 
   it("attaches session_id when one is open", async () => {
     await sessions.ensure();
-    await actions.record({ action: "x", target: "y", outcome: "ok" });
+    await actions.record({ action: "x", target: "y", outcome: "changed" });
     const entries = await actions.load();
     expect(typeof entries[0]!.session_id).toBe("string");
   });

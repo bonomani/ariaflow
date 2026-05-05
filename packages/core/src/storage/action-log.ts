@@ -8,10 +8,26 @@ const MAX_LINES = 10_000;
 const KEEP_LINES = 5_000;
 const ROTATE_SIZE_BYTES = 512 * 1024;
 
+/**
+ * Closed set of audit-log outcomes. `changed`/`unchanged` describe a
+ * successful mutation that did or did not move state; `failed` is a
+ * caught exception; `converged` is for idempotent reconciliation runs
+ * that ended in the desired state; `blocked` is for refusals that
+ * weren't exceptions (preflight failed, supervisor unknown, etc.);
+ * `error` is for the action-log writer's own failure path.
+ */
+export type ActionOutcome =
+  | "changed"
+  | "unchanged"
+  | "failed"
+  | "converged"
+  | "blocked"
+  | "error";
+
 interface ActionLogEntry {
   action: string;
   target: string;
-  outcome: string;
+  outcome: ActionOutcome;
   observation?: string;
   reason?: string;
   timestamp?: string;
@@ -25,7 +41,7 @@ interface ActionLogEntry {
 interface RecordActionInput {
   action: string;
   target: string;
-  outcome: string;
+  outcome: ActionOutcome;
   observation?: string;
   reason?: string;
   before?: Record<string, unknown>;
