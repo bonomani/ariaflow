@@ -11,9 +11,55 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
 
-_None._
+### BG-44: Consolidate aria2-launchd row into aria2.auto_start
+
+**Paired frontend gap:** none (FE migrates rendering off
+aria2-launchd; backend phases gated by FE rollout)
+
+The `/api/lifecycle` response had two cards for one component:
+`aria2` (binary + RPC + version) and `aria2-launchd` (plist
+installed yes/no). After BG-29 added `managed_by` to the aria2
+row, the standalone aria2-launchd row mostly duplicated 'is the
+auto-start plist installed' which already shows up indirectly as
+`managed_by='launchd'`.
+
+**Phase 1 — backend additive (✅ shipped, v0.1.274, commit 82eee8c).**
+Surface a structured sub-object on `aria2.result.auto_start`:
+
+```ts
+auto_start = {
+  installed: bool,                      // plist / unit file present
+  target: 'launchd' | 'systemd' | null, // platform-detected
+  path: string | null,                  // file path for diagnostics
+}
+```
+
+The standalone `aria2-launchd` row stays emitted for one
+deprecation window so the FE has time to migrate.
+
+**Phase 2 — FE migrates rendering (✅ shipped, ariaflow-dashboard
+commit 9a7a801, in v0.1.466).** The lifecycle template now reads
+`aria2.result.auto_start` and renders a sub-section under the
+aria2 row (loaded badge, mechanism + path chips, Load/Unload
+buttons). The standalone `aria2-launchd` row is no longer
+included in `lifecycleRows`. Action targets still POST to
+`/api/lifecycle/aria2-launchd/{install,uninstall}` until phase 3.
+
+**Phase 3 — backend retires the standalone row.** Once phase 2 is
+in production for a release or two, drop:
+- `data['aria2-launchd']` from the `/api/lifecycle` response
+- and (optionally) the `'aria2-launchd'` action target on
+  `POST /api/lifecycle/:target/:action`, replacing it with
+  `aria2/auto_start_install` and `aria2/auto_start_uninstall`
+  (or any naming the backend prefers).
+
+If phase 3 renames the action targets, the FE will need a
+follow-up commit to update the two `lifecycleAction(...)` calls
+in `tab_lifecycle.html`. Backwards-compat keep-alive (accept
+both old and new for one release) would be safer than a hard
+cutover.
 
 ## Explicit non-requests (do not implement)
 
