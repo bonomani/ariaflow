@@ -1,18 +1,4 @@
-import type { QueueItemRecord } from "../queue/types.js";
 import { prefValue, type Declaration } from "../contracts/declaration.js";
-
-/**
- * Resolve the desired (running|paused) state of an item:
- * - explicit `desired_state` of "running" or "paused" wins
- * - else `status === "paused"` -> "paused"
- * - else "running"
- */
-export function desiredState(item: QueueItemRecord): "running" | "paused" {
-  const desired = String(item.desired_state ?? "").trim().toLowerCase();
-  if (desired === "running" || desired === "paused") return desired;
-  if (String(item.status ?? "").trim().toLowerCase() === "paused") return "paused";
-  return "running";
-}
 
 export interface DiskCheckResult {
   ok: boolean;

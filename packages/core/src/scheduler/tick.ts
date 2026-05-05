@@ -125,10 +125,3 @@ export async function runSchedulerTick(deps: SchedulerTickDeps): Promise<Schedul
 
   return { started, failed, saturated: false };
 }
-
-/**
- * Convenience filter: terminal items the scheduler shouldn't touch
- * (used by callers when computing "what's still in flight").
- */
-export const isTerminalStatus = (status: string | undefined | null): boolean =>
-  TERMINAL_STATUSES.has(String(status ?? "") as never);

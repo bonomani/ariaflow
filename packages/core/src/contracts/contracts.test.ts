@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultDeclaration, prefValue } from "./declaration.js";
-import { evaluatePreflight, uccResultToDict } from "./preflight.js";
+import { evaluatePreflight } from "./preflight.js";
 
 describe("defaultDeclaration", () => {
   it("declares UCC v2.0 with the two hard gates", () => {
@@ -69,17 +69,3 @@ describe("evaluatePreflight", () => {
   });
 });
 
-describe("uccResultToDict", () => {
-  it("drops null/undefined/empty-string fields", () => {
-    expect(
-      uccResultToDict({
-        observation: "ok",
-        outcome: "ok",
-        completion: null,
-        message: "",
-        reason: "aggregate",
-        diff: null,
-      }),
-    ).toEqual({ observation: "ok", outcome: "ok", reason: "aggregate" });
-  });
-});

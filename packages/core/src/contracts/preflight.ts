@@ -95,13 +95,3 @@ export interface UCCResult {
   diff?: Record<string, unknown> | null;
 }
 
-/** Strip null/empty fields from a UCCResult. */
-export function uccResultToDict(r: UCCResult): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(r)) {
-    if (v === null || v === undefined) continue;
-    if (v === "") continue;
-    out[k] = v;
-  }
-  return out;
-}

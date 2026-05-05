@@ -179,6 +179,3 @@ export async function runPostActionBatch(
   return out;
 }
 
-/** Skip-guard for callers that want to filter already-seeding items. */
-export const isAlreadySeeding = (item: QueueItemRecord): boolean =>
-  item.distribute_status === "seeding";

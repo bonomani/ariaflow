@@ -1,22 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { checkDiskSpace, desiredState, maxDiskPercent } from "./helpers.js";
+import { checkDiskSpace, maxDiskPercent } from "./helpers.js";
 import { getActiveProgress } from "./progress.js";
 import { Aria2Client } from "../aria2/client.js";
 import { defaultDeclaration } from "../contracts/declaration.js";
 import type { ServerState } from "../storage/state.js";
-
-describe("desiredState", () => {
-  it.each([
-    [{ desired_state: "running" }, "running"],
-    [{ desired_state: "paused" }, "paused"],
-    [{ desired_state: "  RUNNING " }, "running"],
-    [{ status: "paused" }, "paused"],
-    [{ status: "queued" }, "running"],
-    [{}, "running"],
-  ] as const)("desiredState(%j) -> %s", (item, expected) => {
-    expect(desiredState({ id: "x", url: "u", ...item })).toBe(expected);
-  });
-});
 
 describe("checkDiskSpace", () => {
   it("returns ok=true with 0 when threshold is 0", () => {

@@ -46,7 +46,6 @@ export {
 } from "./contracts/declaration.js";
 export {
   evaluatePreflight,
-  uccResultToDict,
   type PreflightResult,
   type GateSignals,
   type UCCResult,
@@ -98,7 +97,6 @@ export { probeAria2Reachable, probeDiskOk } from "./scheduler/probes.js";
 export { getActiveProgress } from "./scheduler/progress.js";
 export {
   runSchedulerTick,
-  isTerminalStatus,
   type SchedulerTickDeps,
   type SchedulerTickResult,
 } from "./scheduler/tick.js";
@@ -112,7 +110,6 @@ export {
 export {
   runPostAction,
   runPostActionBatch,
-  isAlreadySeeding,
   type PostActionDeps,
   type PostActionResult,
 } from "./scheduler/post-action.js";
