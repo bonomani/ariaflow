@@ -74,21 +74,25 @@ export interface WaitReasonInputs {
  * actively dispatching, paused, stopped, or starting — wait_reason is
  * meaningful only in the "idle" state per BG-40.
  *
- * Order of checks is intentional: most-blocking first, queue_empty last.
+ * Order of checks: hard blockers (aria2/preflight/disk) first, then
+ * `queue_empty` BEFORE `bandwidth_probe_pending` per BG-47 — an empty
+ * queue makes the probe state irrelevant, since the probe only runs
+ * when there's work to schedule. Reporting "probe pending" on an
+ * empty queue is misleading.
  */
 export function deriveWaitReason(input: WaitReasonInputs): WaitReason {
   if (input.status !== "idle") return null;
   if (input.aria2Reachable === false) return "aria2_unreachable";
   if (!input.preflightOk) return "preflight_blocked";
   if (!input.diskOk) return "disk_full";
+  const hasPending = input.items.some((i) =>
+    PENDING_STATUSES.has(String(i.status ?? "")),
+  );
+  if (!hasPending) return "queue_empty";
   const now = input.now ?? Date.now() / 1000;
   const probeAt = input.lastBandwidthProbeAt ?? 0;
   const probeStale =
     probeAt <= 0 || now - probeAt > input.bandwidthProbeMaxAgeSeconds;
   if (probeStale) return "bandwidth_probe_pending";
-  const hasPending = input.items.some((i) =>
-    PENDING_STATUSES.has(String(i.status ?? "")),
-  );
-  if (!hasPending) return "queue_empty";
   return null;
 }

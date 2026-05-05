@@ -120,17 +120,30 @@ describe("deriveWaitReason", () => {
     expect(deriveWaitReason(idleInputs({ diskOk: false }))).toBe("disk_full");
   });
 
-  it("returns 'bandwidth_probe_pending' when probe is stale or never run", () => {
-    expect(deriveWaitReason(idleInputs({ lastBandwidthProbeAt: null }))).toBe(
-      "bandwidth_probe_pending",
-    );
-    expect(deriveWaitReason(idleInputs({ lastBandwidthProbeAt: 0 }))).toBe(
-      "bandwidth_probe_pending",
-    );
+  it("returns 'bandwidth_probe_pending' when probe is stale or never run (with work in queue)", () => {
+    // BG-47: queue_empty wins over bandwidth_probe_pending, so these
+    // checks need at least one pending item to isolate the probe path.
+    const pending = [
+      { id: "1", url: "http://h/a", status: "queued" } as unknown as QueueItemRecord,
+    ];
+    expect(
+      deriveWaitReason(idleInputs({ lastBandwidthProbeAt: null, items: pending })),
+    ).toBe("bandwidth_probe_pending");
+    expect(
+      deriveWaitReason(idleInputs({ lastBandwidthProbeAt: 0, items: pending })),
+    ).toBe("bandwidth_probe_pending");
     // 700s > 600s threshold
     expect(
-      deriveWaitReason(idleInputs({ lastBandwidthProbeAt: 999_400, now: 1_000_100 })),
+      deriveWaitReason(
+        idleInputs({ lastBandwidthProbeAt: 999_400, now: 1_000_100, items: pending }),
+      ),
     ).toBe("bandwidth_probe_pending");
+  });
+
+  it("BG-47: returns 'queue_empty' even when probe is stale, since the probe is irrelevant on an empty queue", () => {
+    expect(
+      deriveWaitReason(idleInputs({ items: [], lastBandwidthProbeAt: null })),
+    ).toBe("queue_empty");
   });
 
   it("returns 'queue_empty' when everything else is fine but no pending items", () => {

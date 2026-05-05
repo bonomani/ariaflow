@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-47 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-47: Don't gate scheduler on bandwidth probe when queue is empty
 
@@ -61,6 +64,8 @@ is empty." The wait_reason should reflect that.
 No FE change required. The dashboard renders whatever
 `state.wait_reason` says; once the priority is corrected, the
 "idle · queue empty" read will appear without further work.
+
+</details>
 
 <details>
 <summary>BG-46 (resolved) — original frontend brief retained for context</summary>
@@ -178,6 +183,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-47 | `deriveWaitReason()` reordered: `queue_empty` is now checked before `bandwidth_probe_pending`, so an empty queue with no probe yet correctly reads `idle · queue empty` instead of "probe pending". Hard blockers (`aria2_unreachable` / `preflight_blocked` / `disk_full`) still win first. The probe itself isn't gated on queue contents — it runs once at scheduler-loop startup as a preloop step (`packages/cli/src/commands/_scheduler_controller.ts`); that's fine because the wait_reason now correctly defaults to `queue_empty` when there's nothing to schedule. One probe-pending test split into two so the assertion isolates the probe path with a pending item; one new test covers the BG-47 reorder explicitly | 2026-05-05 |
 | BG-46 | `installed_via` now exposed on `lifecycle.aria2.result`, detected from the resolved `aria2c` path via the new `detectBinaryInstalledVia(binPath)` helper (shared logic with `detectAriaflowInstalledVia`, "source" verdict suppressed for third-party binaries). New action `POST /api/lifecycle/aria2/update` mirrors the ariaflow-server update flow: `brew upgrade aria2` (homebrew) / 409 with explanatory error for pipx/npm (aria2 isn't distributed via those) / 409 unknown_installer when path doesn't match. Detached subprocess + post-`reply.raw.finish` side-effect pattern reused from BG-43 | 2026-05-05 |
 | BG-45 | Three new declaration preferences (`auto_start_aria2` defaulting true on macOS/Linux, `auto_update`, `auto_update_check_hours`) persisted via the existing PATCH /api/declaration/preferences. cmdServe now reconciles aria2's launchd plist / systemd unit on boot to match `auto_start_aria2` (install if true+missing, uninstall if false+present), logging `auto_start_reconciled`. A periodic auto-update controller polls every `auto_update_check_hours` when `auto_update` is on, runs `brew outdated --json=v2 ariaflow-server` (homebrew-only in v1; pipx/npm/source skip), and on a hit dispatches `brew upgrade ariaflow-server` detached. Both phases log `auto_update_check` (always) and `auto_update_applied` (on hit). New `aria2AutoStartInstalled()` helper in core; new `skipAutoStartReconcile` cmdServe flag so test harnesses don't mutate real launchd state | 2026-05-05 |
 | BG-44 | Phase 3 (backend retires the standalone row). `data['aria2-launchd']` dropped from `/api/lifecycle`; auto-start info lives entirely on `aria2.result.auto_start` (shipped in phase 1). Action targets `aria2-launchd` / `aria2-systemd` / `aria2-service` for `{install,uninstall}` kept alive for back-compat (no rename). `buildAria2LaunchdRow` and the unused `detectServiceTarget` import removed. Tests updated to assert `body['aria2-launchd']` is undefined and that `auto_start` shape stays correct | 2026-05-05 |
