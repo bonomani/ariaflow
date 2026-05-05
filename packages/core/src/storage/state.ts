@@ -115,11 +115,6 @@ export class StateStore {
     this.bus = bus;
   }
 
-  /** Detach any previously-attached event bus. */
-  clearBus(): void {
-    this.bus = undefined;
-  }
-
   load(): Promise<ServerState> {
     return this.lock.with(() => readJson(statePath(this.env), { ...DEFAULT_STATE }));
   }

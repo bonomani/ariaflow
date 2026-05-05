@@ -78,11 +78,6 @@ export class ActionLog {
     this.bus = bus;
   }
 
-  /** Detach any previously-attached event bus. */
-  clearBus(): void {
-    this.bus = undefined;
-  }
-
   /** Low-level append. Stamps timestamp + session_id if not already set. */
   async append(entry: ActionLogEntry): Promise<ActionLogEntry> {
     return this.lock.with(async () => {

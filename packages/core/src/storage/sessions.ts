@@ -52,10 +52,6 @@ export class SessionService {
     this.bus = bus;
   }
 
-  clearBus(): void {
-    this.bus = undefined;
-  }
-
   /** Open a session if none is active; idempotent within an open session. */
   ensure(): Promise<ServerState> {
     return this.lock.with(async () => {
