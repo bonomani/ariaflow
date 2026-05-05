@@ -1357,11 +1357,15 @@ async function freshAppWithPeerRegistry(
 }
 
 describe("scheduler routes", () => {
-  it("GET /api/scheduler reports 'starting' before any run is started", async () => {
+  // BG-40: status enum is now stopped|starting|idle|running|paused.
+  // A fresh state has scheduler_intent default of "stopped", so the
+  // status must be "stopped" before any /start (or /resume) hits.
+  it("GET /api/scheduler reports 'stopped' before any run is started", async () => {
     const res = await app.inject({ method: "GET", url: "/api/scheduler" });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.status).toBe("starting");
+    expect(body.status).toBe("stopped");
+    expect(body.wait_reason).toBeNull();
     expect(body.running).toBe(false);
     expect(body.paused).toBe(false);
   });
@@ -1474,9 +1478,17 @@ describe("BG-25: scheduler start/stop lifecycle", () => {
 
       const status = await wired.inject({ method: "GET", url: "/api/status" });
       expect(status.json().state.running).toBe(true);
+      // BG-40: /api/status mirrors scheduler_status + wait_reason.
+      expect(status.json().state.scheduler_status).toBeDefined();
+      expect("wait_reason" in status.json().state).toBe(true);
 
       const stop = await wired.inject({ method: "POST", url: "/api/scheduler/stop" });
       expect(stop.json()).toMatchObject({ stopped: true, running: false });
+
+      // BG-40: after /stop, scheduler_intent="stopped" → status="stopped".
+      const after = await wired.inject({ method: "GET", url: "/api/scheduler" });
+      expect(after.json().status).toBe("stopped");
+      expect(after.json().wait_reason).toBeNull();
     } finally {
       await wired.close();
     }

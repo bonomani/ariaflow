@@ -75,6 +75,13 @@ export * as bandwidthUnits from "./bandwidth/units.js";
 export { bandwidthConfigFrom, type BandwidthConfig } from "./bandwidth/config.js";
 export { runBandwidthProbe, type ResolvedProbe } from "./bandwidth/run.js";
 export * as scheduler from "./scheduler/helpers.js";
+export {
+  deriveSchedulerStatus,
+  deriveWaitReason,
+  type SchedulerStatus,
+  type WaitReason,
+  type WaitReasonInputs,
+} from "./scheduler/status.js";
 export { getActiveProgress } from "./scheduler/progress.js";
 export {
   runSchedulerTick,

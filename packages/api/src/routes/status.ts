@@ -1,6 +1,7 @@
 import { prefValue, scheduler as schedulerHelpers, summarizeQueue } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
 import type { RouteContext } from "./_context.js";
+import { computeSchedulerStatus } from "./_scheduler_status.js";
 
 export function registerStatusRoute({ app, deps, metrics }: RouteContext): void {
   app.get<{ Querystring: { status?: string; session?: string } }>(
@@ -113,6 +114,12 @@ export function registerStatusRoute({ app, deps, metrics }: RouteContext): void 
       // `state.paused` as the field name; we do not surface it.
       const dispatchPaused = Boolean(state.paused);
 
+      // BG-40: scheduler_status + wait_reason on /api/status mirror the
+      // /api/scheduler view so the dashboard's System Health card
+      // doesn't need a second fetch.
+      const { status: schedulerStatus, wait_reason } =
+        await computeSchedulerStatus(deps, state);
+
       const summary = summarizeQueue(filtered);
 
       const { paused: _legacyPaused, ...stateRest } = state;
@@ -122,6 +129,8 @@ export function registerStatusRoute({ app, deps, metrics }: RouteContext): void 
         active_gid: liveActiveGid,
         active_url: liveActiveUrl,
         dispatch_paused: dispatchPaused,
+        scheduler_status: schedulerStatus,
+        wait_reason,
       };
 
       const payload: Record<string, unknown> = {

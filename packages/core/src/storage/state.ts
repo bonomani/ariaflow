@@ -12,6 +12,15 @@ export interface ServerState {
   session_last_seen_at: string | null;
   session_closed_at: string | null;
   session_closed_reason: string | null;
+  /**
+   * BG-40: operator-declared scheduler intent. "running" means the
+   * operator has hit /start (or /resume's auto-start path); "stopped"
+   * means /stop was hit or the loop has never started. Distinct from
+   * `running` (which the loop itself flips to reflect actual dispatch
+   * progress) — the difference is what lets us tell `stopped` apart
+   * from `starting` in the derived status enum.
+   */
+  scheduler_intent?: "stopped" | "running";
   _rev?: number;
   [k: string]: unknown;
 }
@@ -26,6 +35,7 @@ const DEFAULT_STATE: ServerState = {
   session_last_seen_at: null,
   session_closed_at: null,
   session_closed_reason: null,
+  scheduler_intent: "stopped",
 };
 
 export class StateStore {

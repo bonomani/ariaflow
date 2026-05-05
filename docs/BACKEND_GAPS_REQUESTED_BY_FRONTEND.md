@@ -11,62 +11,9 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
 
-### BG-40: Richer scheduler state enum + wait_reason
-
-**Paired frontend gap:** FE-34
-
-The dashboard's System Health → ariaflow-server → Scheduler badge
-needs to distinguish four states: `stopped`, `paused`, `idle`
-(engine on, no work in flight), `running` (actively dispatching).
-Today the frontend infers these from `state.running`,
-`state.dispatch_paused`, and `state.active_gid` on `/api/status` —
-which works, but isn't declared and can't explain *why* the
-scheduler is idle.
-
-Two backend signals are missing/wrong:
-
-1. **`/api/scheduler.status` enum is incomplete.** It returns
-   `"paused" | "running" | "starting"`. There is no `"stopped"`
-   value — when `running=false` the route falls through to
-   `"starting"`, which is incorrect after a deliberate
-   `POST /api/scheduler/stop`. See
-   `packages/api/src/routes/scheduler.ts:9`.
-
-2. **No `wait_reason`.** When the scheduler is idle the UI cannot
-   tell whether it's waiting on aria2, waiting on preflight,
-   queue empty, etc. The frontend currently shows just "idle".
-
-**Proposed shape** (`/api/scheduler` and mirrored on
-`/api/status.state`):
-
-```json
-{
-  "status": "stopped" | "starting" | "idle" | "running" | "paused",
-  "wait_reason": null | "queue_empty" | "aria2_unreachable"
-                      | "preflight_blocked" | "disk_full"
-                      | "bandwidth_probe_pending",
-  "running": bool,
-  "paused": bool,
-  ...existing fields
-}
-```
-
-Semantics:
-
-- `stopped` → `running=false` after explicit stop (or never started)
-- `starting` → bootstrap window before first loop tick
-- `idle` → `running=true`, no `active_gid`, queue not blocked
-- `running` → `running=true` with an `active_gid`
-- `paused` → `running=true && dispatch_paused=true`
-- `wait_reason` populated only in `idle` (or `stopped` with a
-  hard-fail reason); `null` otherwise
-
-**Why this matters for the FE:** the System Health page is the
-operator's "why isn't anything happening?" surface. Without
-`wait_reason` we can't answer that question without crawling
-`/api/lifecycle` + preflight + bandwidth separately.
+_None._
 
 ## Explicit non-requests (do not implement)
 
@@ -79,6 +26,7 @@ operator's "why isn't anything happening?" surface. Without
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-40 | Richer scheduler status enum + wait_reason. New `state.scheduler_intent` (`"stopped"\|"running"`) is stamped by `/api/scheduler/{start,stop,resume}` and lets `deriveSchedulerStatus(state)` (in `packages/core/src/scheduler/status.ts`) return the 5-state enum: `stopped\|starting\|idle\|running\|paused`. `deriveWaitReason()` classifies idle reasons in priority order: `aria2_unreachable\|preflight_blocked\|disk_full\|bandwidth_probe_pending\|queue_empty\|null`. `GET /api/scheduler` now returns `{status, wait_reason, running, paused, ...}`; `/api/status.state` mirrors `scheduler_status` + `wait_reason` so the dashboard's System Health card avoids a second fetch. 13 pure-helper tests in `status.test.ts` cover every truth-table branch; server tests assert the new shape | 2026-05-05 |
 | BG-39 | `/api/sessions/history` registered in the freshness contract (`swr`, ttl 30s) and the handler stamps via `withMeta`, matching `/api/sessions`. FE can drop the synthetic `LOCAL_METAS` mirror | 2026-05-05 |
 | BG-38 | `/api/torrents` now returns `{ok: true, torrents, count, meta}`, aligning with `/api/peers` / `/api/sessions` and the `TestEnvelopeNormalization` live-contract tests | 2026-05-05 |
 | BG-37 | `GET /api/openapi.yaml` now rewrites `info.version` at serve time to the runtime value (`deps.version`, sourced via BG-23 from cli/package.json), so the published contract artifact matches `/api/version`. Implementation in `packages/api/src/server.ts` uses an anchored regex on the `info:` block (single-line replace, leaves the rest of the spec byte-identical). Test in `server.test.ts` writes a stub yaml with `version: 0.1.145`, builds the server with version `0.1.244`, and asserts the served body contains `version: 0.1.244` and that `/api/version` reports the same value | 2026-05-04 |
