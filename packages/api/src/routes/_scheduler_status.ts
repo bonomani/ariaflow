@@ -10,7 +10,7 @@ import {
 } from "@ariaflow/core";
 import type { ServerDeps } from "../server.js";
 
-export interface SchedulerStatusBlock {
+interface SchedulerStatusBlock {
   status: SchedulerStatus;
   wait_reason: WaitReason;
 }

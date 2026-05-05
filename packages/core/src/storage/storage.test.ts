@@ -26,9 +26,6 @@ describe("paths", () => {
   it("uses ARIAFLOW_DIR when set", () => {
     expect(configDir({ ARIAFLOW_DIR: "/tmp/foo" })).toBe("/tmp/foo");
   });
-  it("falls back to ARIA_QUEUE_DIR", () => {
-    expect(configDir({ ARIA_QUEUE_DIR: "/tmp/bar" })).toBe("/tmp/bar");
-  });
   it("derives every well-known path from configDir", () => {
     const env = { ARIAFLOW_DIR: dir };
     expect(queuePath(env)).toBe(join(dir, "queue.json"));

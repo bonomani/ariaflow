@@ -1,28 +1,13 @@
-import { existsSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 /**
- * Resolve the on-disk config directory.
- *
- * Honors `ARIAFLOW_DIR` / `ARIA_QUEUE_DIR` env vars; otherwise defaults
- * to `~/.config/ariaflow-server`. Migrates the legacy `aria-queue`
- * directory in-place if present.
+ * Resolve the on-disk config directory. Honors `ARIAFLOW_DIR`;
+ * otherwise defaults to `~/.config/ariaflow-server`.
  */
 export function configDir(env: NodeJS.ProcessEnv = process.env): string {
-  const explicit = env.ARIAFLOW_DIR || env.ARIA_QUEUE_DIR;
-  if (explicit) return explicit;
-  const home = homedir();
-  const next = join(home, ".config", "ariaflow-server");
-  const old = join(home, ".config", "aria-queue");
-  if (!existsSync(next) && existsSync(old)) {
-    try {
-      renameSync(old, next);
-    } catch {
-      return old;
-    }
-  }
-  return next;
+  if (env.ARIAFLOW_DIR) return env.ARIAFLOW_DIR;
+  return join(homedir(), ".config", "ariaflow-server");
 }
 
 export const queuePath = (env?: NodeJS.ProcessEnv) => join(configDir(env), "queue.json");
