@@ -11,7 +11,49 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (2)
+## Open (3)
+
+### BG-43: Expose restart + update actions for ariaflow-server
+
+**Paired frontend gap:** none (FE will wire buttons once backend
+ships the routes)
+
+The dashboard's System Health → Components → ariaflow-server row
+currently has **no action buttons** because the only generic
+lifecycle action the backend supports for that target would be
+`uninstall` — and uninstalling the backend the dashboard is
+talking to is a foot-gun (FE commit d30fa5d removed it).
+
+The two operationally legitimate actions are:
+
+- **Restart** — bounce the backend cleanly. Useful after a
+  config change, after BG-41-class stuck states, or to pick up
+  a new aria2c binary. Implementation could fork a new process
+  and exit, or signal a supervisor (launchd/systemd if managed
+  there).
+- **Update** — pull the latest release. Surfaces a button on the
+  row when `current === false` (i.e. installed version doesn't
+  match `expected_version`). Implementation depends on the
+  install medium (Homebrew bottle pull, pipx upgrade, npm
+  install -g, or git-source rebuild via the dev path).
+
+Concretely:
+
+```
+POST /api/lifecycle/ariaflow-server/restart  → 202 Accepted, then exit
+POST /api/lifecycle/ariaflow-server/update   → kicks off package-manager update
+```
+
+Today both return `400 unsupported_action` (lifecycle.ts:240).
+The FE will surface them automatically once they're implemented:
+add `'restart'` and `'update'` to the actions returned by
+`lifecycleActionsFor('ariaflow-server', …)` in
+`src/ariaflow_dashboard/static/ts/lifecycle.ts:158-178`. Update
+gates on `current === false`; Restart is always available when
+the row is reachable.
+
+Restart is the higher-value one — it's what the operator wants
+when something looks stuck and they don't have shell access.
 
 ### BG-42: Silence /favicon.ico + expose recent HTTP errors
 
