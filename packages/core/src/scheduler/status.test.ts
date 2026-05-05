@@ -26,10 +26,30 @@ describe("deriveSchedulerStatus", () => {
     ).toBe("stopped");
   });
 
-  it("returns 'starting' when intent='running' but loop hasn't flipped running yet", () => {
+  it("returns 'starting' when intent='running' and no session has been opened yet (bootstrap)", () => {
     expect(
-      deriveSchedulerStatus({ ...baseState(), scheduler_intent: "running", running: false }),
+      deriveSchedulerStatus({
+        ...baseState(),
+        scheduler_intent: "running",
+        running: false,
+        // session_id stays null — loop's first tick hasn't run.
+      }),
     ).toBe("starting");
+  });
+
+  it("returns 'idle' when intent='running' + running=false but a session is open (drained loop)", () => {
+    // runSchedulerLoop sets running=false on a clean drain/max_iterations
+    // exit. The session stays open until /api/sessions/close. The next
+    // /api/downloads add will re-kick the loop.
+    expect(
+      deriveSchedulerStatus({
+        ...baseState(),
+        scheduler_intent: "running",
+        running: false,
+        session_id: "abc-123",
+        session_started_at: "2026-05-05T00:00:00Z",
+      }),
+    ).toBe("idle");
   });
 
   it("returns 'paused' when running and dispatch is paused", () => {

@@ -22,11 +22,17 @@ const PENDING_STATUSES = new Set(["queued", "waiting", "active"]);
  * Derive the operator-facing scheduler status from the persisted state.
  *
  * Truth table:
- *   intent=stopped                              → "stopped"
- *   intent=running, running=false               → "starting"
- *   intent=running, running=true, paused=true   → "paused"
- *   intent=running, running=true, active_gid    → "running"
- *   intent=running, running=true, !active_gid   → "idle"
+ *   intent=stopped                                → "stopped"
+ *   intent=running, no session yet                → "starting"
+ *     (genuine bootstrap window: operator hit start but the loop's
+ *      first tick hasn't opened a session)
+ *   intent=running, running=false, session open   → "idle"
+ *     (loop drained — runSchedulerLoop sets running=false on a clean
+ *      drain/max_iterations exit; the operator still wants it
+ *      running, so the next /api/downloads add will re-kick it)
+ *   intent=running, running=true, paused=true     → "paused"
+ *   intent=running, running=true, active_gid      → "running"
+ *   intent=running, running=true, !active_gid     → "idle"
  *
  * `scheduler_intent` is undefined on legacy on-disk state files; treat
  * undefined as "stopped" (the documented default).
@@ -34,7 +40,13 @@ const PENDING_STATUSES = new Set(["queued", "waiting", "active"]);
 export function deriveSchedulerStatus(state: ServerState): SchedulerStatus {
   const intent = state.scheduler_intent ?? "stopped";
   if (intent === "stopped") return "stopped";
-  if (!state.running) return "starting";
+  if (!state.running) {
+    // Loop has run at least once iff a session was opened. If the
+    // session is still open (or a closed session is present), the loop
+    // ran and exited cleanly — treat as idle, not starting.
+    const hasOpenSession = Boolean(state.session_id);
+    return hasOpenSession ? "idle" : "starting";
+  }
   if (state.paused) return "paused";
   return state.active_gid ? "running" : "idle";
 }

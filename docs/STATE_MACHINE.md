@@ -74,13 +74,20 @@ distinct from item status. It composes three persisted axes:
 
 Truth table:
 
-| intent    | running | paused | active_gid | → status     |
-|-----------|---------|--------|------------|--------------|
-| stopped   | *       | *      | *          | `stopped`    |
-| running   | false   | *      | *          | `starting`   |
-| running   | true    | true   | *          | `paused`     |
-| running   | true    | false  | set        | `running`    |
-| running   | true    | false  | null       | `idle`       |
+| intent    | running | paused | active_gid | session    | → status     |
+|-----------|---------|--------|------------|------------|--------------|
+| stopped   | *       | *      | *          | *          | `stopped`    |
+| running   | false   | *      | *          | none open  | `starting`   |
+| running   | false   | *      | *          | open       | `idle`       |
+| running   | true    | true   | *          | *          | `paused`     |
+| running   | true    | false  | set        | *          | `running`    |
+| running   | true    | false  | null       | *          | `idle`       |
+
+`starting` is reserved for the genuine bootstrap window before the
+loop's first tick has opened a session. Once the session is open, a
+`running=false` state means the loop drained cleanly and is waiting
+for new work — that's `idle`, not `starting`. The next
+`POST /api/downloads` (or `/api/scheduler/resume`) re-kicks the loop.
 
 `wait_reason` is populated only when status is `idle`, in priority
 order: `aria2_unreachable` > `preflight_blocked` > `disk_full` >
