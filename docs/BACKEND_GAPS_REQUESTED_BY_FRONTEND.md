@@ -11,7 +11,12 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<!-- All current backend gaps are resolved. See the Resolved table below. -->
+
+<details>
+<summary>BG-45 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-45: Persist auto-start and auto-update as declaration preferences
 
@@ -71,6 +76,8 @@ package-manager "is there a newer version" check has its own
 detection per installer (`brew outdated`, `pipx list --outdated`,
 `npm outdated -g`). Worth phasing.
 
+</details>
+
 ## Explicit non-requests (do not implement)
 
 | Topic | Decision | Reason |
@@ -82,6 +89,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-45 | Three new declaration preferences (`auto_start_aria2` defaulting true on macOS/Linux, `auto_update`, `auto_update_check_hours`) persisted via the existing PATCH /api/declaration/preferences. cmdServe now reconciles aria2's launchd plist / systemd unit on boot to match `auto_start_aria2` (install if true+missing, uninstall if false+present), logging `auto_start_reconciled`. A periodic auto-update controller polls every `auto_update_check_hours` when `auto_update` is on, runs `brew outdated --json=v2 ariaflow-server` (homebrew-only in v1; pipx/npm/source skip), and on a hit dispatches `brew upgrade ariaflow-server` detached. Both phases log `auto_update_check` (always) and `auto_update_applied` (on hit). New `aria2AutoStartInstalled()` helper in core; new `skipAutoStartReconcile` cmdServe flag so test harnesses don't mutate real launchd state | 2026-05-05 |
 | BG-44 | Phase 3 (backend retires the standalone row). `data['aria2-launchd']` dropped from `/api/lifecycle`; auto-start info lives entirely on `aria2.result.auto_start` (shipped in phase 1). Action targets `aria2-launchd` / `aria2-systemd` / `aria2-service` for `{install,uninstall}` kept alive for back-compat (no rename). `buildAria2LaunchdRow` and the unused `detectServiceTarget` import removed. Tests updated to assert `body['aria2-launchd']` is undefined and that `auto_start` shape stays correct | 2026-05-05 |
 | BG-43 | Two new axes on `/api/lifecycle.ariaflow-server.result`: `managed_by` (launchd/systemd/docker/external/null) and `installed_via` (homebrew/pipx/npm/source/null), auto-detected from `/.dockerenv`, `~/Library/LaunchAgents/*.plist`, `INVOCATION_ID`, ppid, `process.argv[1]` path, etc. (see `packages/core/src/install/ariaflow_self.ts`). Two new lifecycle actions: `POST /api/lifecycle/ariaflow-server/restart` dispatches `launchctl kickstart -k gui/UID/<label>` (launchd) / `systemctl --user restart ariaflow-server` (systemd) / `process.exit(0)` (docker) / 409 (external/null). `POST /api/lifecycle/ariaflow-server/update` dispatches `brew upgrade ariaflow-server` (homebrew) / `pipx upgrade ariaflow-server` (pipx) / `npm install -g @ariaflow/cli@latest` (npm) / 409 (source/null). Subprocesses spawned detached + unref()'d so the response isn't blocked; side effects fire on `reply.raw.on('finish')` after the 202 ack flushes. 7 new pure-helper tests for installed_via detection. Verified live on v0.1.273: `managed_by="launchd"`, `installed_via="homebrew"` | 2026-05-05 |
 | BG-41 | Scheduler stuck in `starting` indefinitely after restart. Resolved as part of the wire-shape sweep — `afbcf93` (toWireState picks declared fields explicitly) plus the scheduler-controller fix verified live: state.running flips to true shortly after intent='running', heartbeat advances. FE workaround (Stop visible during 'starting') stays as defense in depth | 2026-05-05 |

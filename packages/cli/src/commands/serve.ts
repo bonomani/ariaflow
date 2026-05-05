@@ -15,6 +15,7 @@ import {
 import { buildServer } from "@ariaflow/api";
 import type { CliContext } from "../context.js";
 import { createSchedulerController } from "./_scheduler_controller.js";
+import { createAutoUpdateController } from "./_auto_update_controller.js";
 
 interface ServeOptions {
   host?: string;
@@ -207,6 +208,12 @@ export async function cmdServe(
     await callStartScheduler(ctx.state, scheduler.launch);
   }
 
+  // BG-45 phase 3: schedule auto-update checks. The controller is a
+  // no-op while auto_update is false; flipping the toggle takes effect
+  // on the next tick without a server restart.
+  const autoUpdate = createAutoUpdateController(ctx);
+  if (!opts.skipAutoStartReconcile) autoUpdate.launch();
+
   // BG-18: announce _ariaflow-server._tcp via the local mDNS daemon so
   // dashboards on the same L2 segment auto-discover the backend.
   // Failures are non-fatal — the HTTP listener stays up either way.
@@ -229,6 +236,7 @@ export async function cmdServe(
     scheduler: scheduler.running(),
     mdns: (mdnsHandle?.backend ?? null) as "dns-sd" | "avahi" | null,
     close: async () => {
+      autoUpdate.stop();
       await scheduler.stop();
       await mdnsHandle?.stop();
       await app.close();
