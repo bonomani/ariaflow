@@ -11,7 +11,56 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-47: Don't gate scheduler on bandwidth probe when queue is empty
+
+**Paired frontend gap:** FE-37 (no FE change needed — pure backend
+priority reorder)
+
+**Symptom seen on the dashboard:** with an empty queue and a probe
+that hasn't run yet, the scheduler badge reads
+`idle · bandwidth probe pending`. That's misleading — there's
+nothing to schedule, so the probe state is irrelevant. The right
+read is `idle · queue empty`.
+
+**Root cause:** `deriveWaitReason()` (BG-40, in
+`packages/core/src/scheduler/status.ts`) currently classifies in
+this priority order:
+
+```
+aria2_unreachable
+preflight_blocked
+disk_full
+bandwidth_probe_pending   ← evaluated before queue check
+queue_empty
+null
+```
+
+`bandwidth_probe_pending` fires before `queue_empty`, so an empty
+queue with no probe yet → "probe pending" wins.
+
+**Operator mental model:** "the scheduler shouldn't depend on the
+probe; the probe only runs when there's work to do; if there's no
+work, the scheduler is idle for the simple reason that the queue
+is empty." The wait_reason should reflect that.
+
+**Requested behaviour:**
+
+1. **Reorder** so `queue_empty` is checked before
+   `bandwidth_probe_pending`. With an empty queue → wait_reason
+   `queue_empty`, regardless of probe state.
+2. **Confirm** that the probe itself is gated on queue non-empty
+   (i.e., it doesn't actually start when there's nothing to
+   schedule). Operator's reading suggests it doesn't run, which
+   makes "probe_pending" doubly wrong on an empty queue. If it
+   *does* still run (e.g., on a periodic timer), please document
+   that — but the wait_reason should still default to
+   `queue_empty` when the queue has nothing in it.
+
+No FE change required. The dashboard renders whatever
+`state.wait_reason` says; once the priority is corrected, the
+"idle · queue empty" read will appear without further work.
 
 <details>
 <summary>BG-46 (resolved) — original frontend brief retained for context</summary>
