@@ -76,10 +76,21 @@ function readPackageVersion(): string | undefined {
 
   const isPlaceholder = (v: string): boolean => !v || v === "0.0.0";
 
-  for (const p of [
-    join(here, "..", "package.json"),
-    join(repoRoot, "packages/cli/package.json"),
-  ]) {
+  // Walk up from `here` looking for the first package.json. After R-H
+  // split commands.ts into commands/, `here` is .../dist/commands/ —
+  // two levels deep instead of one. A bounded walk-up handles both
+  // shapes (and any future restructure) without hard-coded depths.
+  const candidates: string[] = [];
+  let dir = here;
+  for (let i = 0; i < 5; i++) {
+    candidates.push(join(dir, "package.json"));
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  candidates.push(join(repoRoot, "packages/cli/package.json"));
+
+  for (const p of candidates) {
     if (!existsSync(p)) continue;
     try {
       const raw = JSON.parse(readFileSync(p, "utf8")) as { version?: unknown };
