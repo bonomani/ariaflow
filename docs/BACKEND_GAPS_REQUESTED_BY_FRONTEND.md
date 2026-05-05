@@ -11,9 +11,52 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (2)
 
-### BG-41: Scheduler stuck in `starting` indefinitely
+### BG-42: Silence /favicon.ico + expose recent HTTP errors
+
+**Paired frontend gap:** none (FE already serves its own
+/favicon.ico → 204 in webapp.py; expose-errors is a backend-only
+addition)
+
+The `Errors` chip in the dashboard's System Health → Process
+section reads `health.errors_total` (Fastify hook in
+`packages/api/src/server.ts:141` counts every response with
+`statusCode >= 400`). Two issues stack:
+
+**(1) /favicon.ico inflates the count.** Whenever an operator
+opens Swagger UI (or hits any backend URL directly in a browser
+via the dashboard's Dev tab "Open Swagger UI" button), the
+browser auto-fetches `/favicon.ico` against the backend origin
+and gets a 404. That's one error per fresh browser session,
+unrelated to anything operationally interesting. Fix: register
+a `GET /favicon.ico` route that returns `204 No Content`
+(matches what the dashboard already does in `webapp.py`).
+
+**(2) Counter is opaque.** Today the chip shows just a number —
+the operator can see "Errors: 4" but has no way to learn what
+the errors were without checking server stdout or browser
+DevTools. Proposal: extend `health` with a small ring buffer:
+
+```ts
+errors_recent: Array<{
+  at: number,        // epoch seconds
+  method: string,    // "GET" / "POST" / ...
+  path: string,      // matched route or raw URL
+  status: number,    // 4xx / 5xx
+  // optional: short error class / fastify error code if available
+}>
+```
+
+Buffer size ~20 is enough for the chip's drill-down use case;
+older entries roll off. The frontend would render this as a
+collapsible list under the chip on the System Health row, so
+the operator can tell at a glance whether the count is
+"benign favicon noise" or "something actually broke".
+
+Both pieces are independent — favicon route is one-liner, the
+recent-errors buffer is a couple hours of work. Either one
+landing alone is useful.
 
 **Paired frontend gap:** none (infra/correctness — FE only displays
 the state)
