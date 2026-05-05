@@ -49,13 +49,21 @@ interface StateBus {
 
 /**
  * BG-33: `state.paused` is internal-only — every wire surface (the
- * /api/status response, /api/events SSE frames) must expose
- * `dispatch_paused` instead. Strips `paused` from the published frame
- * and adds the canonical alias.
+ * /api/status response, /api/events SSE frames, /api/sessions*
+ * payloads) must expose `dispatch_paused` instead. Strips `paused`
+ * from the supplied state and stamps the canonical alias.
+ *
+ * Use at any boundary that ships a ServerState to a remote consumer.
  */
-function publishStateChange(bus: StateBus, state: ServerState): void {
+export function toWireState(
+  state: ServerState,
+): Omit<ServerState, "paused"> & { dispatch_paused: boolean } {
   const { paused, ...rest } = state;
-  bus.publish("state_changed", { ...rest, dispatch_paused: Boolean(paused) });
+  return { ...rest, dispatch_paused: Boolean(paused) };
+}
+
+function publishStateChange(bus: StateBus, state: ServerState): void {
+  bus.publish("state_changed", toWireState(state));
 }
 
 export class StateStore {

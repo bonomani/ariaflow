@@ -482,6 +482,30 @@ describe("StateStore -> EventBus bridge", () => {
     expect(seen.filter(([e]) => e === "state_changed")).toHaveLength(2);
   });
 
+  // BG-33: internal-only `paused` must NOT leak onto the SSE wire.
+  // state_changed events strip it and stamp `dispatch_paused` instead.
+  it("state_changed publishes the sanitized wire shape (no `paused`, has `dispatch_paused`)", async () => {
+    const { EventBus, StateStore, StorageLock, storageLockPath } = await import(
+      "@ariaflow/core"
+    );
+    const env = { ARIAFLOW_DIR: dir };
+    const lock = new StorageLock(storageLockPath(env));
+    const state = new StateStore(lock, env);
+    const bus = new EventBus();
+    state.setBus(bus);
+    let payload: Record<string, unknown> | null = null;
+    bus.subscribe((event, data) => {
+      if (event === "state_changed") payload = data as Record<string, unknown>;
+    });
+    await state.update((s) => {
+      s.paused = true;
+      s.running = true;
+    });
+    expect(payload).not.toBeNull();
+    expect(payload).not.toHaveProperty("paused");
+    expect(payload).toMatchObject({ dispatch_paused: true, running: true });
+  });
+
   it("buildServer attaches the EventBus to StateStore so route mutations stream via SSE", async () => {
     const { EventBus } = await import("@ariaflow/core");
     const bus = new EventBus();

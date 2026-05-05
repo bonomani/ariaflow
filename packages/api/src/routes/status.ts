@@ -1,6 +1,7 @@
 import {
   probeDiskOk,
   summarizeQueue,
+  toWireState,
   type Aria2Client,
   type QueueItemRecord,
   type ResolvedProbe,
@@ -136,15 +137,12 @@ export function registerStatusRoute({ app, deps, metrics }: RouteContext): void 
       ]);
 
       // BG-33: `dispatch_paused` is the canonical scheduler-pause field
-      // (disambiguates from item-level `paused`). Internal storage keeps
-      // `state.paused` as the field name; we do not surface it.
-      const { paused: _legacyPaused, ...stateRest } = state;
-      void _legacyPaused;
-      const stateOut: Record<string, unknown> = {
-        ...stateRest,
+      // (disambiguates from item-level `paused`). toWireState strips
+      // the internal `paused` and stamps `dispatch_paused`.
+      const stateOut = {
+        ...toWireState(state),
         active_gid: live.active_gid,
         active_url: live.active_url,
-        dispatch_paused: Boolean(state.paused),
         scheduler_status: scheduler.status,
         wait_reason: scheduler.wait_reason,
       };
