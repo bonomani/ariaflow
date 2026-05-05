@@ -3,16 +3,12 @@ import { dirname, join } from "node:path";
 import {
   advertiseHttpService,
   Aria2Client,
-  bandwidthConfigFrom,
   callStartScheduler,
-  deduplicateActiveTransfers,
   EventBus,
-  reconcileLiveQueue,
-  runBandwidthProbe,
-  runSchedulerLoop,
 } from "@ariaflow/core";
 import { buildServer } from "@ariaflow/api";
 import type { CliContext } from "../context.js";
+import { createSchedulerController } from "./_scheduler_controller.js";
 
 interface ServeOptions {
   host?: string;
@@ -137,100 +133,9 @@ export async function cmdServe(
   // run without npm install.
   const resolvedVersion = opts.version ?? readPackageVersion();
 
-  let schedulerCtrl: AbortController | undefined;
-  let schedulerDone: Promise<unknown> = Promise.resolve();
-
-  // BG-25: factored so /api/scheduler/start (and /resume's auto-start)
-  // can spin up the loop on demand, not just at boot.
-  const launchScheduler = async (): Promise<{ started: boolean; reason: string }> => {
-    if (!aria2) return { started: false, reason: "aria2_unavailable" };
-    if (schedulerCtrl && !schedulerCtrl.signal.aborted) {
-      return { started: false, reason: "already_running" };
-    }
-    schedulerCtrl = new AbortController();
-    const state = await ctx.state.load();
-    const initialCap = Number(state.last_bandwidth_probe?.cap_bytes_per_sec ?? 0) || 0;
-    schedulerDone = runSchedulerLoop(
-      {
-        queueStore: ctx.queue,
-        stateStore: ctx.state,
-        declarationStore: ctx.declaration,
-        actionLog: ctx.actions,
-        aria2,
-      },
-      {
-        capBytesPerSec: initialCap,
-        intervalMs: opts.schedulerIntervalMs ?? 2000,
-        signal: schedulerCtrl.signal,
-        preLoop: async () => {
-          // Adopt orphan GIDs from a previous run before the loop starts
-          // pushing new ones. Composes Phase 8's matcher to avoid double-
-          // dispatching items aria2 is already running.
-          await reconcileLiveQueue(
-            {
-              queueStore: ctx.queue,
-              stateStore: ctx.state,
-              actionLog: ctx.actions,
-              aria2: aria2!,
-            },
-            { adoptMissing: true },
-          );
-          // Drop duplicate active transfers so the scheduler doesn't
-          // double-bill bandwidth to the same URL on startup.
-          await deduplicateActiveTransfers({
-            declarationStore: ctx.declaration,
-            actionLog: ctx.actions,
-            aria2: aria2!,
-          });
-          // Refresh the bandwidth cap before entering the loop so the
-          // first batch of dispatches respects the live network rate.
-          const declaration = await ctx.declaration.load();
-          const config = bandwidthConfigFrom(declaration);
-          const fresh = await runBandwidthProbe({ config });
-          await ctx.state.update((s) => {
-            s.last_bandwidth_probe = fresh;
-            s.last_bandwidth_probe_at = Date.now() / 1000;
-          });
-          await ctx.actions.record({
-            action: "probe",
-            target: "bandwidth",
-            outcome: fresh.source === "networkquality" ? "changed" : "unchanged",
-            reason: "scheduler_preloop",
-            detail: fresh as unknown as Record<string, unknown>,
-          });
-          return { capBytesPerSec: fresh.cap_bytes_per_sec ?? 0 };
-        },
-      },
-    ).then(() => {
-      // Loop exited normally (drained / max_iterations) — clear the
-      // controller so launchScheduler() can spin up a fresh loop when
-      // new items arrive.
-      schedulerCtrl = undefined;
-      schedulerDone = Promise.resolve();
-    }, (err) => {
-      // Surface scheduler crashes to stderr but don't kill the HTTP
-      // listener — caller can investigate via /api/log.
-      console.error("scheduler loop crashed:", err);
-      schedulerCtrl = undefined;
-      schedulerDone = Promise.resolve();
-    });
-    // Wait one event-loop tick so the loop's first state.running=true
-    // write lands before we report success — callers immediately read
-    // /api/status after /start and would otherwise race the flip.
-    await new Promise<void>((r) => setImmediate(r));
-    return { started: true, reason: "started" };
-  };
-
-  const stopSchedulerLoop = async (): Promise<{ stopped: boolean; reason: string }> => {
-    if (!schedulerCtrl || schedulerCtrl.signal.aborted) {
-      return { stopped: false, reason: "not_running" };
-    }
-    schedulerCtrl.abort();
-    await schedulerDone;
-    schedulerCtrl = undefined;
-    schedulerDone = Promise.resolve();
-    return { stopped: true, reason: "stopped" };
-  };
+  const scheduler = createSchedulerController(ctx, aria2, {
+    ...(opts.schedulerIntervalMs !== undefined ? { intervalMs: opts.schedulerIntervalMs } : {}),
+  });
 
   const app = buildServer({
     queueOps: ctx.queueOps,
@@ -244,7 +149,9 @@ export async function cmdServe(
     ...(aria2 ? { aria2 } : {}),
     ...(resolvedVersion !== undefined ? { version: resolvedVersion } : {}),
     ...(yamlPath ? { openapiYamlPath: yamlPath } : {}),
-    ...(aria2 ? { startScheduler: launchScheduler, stopScheduler: stopSchedulerLoop } : {}),
+    ...(aria2
+      ? { startScheduler: scheduler.launch, stopScheduler: scheduler.stop }
+      : {}),
   });
   const requestedPort = opts.port ?? 8000;
   const host = opts.host ?? "127.0.0.1";
@@ -258,7 +165,7 @@ export async function cmdServe(
     // revert-on-failure, matching /api/scheduler/start semantics so
     // `ariaflow serve --scheduler` reports "starting"/"running"
     // (never "stopped") during the bootstrap window.
-    await callStartScheduler(ctx.state, launchScheduler);
+    await callStartScheduler(ctx.state, scheduler.launch);
   }
 
   // BG-18: announce _ariaflow-server._tcp via the local mDNS daemon so
@@ -280,15 +187,14 @@ export async function cmdServe(
   return {
     url: `http://${host}:${port}`,
     port,
-    scheduler: Boolean(schedulerCtrl),
+    scheduler: scheduler.running(),
     mdns: (mdnsHandle?.backend ?? null) as "dns-sd" | "avahi" | null,
     close: async () => {
-      schedulerCtrl?.abort();
-      await schedulerDone;
+      await scheduler.stop();
       await mdnsHandle?.stop();
       await app.close();
     },
-    startScheduler: launchScheduler,
-    stopScheduler: stopSchedulerLoop,
+    startScheduler: scheduler.launch,
+    stopScheduler: scheduler.stop,
   };
 }
