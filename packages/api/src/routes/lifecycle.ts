@@ -427,7 +427,7 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
               : dispatchAriaflowUpdate();
         await deps.actionLog.record({
           action: ACTIONS.systemLifecycle,
-          target: target || "system",
+          target: target,
           outcome: dispatch.status === 202 ? "changed" : "blocked",
           reason: action,
           before,
@@ -482,9 +482,9 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
 
         await deps.actionLog.record({
           action: ACTIONS.systemLifecycle,
-          target: target || "system",
+          target: target,
           outcome: "changed",
-          reason: action || "lifecycle_action",
+          reason: action,
           before,
           after: { target, action, result },
           detail: { target, action, dry_run: dryRun, result },
@@ -494,7 +494,7 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
         const message = err instanceof Error ? err.message : String(err);
         await deps.actionLog.record({
           action: ACTIONS.systemLifecycle,
-          target: target || "system",
+          target: target,
           outcome: "failed",
           reason: "exception",
           before,
