@@ -122,6 +122,7 @@ export function registerDefaultFreshness(): void {
   // BG-34: per-tab loader endpoints. Classes follow the frontend's
   // suggestions (see docs/BACKEND_GAPS_REQUESTED_BY_FRONTEND.md). Choice
   // isn't load-bearing — the FreshnessRouter just needs *some* class.
+  registerFreshness("GET", "/api/downloads", { freshness: "warm", ttl_s: 15 });
   registerFreshness("GET", "/api/torrents", { freshness: "warm", ttl_s: 30 });
   registerFreshness("GET", "/api/peers", { freshness: "warm", ttl_s: 30 });
   registerFreshness("GET", "/api/downloads/archive", { freshness: "swr", ttl_s: 60 });

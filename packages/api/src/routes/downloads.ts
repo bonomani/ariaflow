@@ -63,7 +63,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
 
   app.get("/api/downloads", async () => {
     const items = await deps.queueStore.load();
-    return {
+    return withMeta("GET", "/api/downloads", {
       ok: true,
       summary: summarizeQueue(items),
       items: items.map((i) => ({
@@ -73,7 +73,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
         gid: i.gid ?? null,
         actions: allowedActions(String(i.status ?? "")),
       })),
-    };
+    });
   });
 
   app.get<{ Querystring: { limit?: string } }>("/api/downloads/archive", async (req, reply) => {
