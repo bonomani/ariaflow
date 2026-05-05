@@ -189,10 +189,7 @@ export class SessionService {
         items_queued: count((i) => i.status === "queued"),
         items_downloading: count((i) => i.status === "active"),
         items_paused: count((i) => i.status === "paused"),
-        bytes_completed: all.reduce(
-          (n, i) => n + Number((i as Record<string, unknown>).completedLength ?? 0),
-          0,
-        ),
+        bytes_completed: all.reduce((n, i) => n + Number(i.completedLength ?? 0), 0),
       };
     });
   }

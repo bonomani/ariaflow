@@ -67,6 +67,21 @@ export interface QueueItemRecord {
   /** File listing populated by the aria2 poller (per-file metadata). */
   files?: unknown[];
   /**
+   * BG-28(b): live progress fields mirrored from aria2's tellStatus
+   * (camelCase to match the dashboard's wire shape — these are the
+   * canonical names, the snake_case aliases were retired). Optional
+   * because rows that have never been polled won't have them. aria2
+   * RPC delivers strings; the dedup/merge path may persist a Number
+   * after an arithmetic compare, so the type is union (callers
+   * Number() at read time anyway).
+   */
+  downloadSpeed?: string | number;
+  uploadSpeed?: string | number;
+  completedLength?: string | number;
+  totalLength?: string | number;
+  connections?: number;
+  numSeeders?: string | number;
+  /**
    * Distribution / seeding fields stamped by the post-action seed flow.
    * Optional because most items never become seed sources. Surfaced by
    * `/api/torrents` and the seed-stop / torrent-file routes.

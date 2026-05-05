@@ -56,7 +56,7 @@ export function queueItemPreference(
   const status = String(item.status ?? "");
   return [
     ranks[status] ?? 0,
-    coerceFloat((item as Record<string, unknown>).completedLength) ?? 0,
+    coerceFloat(item.completedLength) ?? 0,
     item.gid ? 1 : 0,
     item.recovered ? 1 : 0,
   ];
