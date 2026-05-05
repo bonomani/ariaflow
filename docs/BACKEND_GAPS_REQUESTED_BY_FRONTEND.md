@@ -11,89 +11,9 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
 
-### BG-43: Expose restart + update actions for ariaflow-server (cross-platform)
-
-**Paired frontend gap:** none (FE will wire buttons once backend
-ships the routes)
-
-The dashboard's System Health → Components → ariaflow-server row
-currently has **no action buttons** because the only generic
-lifecycle action the backend supports for that target would be
-`uninstall` — a foot-gun on the host process (FE commit d30fa5d
-removed it). The legitimate actions are **Restart** and **Update**.
-Implementing them needs platform-aware detection of who runs and
-who installs the backend, since neither action is something the
-app can do to itself reliably.
-
-#### Two new axes on `/api/lifecycle.ariaflow-server.result`
-
-Same shape as BG-29's `managed_by` for aria2:
-
-```ts
-managed_by:    "launchd" | "systemd" | "docker" | "external" | null
-installed_via: "homebrew" | "pipx" | "npm" | "source" | null
-```
-
-Auto-detection at startup:
-
-| Axis | Detection |
-|---|---|
-| `managed_by="launchd"` | `~/Library/LaunchAgents/com.ariaflow-server.plist` exists AND own pid is a child of `launchd` |
-| `managed_by="systemd"` | `systemctl --user is-active ariaflow-server` returns `active`, OR `/proc/1/comm == "systemd"` and unit file exists |
-| `managed_by="docker"` | `/.dockerenv` exists OR `/proc/1/cgroup` contains `docker` |
-| `managed_by="external"` | none of the above, parent pid is not init |
-| `managed_by=null` | unknown/dev session (e.g. foregrounded `pnpm serve`) |
-| `installed_via="homebrew"` | `process.argv[0]` resolves under `$(brew --prefix)` |
-| `installed_via="pipx"` | resolves under `~/.local/pipx/venvs/` |
-| `installed_via="npm"` | resolves under `$(npm prefix -g)/lib/node_modules/` |
-| `installed_via="source"` | resolves to a path inside a git working tree |
-| `installed_via=null` | unknown |
-
-#### Two new lifecycle actions
-
-```
-POST /api/lifecycle/ariaflow-server/restart  → 202 Accepted, then exit
-POST /api/lifecycle/ariaflow-server/update   → kicks off package-manager update, then 202
-```
-
-Restart implementation (per `managed_by`):
-
-| `managed_by` | Restart implementation |
-|---|---|
-| `launchd` | `launchctl kickstart -k gui/$UID/com.ariaflow-server` |
-| `systemd` | `systemctl --user restart ariaflow-server` |
-| `docker` | exit with non-zero — orchestrator restarts |
-| `external` | reject with `409 manual_restart_required` |
-| `null` | reject with `409 unknown_supervisor` |
-
-Update implementation (per `installed_via`):
-
-| `installed_via` | Update implementation |
-|---|---|
-| `homebrew` | `brew upgrade ariaflow-server` |
-| `pipx` | `pipx upgrade ariaflow-server` |
-| `npm` | `npm install -g @ariaflow/cli@latest` |
-| `source` | reject with `409 source_install` (operator runs `git pull && pnpm build`) |
-| `null` | reject with `409 unknown_installer` |
-
-#### What the FE will do
-
-- Add `'restart'` and `'update'` cases to
-  `lifecycleActionsFor('ariaflow-server', …)` in
-  `src/ariaflow_dashboard/static/ts/lifecycle.ts:158-178`.
-- **Restart** button: shown when `managed_by` is one of
-  `launchd|systemd|docker`. Disabled with tooltip otherwise.
-- **Update** button: shown when `current === false` AND
-  `installed_via` is one of `homebrew|pipx|npm`. Hidden when
-  versions match.
-- Tooltip on disabled cases: "managed externally — restart via
-  `<launchctl|systemctl|docker>`".
-
-Restart is the higher-value half — it's what the operator wants
-when BG-41-class stuck states or config changes happen and they
-don't have shell access.
+_None._
 
 ## Explicit non-requests (do not implement)
 
@@ -106,6 +26,7 @@ don't have shell access.
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-43 | Two new axes on `/api/lifecycle.ariaflow-server.result`: `managed_by` (launchd/systemd/docker/external/null) and `installed_via` (homebrew/pipx/npm/source/null), auto-detected from `/.dockerenv`, `~/Library/LaunchAgents/*.plist`, `INVOCATION_ID`, ppid, `process.argv[1]` path, etc. (see `packages/core/src/install/ariaflow_self.ts`). Two new lifecycle actions: `POST /api/lifecycle/ariaflow-server/restart` dispatches `launchctl kickstart -k gui/UID/<label>` (launchd) / `systemctl --user restart ariaflow-server` (systemd) / `process.exit(0)` (docker) / 409 (external/null). `POST /api/lifecycle/ariaflow-server/update` dispatches `brew upgrade ariaflow-server` (homebrew) / `pipx upgrade ariaflow-server` (pipx) / `npm install -g @ariaflow/cli@latest` (npm) / 409 (source/null). Subprocesses spawned detached + unref()'d so the response isn't blocked; side effects fire on `reply.raw.on('finish')` after the 202 ack flushes. 7 new pure-helper tests for installed_via detection. Verified live on v0.1.273: `managed_by="launchd"`, `installed_via="homebrew"` | 2026-05-05 |
 | BG-41 | Scheduler stuck in `starting` indefinitely after restart. Resolved as part of the wire-shape sweep — `afbcf93` (toWireState picks declared fields explicitly) plus the scheduler-controller fix verified live: state.running flips to true shortly after intent='running', heartbeat advances. FE workaround (Stop visible during 'starting') stays as defense in depth | 2026-05-05 |
 | BG-42 | (1) `GET /favicon.ico` registered in `routes/meta.ts` returning 204 — silences the per-browser-session 404 that was inflating `health.errors_total`. (2) `health.errors_recent` ring buffer added to `ServerMetrics` (`routes/_context.ts`); `onResponse` hook in `server.ts` pushes `{at, method, path, status}` for every 4xx/5xx, capped at `ERRORS_RECENT_MAX=20` (older entries roll off). Surfaced on `/api/status.health.errors_recent`. `path` prefers Fastify's matched `routerPath` ("/api/downloads/:id") and falls back to raw `req.url` when not yet matched | 2026-05-05 |
 | BG-40 | Richer scheduler status enum + wait_reason. New `state.scheduler_intent` (`"stopped"\|"running"`) is stamped by `/api/scheduler/{start,stop,resume}` and lets `deriveSchedulerStatus(state)` (in `packages/core/src/scheduler/status.ts`) return the 5-state enum: `stopped\|starting\|idle\|running\|paused`. `deriveWaitReason()` classifies idle reasons in priority order: `aria2_unreachable\|preflight_blocked\|disk_full\|bandwidth_probe_pending\|queue_empty\|null`. `GET /api/scheduler` now returns `{status, wait_reason, running, paused, ...}`; `/api/status.state` mirrors `scheduler_status` + `wait_reason` so the dashboard's System Health card avoids a second fetch. 13 pure-helper tests in `status.test.ts` cover every truth-table branch; server tests assert the new shape | 2026-05-05 |
