@@ -169,7 +169,7 @@ describe("cmdDeclaration", () => {
 
 describe("cmdWatch", () => {
   it("streams an action_logged event from a running server", async () => {
-    const handle = await cmdServe(ctx, { host: "127.0.0.1", port: 0 });
+    const handle = await cmdServe(ctx, { skipAutoStartReconcile: true, host: "127.0.0.1", port: 0 });
     const lines: string[] = [];
     const out = { write: (s: string) => void lines.push(s) };
     const watch = cmdWatch({
@@ -201,7 +201,7 @@ describe("cmdWatch", () => {
 
 describe("cmdServe SSE", () => {
   it("echoes the request Origin on /api/events (CORS)", async () => {
-    const handle = await cmdServe(ctx, { host: "127.0.0.1", port: 0, aria2Host: "" });
+    const handle = await cmdServe(ctx, { skipAutoStartReconcile: true, host: "127.0.0.1", port: 0, aria2Host: "" });
     try {
       const res = await fetch(`${handle.url}/api/events`, {
         headers: { Accept: "text/event-stream", Origin: "http://dashboard.local" },
@@ -214,7 +214,7 @@ describe("cmdServe SSE", () => {
   });
 
   it("emits a real named 'connected' event as the first frame", async () => {
-    const handle = await cmdServe(ctx, { host: "127.0.0.1", port: 0, aria2Host: "" });
+    const handle = await cmdServe(ctx, { skipAutoStartReconcile: true, host: "127.0.0.1", port: 0, aria2Host: "" });
     try {
       const res = await fetch(`${handle.url}/api/events`, {
         headers: { Accept: "text/event-stream" },
@@ -246,7 +246,7 @@ describe("cmdServe SSE", () => {
 
 describe("cmdServe", () => {
   it("boots a real HTTP server on a free port and answers /api/health", async () => {
-    const handle = await cmdServe(ctx, { host: "127.0.0.1", port: 0, version: "9.9.9" });
+    const handle = await cmdServe(ctx, { skipAutoStartReconcile: true, host: "127.0.0.1", port: 0, version: "9.9.9" });
     try {
       const res = await fetch(`${handle.url}/api/health`);
       expect(res.status).toBe(200);
@@ -265,7 +265,7 @@ describe("cmdServe", () => {
     // The only stamp source is packages/cli/package.json (set by
     // release-npm.yml on tag push). In a fresh checkout it's the
     // placeholder 0.0.0; either way the shape must be a valid semver.
-    const handle = await cmdServe(ctx, { host: "127.0.0.1", port: 0 });
+    const handle = await cmdServe(ctx, { skipAutoStartReconcile: true, host: "127.0.0.1", port: 0 });
     try {
       const res = await fetch(`${handle.url}/api/version`);
       const body = (await res.json()) as { version: string };

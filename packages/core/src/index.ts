@@ -178,6 +178,7 @@ export {
   buildAria2SystemdUnit,
   detectServiceTarget,
   findAria2c,
+  aria2AutoStartInstalled,
   installAria2Service,
   planLaunchdInstall,
   planLaunchdUninstall,

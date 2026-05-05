@@ -46,6 +46,8 @@ export const ACTIONS = {
   // system
   systemBonjourRegister: "bonjour_register",
   systemLifecycle: "lifecycle_action",
+  // BG-45: declaration-driven reconciliation
+  autoStartReconciled: "auto_start_reconciled",
 } as const;
 
 export type ActionName = (typeof ACTIONS)[keyof typeof ACTIONS];

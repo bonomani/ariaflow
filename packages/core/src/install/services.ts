@@ -277,6 +277,17 @@ export async function installAria2Service(opts: {
   return { target, commands, results, ok: results.every((r) => r.ok) };
 }
 
+/**
+ * BG-45 phase 2: is the aria2 supervisor (launchd plist or systemd
+ * unit) currently installed for this user on this platform? Returns
+ * false on platforms where there's no supervisor we manage.
+ */
+export function aria2AutoStartInstalled(): boolean {
+  if (isMacOS()) return existsSync(launchdPlistPath());
+  if (isLinux()) return existsSync(systemdUnitPath());
+  return false;
+}
+
 export async function uninstallAria2Service(opts: {
   dryRun?: boolean;
   spawn?: typeof nodeSpawn;

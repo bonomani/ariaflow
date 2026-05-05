@@ -4,9 +4,13 @@ import {
   ACTIONS,
   TARGETS,
   advertiseHttpService,
+  aria2AutoStartInstalled,
   Aria2Client,
   callStartScheduler,
   EventBus,
+  installAria2Service,
+  prefValue,
+  uninstallAria2Service,
 } from "@ariaflow/core";
 import { buildServer } from "@ariaflow/api";
 import type { CliContext } from "../context.js";
@@ -32,6 +36,12 @@ interface ServeOptions {
   schedulerIntervalMs?: number;
   /** Disable mDNS advertisement (default: announce when a backend is available). */
   noMdns?: boolean;
+  /**
+   * BG-45: skip the auto-start reconciliation pass on boot. Used by
+   * tests that don't want cmdServe to mutate real launchd / systemd
+   * state. Production code never sets this.
+   */
+  skipAutoStartReconcile?: boolean;
 }
 
 /**
@@ -152,6 +162,42 @@ export async function cmdServe(
   const addr = app.server.address();
   const port =
     typeof addr === "object" && addr !== null && "port" in addr ? addr.port : requestedPort;
+
+  // BG-45 phase 2: reconcile the aria2 auto-start supervisor (launchd
+  // plist / systemd unit) to match the declared preference. Failures
+  // are non-fatal — the HTTP listener stays up either way.
+  if (!opts.skipAutoStartReconcile) try {
+    const declaration = await ctx.declaration.load();
+    const want = Boolean(prefValue(declaration, "auto_start_aria2", false));
+    const installed = aria2AutoStartInstalled();
+    if (want && !installed) {
+      const result = await installAria2Service();
+      await ctx.actions.record({
+        action: ACTIONS.autoStartReconciled,
+        target: TARGETS.system,
+        outcome: result.ok ? "changed" : "failed",
+        reason: "install",
+        detail: { target: result.target, ok: result.ok },
+      });
+    } else if (!want && installed) {
+      const result = await uninstallAria2Service();
+      await ctx.actions.record({
+        action: ACTIONS.autoStartReconciled,
+        target: TARGETS.system,
+        outcome: result.ok ? "changed" : "failed",
+        reason: "uninstall",
+        detail: { target: result.target, ok: result.ok },
+      });
+    }
+  } catch (err) {
+    await ctx.actions.record({
+      action: ACTIONS.autoStartReconciled,
+      target: TARGETS.system,
+      outcome: "failed",
+      reason: "exception",
+      detail: { error: err instanceof Error ? err.message : String(err) },
+    });
+  }
 
   if (opts.startScheduler && aria2) {
     // BG-40: callStartScheduler stamps the operator intent + handles
