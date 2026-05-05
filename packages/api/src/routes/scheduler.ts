@@ -1,6 +1,7 @@
 import {
   ACTIONS,
   TARGETS,
+  aria2,
   callStartScheduler,
   callStopScheduler,
   errorPayload,
@@ -32,11 +33,26 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
     const next = await deps.stateStore.update((s) => {
       s.paused = true;
     });
+    // Operator semantic: pause = freeze everything, including in-flight
+    // aria2 transfers (not just future dispatches). Best-effort: if the
+    // daemon is unreachable, the state flip already happened so the
+    // dispatch tier won't queue more, and the next /resume will also
+    // try unpauseAll.
+    let aria2Paused = false;
+    if (deps.aria2) {
+      try {
+        await aria2.pauseAll(deps.aria2);
+        aria2Paused = true;
+      } catch {
+        /* swallow — daemon unreachable */
+      }
+    }
     await deps.actionLog.record({
       action: ACTIONS.schedulerPause,
       target: TARGETS.scheduler,
       outcome: "changed",
       reason: "api_request",
+      detail: { aria2_pause_all: aria2Paused },
     });
     return { ok: true, paused: next.paused, _rev: Number(next._rev ?? 0) };
   });
@@ -142,11 +158,23 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
     const next = await deps.stateStore.update((s) => {
       s.paused = false;
     });
+    // Symmetric with /pause: unpause every aria2 transfer that /pause
+    // froze. Best-effort — daemon may be unreachable.
+    let aria2Unpaused = false;
+    if (deps.aria2) {
+      try {
+        await aria2.unpauseAll(deps.aria2);
+        aria2Unpaused = true;
+      } catch {
+        /* swallow — daemon unreachable */
+      }
+    }
     await deps.actionLog.record({
       action: ACTIONS.schedulerResume,
       target: TARGETS.scheduler,
       outcome: "changed",
       reason: "api_request",
+      detail: { aria2_unpause_all: aria2Unpaused },
     });
     // BG-25: when the scheduler loop isn't running, /resume must also
     // start it — otherwise unpausing has no effect and queued items

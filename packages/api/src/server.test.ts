@@ -1475,6 +1475,26 @@ describe("scheduler routes", () => {
     );
   });
 
+  // Operator semantic: scheduler/pause freezes everything including
+  // in-flight aria2 transfers (not just future dispatches). Symmetric
+  // /resume calls aria2.unpauseAll. Best-effort RPC — an unreachable
+  // daemon must not poison the state flip.
+  it("/api/scheduler/pause and /resume call aria2.{pause,unpause}All when wired", async () => {
+    const calls: string[] = [];
+    const mock = await mockServerWithAria2(dir, ({ method }) => {
+      calls.push(method);
+      return "OK";
+    });
+    try {
+      await mock.inject({ method: "POST", url: "/api/scheduler/pause" });
+      await mock.inject({ method: "POST", url: "/api/scheduler/resume" });
+    } finally {
+      await mock.close();
+    }
+    expect(calls).toContain("aria2.pauseAll");
+    expect(calls).toContain("aria2.unpauseAll");
+  });
+
   it("POST /api/scheduler/ucc returns failed envelope when preflight gates fail", async () => {
     const res = await app.inject({ method: "POST", url: "/api/scheduler/ucc" });
     expect(res.statusCode).toBe(200);
