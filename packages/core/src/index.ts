@@ -12,7 +12,7 @@ export {
   storageLockPath,
 } from "./storage/paths.js";
 export { readJson, writeJson } from "./storage/json.js";
-export { StateStore, toWireState, type ServerState } from "./storage/state.js";
+export { StateStore, toWireState, type ServerState, type WireState } from "./storage/state.js";
 export { QueueStore, ArchiveStore } from "./storage/queue.js";
 export { ActionLog } from "./storage/action-log.js";
 export {

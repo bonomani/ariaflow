@@ -48,18 +48,48 @@ interface StateBus {
 }
 
 /**
- * BG-33: `state.paused` is internal-only — every wire surface (the
- * /api/status response, /api/events SSE frames, /api/sessions*
- * payloads) must expose `dispatch_paused` instead. Strips `paused`
- * from the supplied state and stamps the canonical alias.
+ * BG-33 + BG-40: produce the canonical wire shape for a ServerState.
+ * Apply at any boundary that ships state to a remote consumer (HTTP
+ * response body, SSE event, etc.).
  *
- * Use at any boundary that ships a ServerState to a remote consumer.
+ * Picks declared fields explicitly so:
+ *   - The internal-only `paused` and `scheduler_intent` stay off the
+ *     wire (canonical names are `dispatch_paused` / `scheduler_status`,
+ *     surfaced separately by callers).
+ *   - Stale legacy keys riding through the `[k: string]: unknown`
+ *     index signature in old state.json files (e.g. `last_error`,
+ *     `stop_requested` from retired code paths) don't leak either.
  */
-export function toWireState(
-  state: ServerState,
-): Omit<ServerState, "paused"> & { dispatch_paused: boolean } {
-  const { paused, ...rest } = state;
-  return { ...rest, dispatch_paused: Boolean(paused) };
+export interface WireState {
+  _rev: number;
+  active_gid: string | null;
+  active_url: string | null;
+  running: boolean;
+  dispatch_paused: boolean;
+  session_id: string | null;
+  session_started_at: string | null;
+  session_last_seen_at: string | null;
+  session_closed_at: string | null;
+  session_closed_reason: string | null;
+  last_bandwidth_probe: ServerState["last_bandwidth_probe"];
+  last_bandwidth_probe_at: number | null;
+}
+
+export function toWireState(state: ServerState): WireState {
+  return {
+    _rev: Number(state._rev ?? 0),
+    active_gid: state.active_gid,
+    active_url: state.active_url,
+    running: Boolean(state.running),
+    dispatch_paused: Boolean(state.paused),
+    session_id: state.session_id,
+    session_started_at: state.session_started_at,
+    session_last_seen_at: state.session_last_seen_at,
+    session_closed_at: state.session_closed_at,
+    session_closed_reason: state.session_closed_reason,
+    last_bandwidth_probe: state.last_bandwidth_probe ?? null,
+    last_bandwidth_probe_at: state.last_bandwidth_probe_at ?? null,
+  };
 }
 
 function publishStateChange(bus: StateBus, state: ServerState): void {

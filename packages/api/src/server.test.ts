@@ -506,6 +506,34 @@ describe("StateStore -> EventBus bridge", () => {
     expect(payload).toMatchObject({ dispatch_paused: true, running: true });
   });
 
+  // toWireState picks declared fields explicitly so internal-only flags
+  // (scheduler_intent) and stale index-signature keys (e.g. last_error
+  // from retired code paths) don't leak onto the wire.
+  it("state_changed payload omits scheduler_intent and unknown index-signature keys", async () => {
+    const { EventBus, StateStore, StorageLock, storageLockPath } = await import(
+      "@ariaflow/core"
+    );
+    const env = { ARIAFLOW_DIR: dir };
+    const lock = new StorageLock(storageLockPath(env));
+    const state = new StateStore(lock, env);
+    const bus = new EventBus();
+    state.setBus(bus);
+    let payload: Record<string, unknown> | null = null;
+    bus.subscribe((event, data) => {
+      if (event === "state_changed") payload = data as Record<string, unknown>;
+    });
+    await state.update((s) => {
+      s.scheduler_intent = "running";
+      // Simulate a stale field riding through the index signature.
+      (s as Record<string, unknown>).last_error = "from a retired code path";
+      (s as Record<string, unknown>).stop_requested = true;
+    });
+    expect(payload).not.toBeNull();
+    expect(payload).not.toHaveProperty("scheduler_intent");
+    expect(payload).not.toHaveProperty("last_error");
+    expect(payload).not.toHaveProperty("stop_requested");
+  });
+
   it("buildServer attaches the EventBus to StateStore so route mutations stream via SSE", async () => {
     const { EventBus } = await import("@ariaflow/core");
     const bus = new EventBus();
