@@ -60,3 +60,21 @@ export function validateIdParam(id: string, reply: FastifyReply): string | null 
   reply.code(400).send(errorPayload("invalid_id", "item id must be a UUID"));
   return null;
 }
+
+/**
+ * Coerce a request body into a plain object record, or send a 400
+ * `invalid_payload` envelope and return null. Centralizes the
+ * `!body || typeof body !== "object" || Array.isArray(body)` pattern
+ * that was duplicated across six routes.
+ */
+export function requireObjectBody(
+  body: unknown,
+  reply: FastifyReply,
+  expected = "expected JSON object",
+): Record<string, unknown> | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    reply.code(400).send(errorPayload("invalid_payload", expected));
+    return null;
+  }
+  return body as Record<string, unknown>;
+}

@@ -9,7 +9,7 @@ import {
   validateChangeOptions,
 } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
-import { requireAria2Of, type RouteContext } from "./_context.js";
+import { requireAria2Of, requireObjectBody, type RouteContext } from "./_context.js";
 
 export function registerAria2Routes({ app, deps }: RouteContext): void {
   const requireAria2 = requireAria2Of(deps);
@@ -96,13 +96,13 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
 
   app.post("/api/aria2/multicall", async (req, reply) => {
     if (requireAria2(reply)) return;
-    const body = req.body;
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return reply
-        .code(400)
-        .send(errorPayload("invalid_payload", "expected {calls: [{methodName, params?}, ...]}"));
-    }
-    const rawCalls = (body as { calls?: unknown }).calls;
+    const obj = requireObjectBody(
+      req.body,
+      reply,
+      "expected {calls: [{methodName, params?}, ...]}",
+    );
+    if (!obj) return;
+    const rawCalls = obj.calls;
     if (!Array.isArray(rawCalls) || rawCalls.length === 0) {
       return reply.code(400).send(errorPayload("invalid_calls", "calls must be a non-empty list"));
     }
@@ -146,11 +146,8 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
 
   app.post("/api/aria2/set_limits", async (req, reply) => {
     if (requireAria2(reply)) return;
-    const body = req.body;
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return reply.code(400).send(errorPayload("invalid_payload", "expected JSON object"));
-    }
-    const p = body as Record<string, unknown>;
+    const p = requireObjectBody(req.body, reply);
+    if (!p) return;
     const gid = typeof p.gid === "string" && p.gid.trim() ? p.gid.trim() : null;
 
     // Declarative table: each entry is one acceptable field on the
@@ -195,14 +192,14 @@ export function registerAria2Routes({ app, deps }: RouteContext): void {
 
   app.post("/api/aria2/change_option", async (req, reply) => {
     if (requireAria2(reply)) return;
-    const body = req.body;
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return reply
-        .code(400)
-        .send(errorPayload("invalid_payload", "expected {gid: string, options: {...}}"));
-    }
-    const gid = String((body as { gid?: unknown }).gid ?? "").trim();
-    const rawOptions = (body as { options?: unknown }).options;
+    const obj = requireObjectBody(
+      req.body,
+      reply,
+      "expected {gid: string, options: {...}}",
+    );
+    if (!obj) return;
+    const gid = String(obj.gid ?? "").trim();
+    const rawOptions = obj.options;
     if (!gid || !rawOptions || typeof rawOptions !== "object" || Array.isArray(rawOptions)) {
       return reply
         .code(400)

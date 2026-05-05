@@ -12,7 +12,7 @@ import {
   type ParsedAddItem,
 } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
-import { requireAria2Of, validateIdParam, type RouteContext } from "./_context.js";
+import { requireAria2Of, requireObjectBody, validateIdParam, type RouteContext } from "./_context.js";
 
 export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
   const requireAria2 = requireAria2Of(deps);
@@ -169,11 +169,9 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
 
   app.post<{ Params: { id: string } }>("/api/downloads/:id/priority", async (req, reply) => {
     if (!validateIdParam(req.params.id, reply)) return;
-    const body = req.body;
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return reply.code(400).send(errorPayload("invalid_payload", "expected {priority: number}"));
-    }
-    const raw = (body as { priority?: unknown }).priority;
+    const obj = requireObjectBody(req.body, reply, "expected {priority: number}");
+    if (!obj) return;
+    const raw = obj.priority;
     const priority = Number(raw);
     if (!Number.isFinite(priority)) {
       return reply
@@ -231,13 +229,9 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
 
   app.post<{ Params: { id: string } }>("/api/downloads/:id/files", async (req, reply) => {
     if (!validateIdParam(req.params.id, reply)) return;
-    const body = req.body;
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return reply
-        .code(400)
-        .send(errorPayload("invalid_payload", "expected {select: [1, 3, 5]}"));
-    }
-    const select = (body as { select?: unknown }).select;
+    const obj = requireObjectBody(req.body, reply, "expected {select: [1, 3, 5]}");
+    if (!obj) return;
+    const select = obj.select;
     if (!Array.isArray(select) || select.length === 0) {
       return reply
         .code(400)

@@ -11,7 +11,7 @@ import {
   type Declaration,
 } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
-import type { RouteContext } from "./_context.js";
+import { requireObjectBody, type RouteContext } from "./_context.js";
 
 export function registerDeclarationRoutes({ app, deps }: RouteContext): void {
   app.get("/api/declaration", async () => {
@@ -59,10 +59,9 @@ export function registerDeclarationRoutes({ app, deps }: RouteContext): void {
     body: unknown,
     reply: FastifyReply,
   ): Promise<unknown> => {
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return reply.code(400).send(errorPayload("invalid_payload", "expected an object"));
-    }
-    const incoming = (body as { declaration?: unknown }).declaration ?? body;
+    const obj = requireObjectBody(body, reply, "expected an object");
+    if (!obj) return;
+    const incoming = (obj.declaration as unknown) ?? obj;
     if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
       return reply
         .code(400)
@@ -92,12 +91,9 @@ export function registerDeclarationRoutes({ app, deps }: RouteContext): void {
     body: unknown,
     reply: FastifyReply,
   ): Promise<unknown> => {
-    if (
-      !body ||
-      typeof body !== "object" ||
-      Array.isArray(body) ||
-      Object.keys(body as object).length === 0
-    ) {
+    const obj = requireObjectBody(body, reply, "expected {preference_name: value}");
+    if (!obj) return;
+    if (Object.keys(obj).length === 0) {
       return reply
         .code(400)
         .send(errorPayload("invalid_payload", "expected {preference_name: value}"));
@@ -106,7 +102,7 @@ export function registerDeclarationRoutes({ app, deps }: RouteContext): void {
     const preferences = declaration.uic?.preferences ?? [];
     const applied: Record<string, { before: unknown; after: unknown }> = {};
     const unknown: string[] = [];
-    for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(obj)) {
       const pref = preferences.find((p) => p.name === key);
       if (!pref) {
         unknown.push(key);
