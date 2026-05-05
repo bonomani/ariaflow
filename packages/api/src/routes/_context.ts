@@ -72,6 +72,14 @@ export function sendRpcError(reply: FastifyReply, err: unknown): FastifyReply {
 }
 
 /**
+ * Send a 404 `not_found` envelope for a missing queue item. Returns
+ * the reply so callers can `return sendNotFound(reply)`.
+ */
+export function sendNotFound(reply: FastifyReply, message = "item not found"): FastifyReply {
+  return reply.code(404).send(errorPayload("not_found", message));
+}
+
+/**
  * Coerce a request body into a plain object record, or send a 400
  * `invalid_payload` envelope and return null. Centralizes the
  * `!body || typeof body !== "object" || Array.isArray(body)` pattern

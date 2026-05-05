@@ -12,7 +12,7 @@ import {
   type ParsedAddItem,
 } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
-import { requireAria2Of, requireObjectBody, sendRpcError, validateIdParam, type RouteContext } from "./_context.js";
+import { requireAria2Of, requireObjectBody, sendNotFound, sendRpcError, validateIdParam, type RouteContext } from "./_context.js";
 
 export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
   const requireAria2 = requireAria2Of(deps);
@@ -138,7 +138,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
     if (!validateIdParam(req.params.id, reply)) return;
     const items = await deps.queueStore.load();
     const item = items.find((i) => i.id === req.params.id);
-    if (!item) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    if (!item) return sendNotFound(reply);
     return {
       ok: true,
       item,
@@ -152,7 +152,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
   ): Promise<unknown> => {
     if (!validateIdParam(id, reply)) return;
     const removed = await deps.queueOps.remove(id);
-    if (!removed) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    if (!removed) return sendNotFound(reply);
     return { ok: true, id: removed.id };
   };
 
@@ -163,7 +163,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
   app.post<{ Params: { id: string } }>("/api/downloads/:id/pause", async (req, reply) => {
     if (!validateIdParam(req.params.id, reply)) return;
     const next = await deps.queueOps.transitionStatus(req.params.id, "paused", "paused_at");
-    if (!next) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    if (!next) return sendNotFound(reply);
     return { ok: true, item: next };
   });
 
@@ -180,7 +180,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
     }
     const items = await deps.queueStore.load();
     const item = items.find((i) => i.id === req.params.id);
-    if (!item) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    if (!item) return sendNotFound(reply);
     item.priority = Math.trunc(priority);
     await deps.queueStore.save(items);
     await deps.actionLog.record({
@@ -197,7 +197,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
     if (!validateIdParam(req.params.id, reply)) return;
     const items = await deps.queueStore.load();
     const item = items.find((i) => i.id === req.params.id);
-    if (!item) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    if (!item) return sendNotFound(reply);
     const before = { ...item };
     // Reset failure fields and re-queue. The aria2-side re-add lives in
     // the deferred scheduler integration.
@@ -223,7 +223,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
   app.post<{ Params: { id: string } }>("/api/downloads/:id/resume", async (req, reply) => {
     if (!validateIdParam(req.params.id, reply)) return;
     const next = await deps.queueOps.transitionStatus(req.params.id, "queued", "resumed_at");
-    if (!next) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    if (!next) return sendNotFound(reply);
     return { ok: true, item: next };
   });
 
@@ -249,7 +249,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
     }
     const items = await deps.queueStore.load();
     const item = items.find((i) => i.id === req.params.id);
-    if (!item) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    if (!item) return sendNotFound(reply);
     const before = item.selected_files ?? null;
     item.selected_files = indices;
     await deps.queueStore.save(items);
@@ -278,7 +278,7 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
     if (!validateIdParam(req.params.id, reply)) return;
     const items = await deps.queueStore.load();
     const item = items.find((i) => i.id === req.params.id);
-    if (!item) return reply.code(404).send(errorPayload("not_found", "item not found"));
+    if (!item) return sendNotFound(reply);
     const gid = item.gid;
     if (!gid) {
       return reply.code(409).send(errorPayload("no_gid", "item has no aria2 GID"));
