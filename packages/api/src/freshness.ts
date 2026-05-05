@@ -117,8 +117,14 @@ export function registerDefaultFreshness(): void {
     freshness: "on-action",
     revalidate_on: ["POST /api/bandwidth/probe"],
   });
-  registerFreshness("GET", "/api/aria2/global_option", { freshness: "cold" });
-  registerFreshness("GET", "/api/aria2/option_tiers", { freshness: "cold" });
+  registerFreshness("GET", "/api/aria2/global_option", {
+    freshness: "on-action",
+    revalidate_on: ["POST /api/aria2/change_global_option"],
+  });
+  registerFreshness("GET", "/api/aria2/option_tiers", {
+    freshness: "on-action",
+    revalidate_on: ["PATCH /api/declaration/preferences"],
+  });
   registerFreshness("GET", "/api/active", {
     freshness: "live",
     transport: "sse",
