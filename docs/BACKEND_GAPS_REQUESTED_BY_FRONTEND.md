@@ -11,7 +11,7 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (3)
+## Open (2)
 
 ### BG-43: Expose restart + update actions for ariaflow-server
 
@@ -54,51 +54,6 @@ the row is reachable.
 
 Restart is the higher-value one — it's what the operator wants
 when something looks stuck and they don't have shell access.
-
-### BG-42: Silence /favicon.ico + expose recent HTTP errors
-
-**Paired frontend gap:** none (FE already serves its own
-/favicon.ico → 204 in webapp.py; expose-errors is a backend-only
-addition)
-
-The `Errors` chip in the dashboard's System Health → Process
-section reads `health.errors_total` (Fastify hook in
-`packages/api/src/server.ts:141` counts every response with
-`statusCode >= 400`). Two issues stack:
-
-**(1) /favicon.ico inflates the count.** Whenever an operator
-opens Swagger UI (or hits any backend URL directly in a browser
-via the dashboard's Dev tab "Open Swagger UI" button), the
-browser auto-fetches `/favicon.ico` against the backend origin
-and gets a 404. That's one error per fresh browser session,
-unrelated to anything operationally interesting. Fix: register
-a `GET /favicon.ico` route that returns `204 No Content`
-(matches what the dashboard already does in `webapp.py`).
-
-**(2) Counter is opaque.** Today the chip shows just a number —
-the operator can see "Errors: 4" but has no way to learn what
-the errors were without checking server stdout or browser
-DevTools. Proposal: extend `health` with a small ring buffer:
-
-```ts
-errors_recent: Array<{
-  at: number,        // epoch seconds
-  method: string,    // "GET" / "POST" / ...
-  path: string,      // matched route or raw URL
-  status: number,    // 4xx / 5xx
-  // optional: short error class / fastify error code if available
-}>
-```
-
-Buffer size ~20 is enough for the chip's drill-down use case;
-older entries roll off. The frontend would render this as a
-collapsible list under the chip on the System Health row, so
-the operator can tell at a glance whether the count is
-"benign favicon noise" or "something actually broke".
-
-Both pieces are independent — favicon route is one-liner, the
-recent-errors buffer is a couple hours of work. Either one
-landing alone is useful.
 
 **Paired frontend gap:** none (infra/correctness — FE only displays
 the state)
@@ -151,6 +106,7 @@ not the fix.
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-42 | (1) `GET /favicon.ico` registered in `routes/meta.ts` returning 204 — silences the per-browser-session 404 that was inflating `health.errors_total`. (2) `health.errors_recent` ring buffer added to `ServerMetrics` (`routes/_context.ts`); `onResponse` hook in `server.ts` pushes `{at, method, path, status}` for every 4xx/5xx, capped at `ERRORS_RECENT_MAX=20` (older entries roll off). Surfaced on `/api/status.health.errors_recent`. `path` prefers Fastify's matched `routerPath` ("/api/downloads/:id") and falls back to raw `req.url` when not yet matched | 2026-05-05 |
 | BG-40 | Richer scheduler status enum + wait_reason. New `state.scheduler_intent` (`"stopped"\|"running"`) is stamped by `/api/scheduler/{start,stop,resume}` and lets `deriveSchedulerStatus(state)` (in `packages/core/src/scheduler/status.ts`) return the 5-state enum: `stopped\|starting\|idle\|running\|paused`. `deriveWaitReason()` classifies idle reasons in priority order: `aria2_unreachable\|preflight_blocked\|disk_full\|bandwidth_probe_pending\|queue_empty\|null`. `GET /api/scheduler` now returns `{status, wait_reason, running, paused, ...}`; `/api/status.state` mirrors `scheduler_status` + `wait_reason` so the dashboard's System Health card avoids a second fetch. 13 pure-helper tests in `status.test.ts` cover every truth-table branch; server tests assert the new shape | 2026-05-05 |
 | BG-39 | `/api/sessions/history` registered in the freshness contract (`swr`, ttl 30s) and the handler stamps via `withMeta`, matching `/api/sessions`. FE can drop the synthetic `LOCAL_METAS` mirror | 2026-05-05 |
 | BG-38 | `/api/torrents` now returns `{ok: true, torrents, count, meta}`, aligning with `/api/peers` / `/api/sessions` and the `TestEnvelopeNormalization` live-contract tests | 2026-05-05 |

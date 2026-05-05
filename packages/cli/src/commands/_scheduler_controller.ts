@@ -107,10 +107,34 @@ export function createSchedulerController(
         ctrl = undefined;
         done = Promise.resolve();
       },
-      (err) => {
-        // Surface scheduler crashes to stderr but don't kill the HTTP
-        // listener — caller can investigate via /api/log.
+      async (err) => {
+        // BG-43: surface scheduler crashes to the audit log and revert
+        // the operator intent so /api/scheduler.status flips to
+        // "stopped" (not stuck at "starting"). Without this, a silent
+        // crash inside the loop leaves intent="running" and
+        // running=false forever — the dashboard sees "starting…" and
+        // the operator has no signal that anything went wrong beyond
+        // a stderr line.
+        const message = err instanceof Error ? err.message : String(err);
         console.error("scheduler loop crashed:", err);
+        try {
+          await ctx.actions.record({
+            action: ACTIONS.schedulerStopped,
+            target: TARGETS.scheduler,
+            outcome: "failed",
+            reason: "loop_crashed",
+            detail: { error: message },
+          });
+        } catch {
+          /* don't recurse into another error path */
+        }
+        try {
+          await ctx.state.update((s) => {
+            s.scheduler_intent = "stopped";
+          });
+        } catch {
+          /* same */
+        }
         ctrl = undefined;
         done = Promise.resolve();
       },

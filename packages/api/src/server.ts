@@ -14,7 +14,7 @@ import type {
   StateStore,
 } from "@ariaflow/core";
 import { registerDefaultFreshness } from "./freshness.js";
-import type { ServerMetrics, RouteContext } from "./routes/_context.js";
+import { ERRORS_RECENT_MAX, type ServerMetrics, type RouteContext } from "./routes/_context.js";
 import { registerMetaRoutes } from "./routes/meta.js";
 import { registerLogRoutes } from "./routes/log.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
@@ -131,14 +131,33 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     sseClients: 0,
     bytesReceivedTotal: 0,
     bytesSentTotal: 0,
+    errorsRecent: [],
   };
   app.addHook("onRequest", async (req) => {
     metrics.requestsTotal += 1;
     const len = Number(req.headers["content-length"] ?? 0);
     if (Number.isFinite(len) && len > 0) metrics.bytesReceivedTotal += len;
   });
-  app.addHook("onResponse", async (_req, reply) => {
-    if (reply.statusCode >= 400) metrics.errorsTotal += 1;
+  app.addHook("onResponse", async (req, reply) => {
+    if (reply.statusCode >= 400) {
+      metrics.errorsTotal += 1;
+      // BG-42: ring buffer of recent failures so the dashboard's
+      // Errors chip can drill down. routerPath is the matched route
+      // (e.g. "/api/downloads/:id") when available; falls back to the
+      // raw URL.
+      metrics.errorsRecent.push({
+        at: Math.round(Date.now() / 1000),
+        method: req.method,
+        path: (req as unknown as { routerPath?: string }).routerPath ?? req.url,
+        status: reply.statusCode,
+      });
+      if (metrics.errorsRecent.length > ERRORS_RECENT_MAX) {
+        metrics.errorsRecent.splice(
+          0,
+          metrics.errorsRecent.length - ERRORS_RECENT_MAX,
+        );
+      }
+    }
     const sent = Number(reply.getHeader("content-length") ?? 0);
     if (Number.isFinite(sent) && sent > 0) metrics.bytesSentTotal += sent;
   });

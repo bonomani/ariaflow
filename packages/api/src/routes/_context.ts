@@ -2,6 +2,21 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { errorPayload, validateItemId } from "@ariaflow/core";
 import type { ServerDeps } from "../server.js";
 
+/**
+ * BG-42: ring-buffer entry summarizing one 4xx/5xx response. Surfaces
+ * on /api/health.errors_recent + /api/status.health.errors_recent so
+ * the dashboard's Errors chip can drill down into recent failures
+ * instead of just showing a count.
+ */
+export interface RecentError {
+  /** Epoch seconds when the response went out. */
+  at: number;
+  method: string;
+  /** Matched route URL when available; otherwise raw req.url. */
+  path: string;
+  status: number;
+}
+
 export interface ServerMetrics {
   startedAt: number;
   requestsTotal: number;
@@ -9,7 +24,12 @@ export interface ServerMetrics {
   sseClients: number;
   bytesReceivedTotal: number;
   bytesSentTotal: number;
+  /** BG-42: ring buffer of the last N error responses. */
+  errorsRecent: RecentError[];
 }
+
+/** BG-42: how many recent-error entries to retain. */
+export const ERRORS_RECENT_MAX = 20;
 
 export interface RouteContext {
   app: FastifyInstance;

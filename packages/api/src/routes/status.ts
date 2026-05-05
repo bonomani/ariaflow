@@ -38,6 +38,9 @@ function buildIdentity(deps: ServerDeps): Identity {
  * BG-24: server metrics for the Developer-tab chips. disk_ok is
  * resolved from max_disk_usage_percent + checkDiskSpace() so a
  * low-disk warning surfaces here too.
+ *
+ * BG-42: also surfaces a recent-errors ring buffer so the Errors chip
+ * can drill down into what failed instead of just showing a count.
  */
 async function buildHealth(deps: ServerDeps, metrics: ServerMetrics) {
   const diskOk = await probeDiskOk(await deps.declarationStore.load());
@@ -45,6 +48,7 @@ async function buildHealth(deps: ServerDeps, metrics: ServerMetrics) {
     uptime_seconds: process.uptime(),
     requests_total: metrics.requestsTotal,
     errors_total: metrics.errorsTotal,
+    errors_recent: metrics.errorsRecent.slice(),
     sse_clients: metrics.sseClients,
     bytes_received_total: metrics.bytesReceivedTotal,
     bytes_sent_total: metrics.bytesSentTotal,

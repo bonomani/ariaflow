@@ -23,6 +23,16 @@ const SWAGGER_UI_HTML = `<!DOCTYPE html>
 `;
 
 export function registerMetaRoutes({ app, deps }: RouteContext): void {
+  // BG-42: silence /favicon.ico. Browsers that hit the backend origin
+  // directly (Swagger UI, "open in browser" etc.) auto-fetch this and
+  // get a 404 otherwise — each one inflates health.errors_total without
+  // representing anything operationally interesting. Returning 204
+  // matches what the dashboard already does in webapp.py.
+  app.get("/favicon.ico", async (_req, reply) => {
+    reply.code(204);
+    return reply.send();
+  });
+
   // Stub /api/tests so the documented endpoint exists. In-server test
   // execution is intentionally out of scope; users run `pnpm test` on
   // the host.
