@@ -5,6 +5,7 @@ import {
   allowedActions,
   Aria2Client,
   bandwidthConfigFrom,
+  callStartScheduler,
   deduplicateActiveTransfers,
   detectServiceTarget,
   downloadSha256,
@@ -473,22 +474,11 @@ export async function cmdServe(
     typeof addr === "object" && addr !== null && "port" in addr ? addr.port : requestedPort;
 
   if (opts.startScheduler && aria2) {
-    // BG-40: stamp operator intent before kicking the loop, mirroring
-    // the route handlers' /api/scheduler/start behavior. Without this
-    // the bootstrap window after `ariaflow serve --scheduler` would
-    // report status="stopped" instead of "starting".
-    await ctx.state.update((s) => {
-      s.scheduler_intent = "running";
-    });
-    const result = await launchScheduler();
-    // BG-40: only revert intent on a genuine failure. "already_running"
-    // means the loop IS running and our intent="running" is correct;
-    // "aria2_unavailable" / etc. mean the loop never started.
-    if (!result.started && result.reason !== "already_running") {
-      await ctx.state.update((s) => {
-        s.scheduler_intent = "stopped";
-      });
-    }
+    // BG-40: callStartScheduler stamps the operator intent + handles
+    // revert-on-failure, matching /api/scheduler/start semantics so
+    // `ariaflow serve --scheduler` reports "starting"/"running"
+    // (never "stopped") during the bootstrap window.
+    await callStartScheduler(ctx.state, launchScheduler);
   }
 
   // BG-18: announce _ariaflow-server._tcp via the local mDNS daemon so

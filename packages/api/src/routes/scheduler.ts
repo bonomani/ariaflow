@@ -1,4 +1,11 @@
-import { errorPayload, evaluatePreflight, summarizeQueue } from "@ariaflow/core";
+import {
+  callStartScheduler,
+  callStopScheduler,
+  errorPayload,
+  evaluatePreflight,
+  probeAria2Reachable,
+  summarizeQueue,
+} from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
 import type { RouteContext } from "./_context.js";
 import { computeSchedulerStatus } from "./_scheduler_status.js";
@@ -34,15 +41,7 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
 
   app.post("/api/scheduler/ucc", async () => {
     const declaration = await deps.declarationStore.load();
-    let aria2Available = false;
-    if (deps.aria2) {
-      try {
-        await deps.aria2.call("aria2.getVersion");
-        aria2Available = true;
-      } catch {
-        aria2Available = false;
-      }
-    }
+    const aria2Available = (await probeAria2Reachable(deps.aria2)) === true;
     const stateBefore = await deps.stateStore.load();
     const queueBefore = await deps.queueStore.load();
     const pf = evaluatePreflight(declaration, {
@@ -113,15 +112,7 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
 
   app.post("/api/scheduler/preflight", async () => {
     const declaration = await deps.declarationStore.load();
-    let aria2Available = false;
-    if (deps.aria2) {
-      try {
-        await deps.aria2.call("aria2.getVersion");
-        aria2Available = true;
-      } catch {
-        aria2Available = false;
-      }
-    }
+    const aria2Available = (await probeAria2Reachable(deps.aria2)) === true;
     const stateBefore = await deps.stateStore.load();
     const queueBefore = await deps.queueStore.load();
     const result = evaluatePreflight(declaration, {
@@ -148,8 +139,6 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
   app.post("/api/scheduler/resume", async () => {
     const next = await deps.stateStore.update((s) => {
       s.paused = false;
-      // BG-40: /resume also expresses an "I want it running" intent.
-      s.scheduler_intent = "running";
     });
     await deps.actionLog.record({
       action: "resume",
@@ -158,29 +147,16 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
       reason: "api_request",
     });
     // BG-25: when the scheduler loop isn't running, /resume must also
-    // start it — otherwise unpausing has no effect and queued items sit
-    // forever. The dashboard's Start button hits /resume when
-    // state.running=false, so this is the path that has to flip the
-    // loop on.
+    // start it — otherwise unpausing has no effect and queued items
+    // sit forever. The dashboard's Start button hits /resume when
+    // state.running=false, so this is the path that flips the loop on.
+    // BG-40: callStartScheduler stamps the operator intent and rolls
+    // it back on a genuine failure.
     let startResult: { started: boolean; reason: string } | undefined;
     const post = await deps.stateStore.load();
     if (!post.running && deps.startScheduler) {
-      try {
-        startResult = await deps.startScheduler();
-      } catch (err) {
-        startResult = {
-          started: false,
-          reason: err instanceof Error ? err.message : "start_failed",
-        };
-      }
-      if (!startResult.started && startResult.reason !== "already_running") {
-        // BG-40: failed auto-start → revert intent so status doesn't
-        // get wedged at "starting". "already_running" is fine (loop IS
-        // running and our intent="running" is correct).
-        await deps.stateStore.update((s) => {
-          s.scheduler_intent = "stopped";
-        });
-      }
+      const start = deps.startScheduler;
+      startResult = await callStartScheduler(deps.stateStore, () => start());
     }
     return {
       ok: true,
@@ -205,20 +181,8 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
     if (before.running) {
       return { ok: true, started: false, reason: "already_running", running: true };
     }
-    // BG-40: stamp intent before the loop boots so /api/scheduler.status
-    // reports "starting" (not "stopped") during the bootstrap window.
-    await deps.stateStore.update((s) => {
-      s.scheduler_intent = "running";
-    });
-    const result = await deps.startScheduler();
-    // BG-40: roll intent back on genuine failure (e.g. aria2_unavailable)
-    // so status doesn't wedge at "starting". "already_running" means the
-    // loop IS running, so intent="running" stays correct.
-    if (!result.started && result.reason !== "already_running") {
-      await deps.stateStore.update((s) => {
-        s.scheduler_intent = "stopped";
-      });
-    }
+    const start = deps.startScheduler;
+    const result = await callStartScheduler(deps.stateStore, () => start());
     const after = await deps.stateStore.load();
     await deps.actionLog.record({
       action: "start",
@@ -242,19 +206,18 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
         .send(errorPayload("scheduler_unavailable", "scheduler lifecycle not wired"));
     }
     const before = await deps.stateStore.load();
+    const stop = deps.stopScheduler;
+    // BG-40: callStopScheduler stamps intent="stopped" regardless of
+    // whether the loop was actually running — the operator hit /stop
+    // either way.
     if (!before.running) {
-      // BG-40: even when the loop wasn't dispatching, /stop should
-      // record the operator's intent so /api/scheduler.status flips to
-      // "stopped" instead of staying at "starting".
-      await deps.stateStore.update((s) => {
-        s.scheduler_intent = "stopped";
-      });
+      await callStopScheduler(deps.stateStore, async () => ({
+        stopped: false,
+        reason: "not_running",
+      }));
       return { ok: true, stopped: false, reason: "not_running", running: false };
     }
-    const result = await deps.stopScheduler();
-    await deps.stateStore.update((s) => {
-      s.scheduler_intent = "stopped";
-    });
+    const result = await callStopScheduler(deps.stateStore, () => stop());
     const after = await deps.stateStore.load();
     await deps.actionLog.record({
       action: "stop",

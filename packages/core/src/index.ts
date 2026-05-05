@@ -82,6 +82,13 @@ export {
   type WaitReason,
   type WaitReasonInputs,
 } from "./scheduler/status.js";
+export {
+  callStartScheduler,
+  callStopScheduler,
+  type StartResult,
+  type StopResult,
+} from "./scheduler/intent.js";
+export { probeAria2Reachable, probeDiskOk } from "./scheduler/probes.js";
 export { getActiveProgress } from "./scheduler/progress.js";
 export {
   runSchedulerTick,

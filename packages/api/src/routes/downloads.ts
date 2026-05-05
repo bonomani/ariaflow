@@ -2,6 +2,7 @@ import type { FastifyReply } from "fastify";
 import {
   allowedActions,
   aria2,
+  callStartScheduler,
   errorPayload,
   parseAddItems,
   planAutoCleanup,
@@ -46,28 +47,11 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
     if (deps.startScheduler) {
       const s = await deps.stateStore.load();
       if (!s.running && !s.paused && created.some((c) => !c.duplicate)) {
-        // BG-40: stamp intent before kicking the loop so /api/scheduler.status
-        // reports "starting" during the bootstrap window (not "stopped").
-        await deps.stateStore.update((st) => {
-          st.scheduler_intent = "running";
-        });
-        let started = false;
-        let reason = "start_failed";
-        try {
-          const result = await deps.startScheduler();
-          started = result.started;
-          reason = result.reason;
-        } catch {
-          /* swallow — surfacing failures here would mask a successful add */
-        }
-        if (!started && reason !== "already_running") {
-          // BG-40: revert intent on genuine failure so status doesn't
-          // wedge at "starting". already_running means loop is up and
-          // intent="running" is correct.
-          await deps.stateStore.update((st) => {
-            st.scheduler_intent = "stopped";
-          });
-        }
+        // BG-40: callStartScheduler stamps intent + handles revert.
+        // We don't surface its result — failures shouldn't mask a
+        // successful add.
+        const start = deps.startScheduler;
+        await callStartScheduler(deps.stateStore, () => start());
       }
     }
     return reply.code(200).send({ ok: true, items: created });

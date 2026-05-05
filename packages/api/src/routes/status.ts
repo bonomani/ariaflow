@@ -1,4 +1,4 @@
-import { prefValue, scheduler as schedulerHelpers, summarizeQueue } from "@ariaflow/core";
+import { probeDiskOk, summarizeQueue } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
 import type { RouteContext } from "./_context.js";
 import { computeSchedulerStatus } from "./_scheduler_status.js";
@@ -34,35 +34,9 @@ export function registerStatusRoute({ app, deps, metrics }: RouteContext): void 
       };
 
       // BG-24: server metrics for the Developer-tab chips. disk_ok is
-      // resolved from the configured max_disk_usage_percent pref +
-      // checkDiskSpace() so a low-disk warning surfaces here too.
-      let diskOk = true;
-      try {
-        const declaration = await deps.declarationStore.load();
-        const max = schedulerHelpers.maxDiskPercent(declaration);
-        const downloadDirPref = String(
-          prefValue(declaration, "download_dir", "") ?? "",
-        );
-        const probePath = downloadDirPref || process.cwd();
-        const { statfsSync } = await import("node:fs");
-        diskOk = schedulerHelpers.checkDiskSpace({
-          maxPercent: max,
-          probe: () => {
-            if (typeof statfsSync !== "function") return null;
-            try {
-              const fs = statfsSync(probePath);
-              const total = Number(fs.blocks) * Number(fs.bsize);
-              const free = Number(fs.bavail) * Number(fs.bsize);
-              return { used: Math.max(0, total - free), total };
-            } catch {
-              return null;
-            }
-          },
-        }).ok;
-      } catch {
-        // Best-effort — unknown disk state shouldn't poison the chip.
-        diskOk = true;
-      }
+      // resolved from max_disk_usage_percent + checkDiskSpace() so a
+      // low-disk warning surfaces here too.
+      const diskOk = await probeDiskOk(await deps.declarationStore.load());
 
       const health = {
         uptime_seconds: process.uptime(),

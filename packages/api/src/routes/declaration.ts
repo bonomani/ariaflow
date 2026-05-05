@@ -4,6 +4,7 @@ import {
   errorPayload,
   evaluatePreflight,
   getActiveProgress,
+  probeAria2Reachable,
   rankActiveInfos,
   type Declaration,
 } from "@ariaflow/core";
@@ -18,20 +19,11 @@ export function registerDeclarationRoutes({ app, deps }: RouteContext): void {
 
   app.get("/api/preflight", async () => {
     const declaration = await deps.declarationStore.load();
-    const queueReadable = true; // we just opened the store
-    let aria2Available = false;
-    if (deps.aria2) {
-      try {
-        await deps.aria2.call("aria2.getVersion");
-        aria2Available = true;
-      } catch {
-        aria2Available = false;
-      }
-    }
+    const aria2Available = (await probeAria2Reachable(deps.aria2)) === true;
     const state = await deps.stateStore.load();
     const result = evaluatePreflight(declaration, {
       aria2_available: aria2Available,
-      queue_readable: queueReadable,
+      queue_readable: true,
       paused: state.paused,
     });
     return { ok: true, ...result };

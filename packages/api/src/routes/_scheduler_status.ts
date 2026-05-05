@@ -3,7 +3,8 @@ import {
   deriveWaitReason,
   evaluatePreflight,
   prefValue,
-  scheduler as schedulerHelpers,
+  probeAria2Reachable,
+  probeDiskOk,
   type SchedulerStatus,
   type ServerState,
   type WaitReason,
@@ -33,16 +34,7 @@ export async function computeSchedulerStatus(
 
   const declaration = await deps.declarationStore.load();
   const items = await deps.queueStore.load();
-
-  let aria2Reachable: boolean | null = null;
-  if (deps.aria2) {
-    try {
-      await deps.aria2.call("aria2.getVersion");
-      aria2Reachable = true;
-    } catch {
-      aria2Reachable = false;
-    }
-  }
+  const aria2Reachable = await probeAria2Reachable(deps.aria2);
 
   const preflight = evaluatePreflight(declaration, {
     aria2_available: aria2Reachable === true,
@@ -50,24 +42,7 @@ export async function computeSchedulerStatus(
     paused: state.paused,
   });
 
-  const maxDisk = schedulerHelpers.maxDiskPercent(declaration);
-  const downloadDir = String(prefValue(declaration, "download_dir", "") ?? "");
-  const probePath = downloadDir || process.cwd();
-  const { statfsSync } = await import("node:fs");
-  const diskOk = schedulerHelpers.checkDiskSpace({
-    maxPercent: maxDisk,
-    probe: () => {
-      if (typeof statfsSync !== "function") return null;
-      try {
-        const fs = statfsSync(probePath);
-        const total = Number(fs.blocks) * Number(fs.bsize);
-        const free = Number(fs.bavail) * Number(fs.bsize);
-        return { used: Math.max(0, total - free), total };
-      } catch {
-        return null;
-      }
-    },
-  }).ok;
+  const diskOk = await probeDiskOk(declaration);
 
   const probeIntervalSeconds = Math.max(
     30,
