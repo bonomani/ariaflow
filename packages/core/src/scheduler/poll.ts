@@ -1,3 +1,4 @@
+import { ACTIONS, TARGETS } from "../storage/actions.js";
 import type { Aria2Client } from "../aria2/client.js";
 import { tellActive, tellStatus, type Aria2Status } from "../aria2/methods.js";
 import type { ActionLog } from "../storage/action-log.js";
@@ -107,8 +108,8 @@ export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
         completed.push({ id: item.id, gid });
         dirty = true;
         await deps.actionLog.record({
-          action: "transition",
-          target: "queue_item",
+          action: ACTIONS.queueItemTransition,
+          target: TARGETS.queueItem,
           outcome: "changed",
           reason: "status:complete",
           before: { item: before },
@@ -132,8 +133,8 @@ export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
         });
         dirty = true;
         await deps.actionLog.record({
-          action: "transition",
-          target: "queue_item",
+          action: ACTIONS.queueItemTransition,
+          target: TARGETS.queueItem,
           outcome: "changed",
           reason: "status:error",
           before: { item: before },
@@ -148,8 +149,8 @@ export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
         item.removed_at = stampNow();
         dirty = true;
         await deps.actionLog.record({
-          action: "transition",
-          target: "queue_item",
+          action: ACTIONS.queueItemTransition,
+          target: TARGETS.queueItem,
           outcome: "changed",
           reason: "status:removed",
           before: { item: before },
@@ -164,8 +165,8 @@ export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
         item.status = "waiting" as ItemStatus;
         dirty = true;
         await deps.actionLog.record({
-          action: "transition",
-          target: "queue_item",
+          action: ACTIONS.queueItemTransition,
+          target: TARGETS.queueItem,
           outcome: "changed",
           reason: "status:waiting",
           before: { item: before },

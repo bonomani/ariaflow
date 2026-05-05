@@ -8,22 +8,35 @@
  */
 
 export const ACTIONS = {
-  // scheduler lifecycle
+  // scheduler lifecycle (route-driven, target=scheduler)
   schedulerStart: "start",
   schedulerStop: "stop",
   schedulerPause: "pause",
   schedulerResume: "resume",
   schedulerPreflight: "preflight",
   schedulerUcc: "ucc",
+  // scheduler loop internals (target=scheduler)
+  schedulerPre: "scheduler_pre",
   schedulerStopped: "scheduler_stopped",
-  // queue mutations
+  // queue mutations (target=queue)
+  queueAdd: "add",
+  queueRemove: "remove",
   queueAutoCleanup: "auto_cleanup",
+  queueReconcile: "reconcile",
+  queueDeduplicate: "deduplicate",
   queueRetry: "retry",
   queueRetryScheduled: "retry_scheduled",
   queueRetryExhausted: "retry_exhausted",
   queueSetPriority: "set_priority",
   queueSelectFiles: "select_files",
   queueSeedStopped: "seed_stopped",
+  queueDistributeStarted: "distribute_started",
+  // queue-item lifecycle (target=queue_item; tick + poll). Note that
+  // "start" is overloaded with schedulerStart — the disambiguator is
+  // the `target` field (scheduler vs queue_item).
+  queueItemStart: "start",
+  queueItemStartFailed: "start_failed",
+  queueItemTransition: "transition",
   // bandwidth
   bandwidthProbe: "probe",
   // declaration
@@ -41,6 +54,7 @@ export const TARGETS = {
   scheduler: "scheduler",
   queue: "queue",
   queueItem: "queue_item",
+  activeTransfer: "active_transfer",
   bandwidth: "bandwidth",
   system: "system",
   declaration: "declaration",

@@ -1,3 +1,4 @@
+import { ACTIONS, TARGETS } from "../storage/actions.js";
 import { prefValue, type Declaration } from "../contracts/declaration.js";
 import type { ActionLog } from "../storage/action-log.js";
 import type { DeclarationStore } from "../storage/declaration.js";
@@ -61,8 +62,8 @@ export async function runRetryPass(deps: RetryDeps, now: number = Date.now()): P
         item.retry_exhausted_at = new Date(now).toISOString();
         dirty = true;
         await deps.actionLog.record({
-          action: "retry_exhausted",
-          target: "queue_item",
+          action: ACTIONS.queueRetryExhausted,
+          target: TARGETS.queueItem,
           outcome: "unchanged",
           reason: "max_retries_reached",
           detail: { item_id: item.id, retry_count: currentRetries, max_retries: maxRetries },
@@ -85,8 +86,8 @@ export async function runRetryPass(deps: RetryDeps, now: number = Date.now()): P
     dirty = true;
     rescheduled.push({ id: item.id, retry_count: nextCount, retry_at: retryAt });
     await deps.actionLog.record({
-      action: "retry_scheduled",
-      target: "queue_item",
+      action: ACTIONS.queueRetryScheduled,
+      target: TARGETS.queueItem,
       outcome: "changed",
       reason: "auto_retry",
       detail: {

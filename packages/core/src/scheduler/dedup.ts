@@ -1,3 +1,4 @@
+import { ACTIONS, TARGETS } from "../storage/actions.js";
 import type { Aria2Client } from "../aria2/client.js";
 import { pause, remove, tellActive, type Aria2Status } from "../aria2/methods.js";
 import { activeItemUrl } from "../reconcile/merge.js";
@@ -94,8 +95,8 @@ export async function deduplicateActiveTransfers(
 
   if (changed) {
     await deps.actionLog.record({
-      action: "deduplicate",
-      target: "active_transfer",
+      action: ACTIONS.queueDeduplicate,
+      target: TARGETS.activeTransfer,
       outcome: "changed",
       reason: "duplicate_active_transfer",
       before: { active: active.map((i) => i.gid).filter(Boolean) },

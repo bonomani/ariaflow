@@ -1,3 +1,4 @@
+import { ACTIONS, TARGETS } from "../storage/actions.js";
 import type { Aria2Client } from "../aria2/client.js";
 import { dispatchDownload, dispatchPrefsFrom } from "../aria2/dispatch.js";
 import type { ActionLog } from "../storage/action-log.js";
@@ -84,8 +85,8 @@ export async function runSchedulerTick(deps: SchedulerTickDeps): Promise<Schedul
       item.status = "active";
       started.push({ id: item.id, gid });
       await deps.actionLog.record({
-        action: "start",
-        target: "queue_item",
+        action: ACTIONS.queueItemStart,
+        target: TARGETS.queueItem,
         outcome: "changed",
         reason: "scheduler_tick",
         detail: { item_id: item.id, gid, url: item.url },
@@ -94,8 +95,8 @@ export async function runSchedulerTick(deps: SchedulerTickDeps): Promise<Schedul
       const message = err instanceof Error ? err.message : String(err);
       failed.push({ id: item.id, error: message });
       await deps.actionLog.record({
-        action: "start_failed",
-        target: "queue_item",
+        action: ACTIONS.queueItemStartFailed,
+        target: TARGETS.queueItem,
         outcome: "failed",
         reason: "rpc_error",
         detail: { item_id: item.id, url: item.url, error: message },

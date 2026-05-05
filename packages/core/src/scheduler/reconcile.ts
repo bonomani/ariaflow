@@ -1,3 +1,4 @@
+import { ACTIONS, TARGETS } from "../storage/actions.js";
 import { randomUUID } from "node:crypto";
 import type { Aria2Client } from "../aria2/client.js";
 import { tellActive, type Aria2Status } from "../aria2/methods.js";
@@ -138,8 +139,8 @@ export async function reconcileLiveQueue(
   if (changed) {
     await deps.queueStore.save(items);
     await deps.actionLog.record({
-      action: "reconcile",
-      target: "queue",
+      action: ACTIONS.queueReconcile,
+      target: TARGETS.queue,
       outcome: "changed",
       reason: "live_state_merged",
       before: { summary: beforeSummary },

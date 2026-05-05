@@ -10,11 +10,11 @@ import {
 } from "@ariaflow/core";
 import type { CliContext } from "../context.js";
 
-export interface SchedulerControllerOptions {
+interface SchedulerControllerOptions {
   intervalMs?: number;
 }
 
-export interface SchedulerController {
+interface SchedulerController {
   /** True iff a loop is currently running. */
   running: () => boolean;
   /** Idempotent: if a loop is already up, returns started=false / reason="already_running". */

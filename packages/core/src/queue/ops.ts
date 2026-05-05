@@ -1,3 +1,4 @@
+import { ACTIONS, TARGETS } from "../storage/actions.js";
 import { randomUUID } from "node:crypto";
 import type { ActionLog } from "../storage/action-log.js";
 import type { DeclarationStore } from "../storage/declaration.js";
@@ -50,8 +51,8 @@ export class QueueOps {
 
     if (existing) {
       await this.actions.record({
-        action: "add",
-        target: "queue",
+        action: ACTIONS.queueAdd,
+        target: TARGETS.queue,
         outcome: "unchanged",
         reason: "duplicate_url",
         before,
@@ -103,8 +104,8 @@ export class QueueOps {
     await this.queue.save(items);
 
     await this.actions.record({
-      action: "add",
-      target: "queue",
+      action: ACTIONS.queueAdd,
+      target: TARGETS.queue,
       outcome: "changed",
       reason: "queue_item_created",
       before,
@@ -138,8 +139,8 @@ export class QueueOps {
     if (timestampField) item[timestampField] = this.now();
     await this.queue.save(items);
     await this.actions.record({
-      action: "transition",
-      target: "queue_item",
+      action: ACTIONS.queueItemTransition,
+      target: TARGETS.queueItem,
       outcome: "changed",
       reason: `status:${next}`,
       before: { item: before },
@@ -160,8 +161,8 @@ export class QueueOps {
     const [removed] = items.splice(idx, 1);
     await this.queue.save(items);
     await this.actions.record({
-      action: "remove",
-      target: "queue_item",
+      action: ACTIONS.queueRemove,
+      target: TARGETS.queueItem,
       outcome: "changed",
       reason: "manual",
       detail: {

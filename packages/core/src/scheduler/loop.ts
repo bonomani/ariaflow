@@ -1,3 +1,4 @@
+import { ACTIONS, TARGETS } from "../storage/actions.js";
 import type { Aria2Client } from "../aria2/client.js";
 import { pauseAll, unpauseAll } from "../aria2/methods.js";
 import type { ActionLog } from "../storage/action-log.js";
@@ -112,8 +113,8 @@ export async function runSchedulerLoop(
       if (out && typeof out.capBytesPerSec === "number") cap = out.capBytesPerSec;
     } catch (err) {
       await deps.actionLog.record({
-        action: "scheduler_pre",
-        target: "scheduler",
+        action: ACTIONS.schedulerPre,
+        target: TARGETS.scheduler,
         outcome: "failed",
         reason: "preloop_error",
         detail: { error: err instanceof Error ? err.message : String(err) },
@@ -215,8 +216,8 @@ export async function runSchedulerLoop(
     });
     if (reason === "aborted") {
       await deps.actionLog.record({
-        action: "scheduler_stopped",
-        target: "scheduler",
+        action: ACTIONS.schedulerStopped,
+        target: TARGETS.scheduler,
         outcome: "changed",
         reason: "abort_signal",
         detail: { iterations },

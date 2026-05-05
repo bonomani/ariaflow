@@ -1,3 +1,4 @@
+import { ACTIONS, TARGETS } from "../storage/actions.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Aria2Client } from "../aria2/client.js";
@@ -144,8 +145,8 @@ export async function runPostAction(
       tracker: trackerUrl,
     };
     await deps.actionLog.record({
-      action: "distribute_started",
-      target: "queue_item",
+      action: ACTIONS.queueDistributeStarted,
+      target: TARGETS.queueItem,
       outcome: "changed",
       reason: "post_action",
       detail: {
