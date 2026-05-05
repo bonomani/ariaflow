@@ -16,8 +16,6 @@ interface ServeOptions {
   host?: string;
   port?: number;
   version?: string;
-  /** Path to openapi.yaml; auto-discovered when omitted. */
-  openapiYamlPath?: string;
   /** aria2 RPC host (default 127.0.0.1). Pass empty string to disable. */
   aria2Host?: string;
   /** aria2 RPC port (default 6800). */
@@ -34,22 +32,6 @@ interface ServeOptions {
   schedulerIntervalMs?: number;
   /** Disable mDNS advertisement (default: announce when a backend is available). */
   noMdns?: boolean;
-}
-
-/**
- * Walk up from cwd looking for an openapi.yaml at the repo root. Returns
- * the resolved absolute path or null when not found within 5 levels.
- */
-function findOpenApiYaml(start: string = process.cwd()): string | null {
-  let dir = start;
-  for (let i = 0; i < 5; i++) {
-    const candidate = join(dir, "openapi.yaml");
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
 }
 
 /**
@@ -128,7 +110,6 @@ export async function cmdServe(
   opts: ServeOptions = {},
 ): Promise<ServeHandle> {
   const eventBus = new EventBus();
-  const yamlPath = opts.openapiYamlPath ?? findOpenApiYaml();
   const aria2Host = opts.aria2Host ?? "127.0.0.1";
   const aria2 =
     aria2Host === ""
@@ -161,7 +142,6 @@ export async function cmdServe(
     eventBus,
     ...(aria2 ? { aria2 } : {}),
     ...(resolvedVersion !== undefined ? { version: resolvedVersion } : {}),
-    ...(yamlPath ? { openapiYamlPath: yamlPath } : {}),
     ...(aria2
       ? { startScheduler: scheduler.launch, stopScheduler: scheduler.stop }
       : {}),

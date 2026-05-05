@@ -40,8 +40,6 @@ export interface ServerDeps {
   actionLog: ActionLog;
   /** Optional version string surfaced at /api/version (default "0.0.0"). */
   version?: string;
-  /** Path to openapi.yaml on disk; if omitted, /api/openapi.yaml 404s. */
-  openapiYamlPath?: string;
   /**
    * CORS origin policy. `true` (default) echoes the request's Origin
    * header; pass `"*"` to send a wildcard, an array of allowed origins

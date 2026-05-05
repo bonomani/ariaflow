@@ -109,7 +109,6 @@ program
   .description("start the HTTP API server")
   .option("--host <h>", "bind host", "127.0.0.1")
   .option("--port <p>", "bind port", (v) => Number(v), 8000)
-  .option("--openapi-yaml <path>", "path to openapi.yaml (auto-discovered if omitted)")
   .option("--aria2-host <h>", "aria2 RPC host", "127.0.0.1")
   .option("--aria2-port <p>", "aria2 RPC port", (v) => Number(v), 6800)
   .option("--aria2-secret <s>", "aria2 RPC secret token")
@@ -129,7 +128,6 @@ program
     async (opts: {
       host: string;
       port: number;
-      openapiYaml?: string;
       aria2: boolean;
       aria2Host: string;
       aria2Port: number;
@@ -142,7 +140,6 @@ program
       const handle = await cmdServe(ctx, {
         host: opts.host,
         port: opts.port,
-        ...(opts.openapiYaml ? { openapiYamlPath: opts.openapiYaml } : {}),
         // commander sets opts.aria2=false when --no-aria2 was passed.
         aria2Host: opts.aria2 === false ? "" : opts.aria2Host,
         aria2Port: opts.aria2Port,

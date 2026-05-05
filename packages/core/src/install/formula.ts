@@ -55,8 +55,8 @@ interface RenderFormulaInput {
  *
  * The brew service stanza launches `ariaflow serve --scheduler` on
  * 127.0.0.1:8000 so the user gets a working downloader once aria2 is
- * also installed. openapi.yaml is vendored alongside the dist tree
- * so /api/docs + /api/openapi.yaml resolve.
+ * also installed. /api/openapi.yaml is generated at request time from
+ * the live route schemas (R-J), so no doc file is vendored.
  */
 export function renderFormula({ version, url, sha256 }: RenderFormulaInput): string {
   return `class AriaflowServer < Formula
@@ -83,7 +83,6 @@ export function renderFormula({ version, url, sha256 }: RenderFormulaInput): str
     system "pnpm", "build"
     system "pnpm", "--filter", "@ariaflow/cli", "deploy", "--prod",
            "#{libexec}/cli"
-    libexec.install "openapi.yaml"
 
     # Hardcode the node + script paths via Ruby interpolation —
     # launchd doesn't set HOMEBREW_PREFIX, so $-expansion at shell
@@ -107,8 +106,7 @@ export function renderFormula({ version, url, sha256 }: RenderFormulaInput): str
       opt_bin/"ariaflow", "serve",
       "--host", "127.0.0.1",
       "--port", "8000",
-      "--scheduler",
-      "--openapi-yaml", "#{opt_libexec}/openapi.yaml"
+      "--scheduler"
     ]
     keep_alive true
     working_dir var

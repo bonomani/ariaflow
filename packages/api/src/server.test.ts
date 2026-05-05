@@ -869,7 +869,7 @@ describe("meta routes", () => {
   // BG-37 / R-J: info.version reflects deps.version (passed to
   // buildServer → @fastify/swagger's openapi.info at register time).
   it("GET /api/openapi.yaml stamps info.version to match /api/version", async () => {
-    const sibling = await freshAppWithOpenApiYaml(dir, `${dir}/unused`, "0.1.244");
+    const sibling = await freshAppWithVersion(dir, "0.1.244");
     try {
       const yamlRes = await sibling.inject({ method: "GET", url: "/api/openapi.yaml" });
       const versionRes = await sibling.inject({ method: "GET", url: "/api/version" });
@@ -1074,13 +1074,8 @@ async function makeWiredServer(baseDir: string, overrides: ServerOverrides = {})
   return { app, state, queue, archive, actions, sessions, declaration };
 }
 
-async function freshAppWithOpenApiYaml(baseDir: string, yamlPath: string, version?: string) {
-  return (
-    await makeWiredServer(baseDir, {
-      openapiYamlPath: yamlPath,
-      ...(version !== undefined ? { version } : {}),
-    })
-  ).app;
+async function freshAppWithVersion(baseDir: string, version: string) {
+  return (await makeWiredServer(baseDir, { version })).app;
 }
 
 describe("downloads compat aliases + cleanup", () => {
