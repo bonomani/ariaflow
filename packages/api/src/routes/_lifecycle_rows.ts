@@ -13,10 +13,10 @@ import {
 import type { ServerDeps } from "../server.js";
 
 const PENDING = new Set(["queued", "waiting", "active"]);
-export const LAUNCHD_PLIST = `${homedir()}/Library/LaunchAgents/com.ariaflow-server.aria2.plist`;
-export const SYSTEMD_UNIT = `${homedir()}/.config/systemd/user/ariaflow-server-aria2.service`;
+const LAUNCHD_PLIST = `${homedir()}/Library/LaunchAgents/com.ariaflow-server.aria2.plist`;
+const SYSTEMD_UNIT = `${homedir()}/.config/systemd/user/ariaflow-server-aria2.service`;
 
-export interface ComponentRow {
+interface ComponentRow {
   result: Record<string, unknown>;
 }
 

@@ -15,7 +15,7 @@ export const ARIA2_SERVICE_TARGETS = new Set([
   "aria2-service",
 ]);
 
-export interface ActionDispatchResult {
+interface ActionDispatchResult {
   status: 202 | 409;
   body: Record<string, unknown>;
   /** Optional post-response side effect (process.exit, spawn, etc.). */
