@@ -14,7 +14,7 @@ export class DeclarationStore {
   ) {}
 
   /** Load the declaration, writing the default to disk on first access. */
-  async ensure(): Promise<Declaration> {
+  async load(): Promise<Declaration> {
     return this.lock.with(async () => {
       const path = declarationPath(this.env);
       const existing = await readJson<Declaration | null>(path, null);
@@ -23,11 +23,6 @@ export class DeclarationStore {
       await writeJson(path, fresh);
       return fresh;
     });
-  }
-
-  /** Convenience alias mirroring Python `load_declaration`. */
-  load(): Promise<Declaration> {
-    return this.ensure();
   }
 
   async save(declaration: Declaration): Promise<Declaration> {

@@ -47,6 +47,17 @@ interface StateBus {
   publish(event: string, data: unknown): void;
 }
 
+/**
+ * BG-33: `state.paused` is internal-only — every wire surface (the
+ * /api/status response, /api/events SSE frames) must expose
+ * `dispatch_paused` instead. Strips `paused` from the published frame
+ * and adds the canonical alias.
+ */
+function publishStateChange(bus: StateBus, state: ServerState): void {
+  const { paused, ...rest } = state;
+  bus.publish("state_changed", { ...rest, dispatch_paused: Boolean(paused) });
+}
+
 export class StateStore {
   private bus: StateBus | undefined;
 
@@ -57,10 +68,10 @@ export class StateStore {
 
   /**
    * R-T: attach an event bus so each successful save() / update() also
-   * publishes "state_changed" carrying the next ServerState. Mirrors
-   * ActionLog.setBus / SessionService.setBus. The /api/events SSE
-   * stream ships state_changed under the "items" + "scheduler" topics
-   * (per event-topics.ts).
+   * publishes "state_changed" carrying the (sanitized) next state.
+   * Mirrors ActionLog.setBus / SessionService.setBus. The /api/events
+   * SSE stream ships state_changed under the "items" + "scheduler"
+   * topics (per event-topics.ts).
    */
   setBus(bus: StateBus): void {
     this.bus = bus;
@@ -80,7 +91,7 @@ export class StateStore {
     return this.lock.with(async () => {
       const next = { ...state, _rev: Number(state._rev ?? 0) + 1 };
       await writeJson(statePath(this.env), next);
-      this.bus?.publish("state_changed", next);
+      if (this.bus) publishStateChange(this.bus, next);
       return next;
     });
   }
@@ -93,7 +104,7 @@ export class StateStore {
       const next = (result ?? current) as ServerState;
       const stamped = { ...next, _rev: Number(next._rev ?? 0) + 1 };
       await writeJson(statePath(this.env), stamped);
-      this.bus?.publish("state_changed", stamped);
+      if (this.bus) publishStateChange(this.bus, stamped);
       return stamped;
     });
   }

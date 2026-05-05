@@ -22,18 +22,18 @@ afterEach(() => {
 });
 
 describe("DeclarationStore", () => {
-  it("writes the default declaration on first ensure()", async () => {
+  it("writes the default declaration on first load()", async () => {
     const store = new DeclarationStore(lock, env);
-    const decl = await store.ensure();
+    const decl = await store.load();
     expect(decl.meta.contract).toBe("UCC");
     // Second call returns the persisted version (no rewrite needed).
-    const again = await store.ensure();
+    const again = await store.load();
     expect(again).toEqual(decl);
   });
 
   it("save() persists user mutations", async () => {
     const store = new DeclarationStore(lock, env);
-    const decl = await store.ensure();
+    const decl = await store.load();
     decl.uic.preferences[0]!.value = "edited";
     await store.save(decl);
     const reloaded = await store.load();

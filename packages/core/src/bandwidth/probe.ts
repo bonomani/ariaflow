@@ -107,10 +107,7 @@ export function parseNetworkQualityOutput(
 /**
  * Decide whether enough time has passed since the last probe to run
  * another. The interval is required — callers resolve it from the live
- * declaration via bandwidthConfigFrom(decl).probe_interval_seconds (or
- * pass any other source-of-truth value). The legacy 180-second default
- * constant was removed because the loop now reads the interval off the
- * config every iteration; a hard-coded fallback was a footgun.
+ * declaration via `bandwidthConfigFrom(decl).probe_interval_seconds`.
  */
 export function shouldProbeBandwidth(
   state: { last_bandwidth_probe_at?: unknown },
