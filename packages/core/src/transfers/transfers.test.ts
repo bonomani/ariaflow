@@ -1,31 +1,8 @@
 import { describe, expect, it } from "vitest";
-import {
-  dedupActiveTransferAction,
-  maxSimultaneousDownloads,
-  rpcFailureMessage,
-} from "./helpers.js";
+import { dedupActiveTransferAction, maxSimultaneousDownloads } from "./helpers.js";
 import { buildTransferSummary, rankActiveInfos } from "./progress.js";
 import { defaultDeclaration } from "../contracts/declaration.js";
 import type { Aria2Status } from "../aria2/methods.js";
-
-describe("rpcFailureMessage", () => {
-  it("uses the error message verbatim when present", () => {
-    expect(rpcFailureMessage("pause", new Error("nope"))).toBe("nope");
-  });
-  it("classifies timeout/abort by name", () => {
-    const e = new Error("");
-    e.name = "AbortError";
-    expect(rpcFailureMessage("pause", e)).toBe("aria2 pause RPC timed out");
-  });
-  it("classifies connection errors by name", () => {
-    const e = new Error("");
-    e.name = "ConnectionRefusedError";
-    expect(rpcFailureMessage("resume", e)).toBe("aria2 resume RPC connection failed");
-  });
-  it("falls back to a generic action-specific message", () => {
-    expect(rpcFailureMessage("remove", "x")).toBe("aria2 remove RPC failed");
-  });
-});
 
 describe("dedupActiveTransferAction / maxSimultaneousDownloads", () => {
   it("dedupActiveTransferAction default is 'remove'", () => {

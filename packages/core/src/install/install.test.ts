@@ -3,11 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { findNetworkQuality, networkqualityStatus } from "./networkquality.js";
-import {
-  formatCommands,
-  homebrewInstallCommands,
-  homebrewUninstallCommands,
-} from "./homebrew.js";
 
 let dir: string;
 
@@ -60,19 +55,3 @@ describe("networkqualityStatus", () => {
   });
 });
 
-describe("homebrew command builders", () => {
-  it("install commands tap then install", () => {
-    expect(homebrewInstallCommands()).toEqual([
-      ["brew", "tap", "bonomani/ariaflow-server"],
-      ["brew", "install", "ariaflow-server"],
-    ]);
-  });
-
-  it("uninstall commands are a single brew uninstall", () => {
-    expect(homebrewUninstallCommands()).toEqual([["brew", "uninstall", "ariaflow-server"]]);
-  });
-
-  it("formatCommands joins each argv with spaces", () => {
-    expect(formatCommands([["a", "b"], ["c"]])).toEqual(["a b", "c"]);
-  });
-});

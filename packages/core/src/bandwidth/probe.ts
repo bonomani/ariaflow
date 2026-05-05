@@ -104,17 +104,3 @@ export function parseNetworkQualityOutput(
   return null;
 }
 
-/**
- * Decide whether enough time has passed since the last probe to run
- * another. The interval is required — callers resolve it from the live
- * declaration via `bandwidthConfigFrom(decl).probe_interval_seconds`.
- */
-export function shouldProbeBandwidth(
-  state: { last_bandwidth_probe_at?: unknown },
-  now: number,
-  intervalSec: number,
-): boolean {
-  const last = coerceFloat(state.last_bandwidth_probe_at);
-  if (last === null) return true;
-  return now - last >= intervalSec;
-}

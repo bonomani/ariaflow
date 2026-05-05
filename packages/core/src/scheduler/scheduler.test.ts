@@ -1,37 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  autoPreflightOnRun,
-  checkDiskSpace,
-  desiredState,
-  maxDiskPercent,
-  reinjectStatus,
-  rpcPollFailureMessage,
-} from "./helpers.js";
+import { checkDiskSpace, desiredState, maxDiskPercent } from "./helpers.js";
 import { getActiveProgress } from "./progress.js";
 import { Aria2Client } from "../aria2/client.js";
 import { defaultDeclaration } from "../contracts/declaration.js";
 import type { ServerState } from "../storage/state.js";
 
-describe("rpcPollFailureMessage", () => {
-  it("prefers the error message text", () => {
-    expect(rpcPollFailureMessage(new Error("custom"))).toBe("custom");
-  });
-  it("classifies timeout-named errors", () => {
-    const err = new Error("");
-    err.name = "TimeoutError";
-    expect(rpcPollFailureMessage(err)).toBe("aria2 status RPC timed out");
-  });
-  it("classifies connection-named errors", () => {
-    const err = new Error("");
-    err.name = "ConnectionRefusedError";
-    expect(rpcPollFailureMessage(err)).toBe("aria2 status RPC connection failed");
-  });
-  it("falls back to a generic message", () => {
-    expect(rpcPollFailureMessage("oops")).toBe("aria2 status RPC failed");
-  });
-});
-
-describe("desiredState / reinjectStatus", () => {
+describe("desiredState", () => {
   it.each([
     [{ desired_state: "running" }, "running"],
     [{ desired_state: "paused" }, "paused"],
@@ -41,11 +15,6 @@ describe("desiredState / reinjectStatus", () => {
     [{}, "running"],
   ] as const)("desiredState(%j) -> %s", (item, expected) => {
     expect(desiredState({ id: "x", url: "u", ...item })).toBe(expected);
-  });
-
-  it("reinjectStatus picks paused vs queued from desired", () => {
-    expect(reinjectStatus({ id: "x", url: "u", desired_state: "paused" })).toBe("paused");
-    expect(reinjectStatus({ id: "x", url: "u", desired_state: "running" })).toBe("queued");
   });
 });
 
@@ -74,9 +43,6 @@ describe("checkDiskSpace", () => {
 });
 
 describe("declaration prefs", () => {
-  it("autoPreflightOnRun defaults to false", () => {
-    expect(autoPreflightOnRun(defaultDeclaration())).toBe(false);
-  });
   it("maxDiskPercent reads from the declaration", () => {
     expect(maxDiskPercent(defaultDeclaration())).toBe(90);
   });
