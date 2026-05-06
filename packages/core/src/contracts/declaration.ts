@@ -149,6 +149,13 @@ const PREFERENCES: UicPreference[] = [
     rationale: "hours between auto-update checks when auto_update is enabled",
   },
   {
+    name: "lifecycle_probe_interval_seconds",
+    value: 60,
+    options: [30, 60, 120, 300, 0],
+    rationale:
+      "BG-63: backend self-runs lifecycle probes every N seconds and emits lifecycle_changed on flips (0 = disabled)",
+  },
+  {
     name: "auto_restart_after_upgrade",
     value: true,
     options: [true, false],

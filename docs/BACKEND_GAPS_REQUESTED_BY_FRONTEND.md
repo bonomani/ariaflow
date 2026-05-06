@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-63 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-63: Backend self-runs periodic lifecycle probes + emits `lifecycle_changed` on flips
 
@@ -71,6 +74,8 @@ operator action.
 **Cost:** one new pref, one new timer, one publish call. Probe cost
 already paid per `/api/lifecycle` request — amortised here across
 operator activity instead of dependent on it.
+
+</details>
 
 ---
 
@@ -1337,6 +1342,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-63 | New `createLifecycleProbeController` in `cli/_lifecycle_probe_controller.ts` runs a snapshot every `lifecycle_probe_interval_seconds` (default 60; 0 disables) covering `aria2_running` (probeAria2Reachable), `aria2_installed` (findAria2c), `networkquality_installed` (findNetworkQuality), `auto_start_installed` (aria2AutoStartInstalled). On any axis flip it `bus.publish("lifecycle_changed", snapshot)` (already mapped to topic `lifecycle` in `event-topics.ts`) and lands an action-log entry `system_lifecycle / lifecycle_probe_flip`. Skips when `scheduler_intent === "stopped"` so background work pauses with operator intent. Wired in `cmdServe` alongside the auto-update controller; stops cleanly on close. New `lifecycle_probe_interval_seconds` declaration pref | 2026-05-06 |
 | BG-62 | `brew upgrade ariaflow-server` is now chained with the BG-61 launchd bootout+bootstrap so the running process picks up the new bottle without a manual restart. New `auto_restart_after_upgrade` declaration pref (default true) gates the chain. Helper `buildPostUpgradeRestartSuffix()` in `core/install/restart_chain.ts` returns the `launchctl bootout <target> 2>/dev/null; launchctl bootstrap <domain> <plist>` shell suffix or null when not applicable (non-launchd, no detectable label, plist not in `~/Library/LaunchAgents`). Wired into `dispatchAriaflowUpdate({ autoRestart })` (homebrew + pipx) — the lifecycle route loads the pref and passes it — and into the BG-45 auto-update controller's `applyUpdate(installedVia, autoRestart)`. Response body and audit log carry `auto_restart: bool` so the operator sees which path fired | 2026-05-06 |
 | BG-61 | `dispatchAriaflowRestart` (launchd branch in `_lifecycle_actions.ts`) prefers `launchctl bootout <target>; launchctl bootstrap <domain> <plist>` over `kickstart -k`. Detected via `existsSync(~/Library/LaunchAgents/<label>.plist)`; if the plist isn't there, falls back to `kickstart -k` so the operator-installed-elsewhere case still works. Response body now carries `method: "bootout_bootstrap" \| "kickstart"` so the action log records which path fired. Same shell-string pattern the dashboard FE already uses | 2026-05-06 |
 | BG-60 | New `resolvePkgManager(name)` helper in `core/install/pkg_manager.ts` — walks `$PATH` first, then well-known prefixes (`/opt/homebrew/bin`, `/usr/local/bin`, `/home/linuxbrew/.linuxbrew/bin`, `~/.local/bin`), falls through to the bare name on miss. Six bare-name spawn sites switched to it: `core/install/check_update.ts` (BG-59 brew probe), `cli/_auto_update_controller.ts` (BG-45 brew probe + brew upgrade), `api/_lifecycle_actions.ts` (BG-43 brew/pipx/npm dispatchers + BG-46 brew aria2 upgrade). Under launchd's minimal PATH (`/usr/bin:/bin:/usr/sbin:/sbin`) all six now resolve to the right absolute path on Apple Silicon, Intel macOS, and Linuxbrew | 2026-05-06 |

@@ -16,6 +16,7 @@ import { buildServer } from "@ariaflow/api";
 import type { CliContext } from "../context.js";
 import { createSchedulerController } from "./_scheduler_controller.js";
 import { createAutoUpdateController } from "./_auto_update_controller.js";
+import { createLifecycleProbeController } from "./_lifecycle_probe_controller.js";
 
 interface ServeOptions {
   host?: string;
@@ -214,6 +215,12 @@ export async function cmdServe(
   const autoUpdate = createAutoUpdateController(ctx);
   if (!opts.skipAutoStartReconcile) autoUpdate.launch();
 
+  // BG-63: backend self-runs lifecycle probes so the FE can drop its
+  // 30s warm poll. Cadence is `lifecycle_probe_interval_seconds`;
+  // skipped under the same flag tests use to avoid timer side effects.
+  const lifecycleProbe = createLifecycleProbeController(ctx, aria2, eventBus);
+  if (!opts.skipAutoStartReconcile) await lifecycleProbe.launch();
+
   // BG-18: announce _ariaflow-server._tcp via the local mDNS daemon so
   // dashboards on the same L2 segment auto-discover the backend.
   // Failures are non-fatal — the HTTP listener stays up either way.
@@ -236,6 +243,7 @@ export async function cmdServe(
     scheduler: scheduler.running(),
     mdns: (mdnsHandle?.backend ?? null) as "dns-sd" | "avahi" | null,
     close: async () => {
+      lifecycleProbe.stop();
       autoUpdate.stop();
       await scheduler.stop();
       await mdnsHandle?.stop();
