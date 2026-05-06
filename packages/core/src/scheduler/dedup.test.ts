@@ -4,9 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Aria2Client } from "../aria2/client.js";
 import { ActionLog } from "../storage/action-log.js";
-import { ArchiveStore, QueueStore } from "../storage/queue.js";
 import { DeclarationStore } from "../storage/declaration.js";
-import { SessionService } from "../storage/sessions.js";
 import { StateStore } from "../storage/state.js";
 import { StorageLock } from "../storage/lock.js";
 import { storageLockPath } from "../storage/paths.js";
@@ -21,12 +19,7 @@ beforeEach(() => {
   const env = { ARIAFLOW_DIR: dir };
   const lock = new StorageLock(storageLockPath(env));
   const state = new StateStore(lock, env);
-  const queue = new QueueStore(lock, env);
-  const archive = new ArchiveStore(lock, env);
   actions = new ActionLog(lock, state, env);
-  // sessions/queueOps/sessions wired so DeclarationStore + StateStore share the lock.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _sessions = new SessionService(lock, state, queue, archive, env);
   declaration = new DeclarationStore(lock, env);
 });
 
