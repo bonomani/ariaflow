@@ -11,7 +11,59 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-53: Per-download `max-download-limit` not refreshed on probe; in-flight transfers drift below the displayed cap
+
+**Paired frontend gap:** FE-43 (FE renders the live cap correctly; just needs the per-download limit to follow it)
+
+**Symptom:** dashboard CAP card reads `5.7 Mbps` but a single in-flight
+download has `max-download-limit: 625000` bytes/s = 5.0 Mbps. The
+download is silently throttled below the operator's declared cap.
+Inspecting via `GET /api/aria2/option?gid=…` shows the stale value
+sticking around for the lifetime of the transfer.
+
+**Root cause — two parallel cap mechanisms drift apart:**
+
+1. **Per-download** `max-download-limit` (`aria2/dispatch.ts:74`) is
+   computed from `capBytesPerSec` at the moment the item is dispatched
+   (`addUri` time). It never moves after that for an in-flight gid.
+2. **Aria2 global** `max-overall-download-limit` is re-set on every
+   probe via `bandwidth.ts:28`
+   (`setMaxOverallDownloadLimit(probeRec.cap_bytes_per_sec)`).
+
+When a probe lands a new value (manual probe today; once BG-52 ships,
+periodic too), the global is refreshed but the per-download is not.
+aria2 enforces `min(per-download, global)`, so the stale per-download
+silently wins for any transfer that started before the new probe.
+
+**Requested behaviour:** alongside `setMaxOverallDownloadLimit`, walk
+every active aria2 gid and call
+`aria2.changeOption(gid, { 'max-download-limit': aria2SpeedValue(cap) })`.
+The helper at `core/src/aria2/methods.ts:99` already exists. Apply
+it from:
+
+- `routes/bandwidth.ts:28` (manual `POST /api/bandwidth/probe`) — fix today
+- The periodic auto-probe loop once BG-52 lands
+
+**Acceptance:**
+
+1. Start a download, observe `GET /api/aria2/option?gid=X` returning
+   `max-download-limit` matching `bw.cap_bytes_per_sec`.
+2. Run a manual probe (`POST /api/bandwidth/probe`) that yields a
+   different cap (changing reserve % is enough to shift it).
+3. Re-query `GET /api/aria2/option?gid=X`: `max-download-limit` now
+   matches the new cap. Action log shows
+   `outcome: "changed", target: aria2.options, detail: {gid, max_download_limit}`.
+
+**Alternative (simpler, possibly preferable):** drop per-download
+`max-download-limit` entirely. The aria2 global cap covers every
+transfer; per-download is redundant when there's no per-item budgeting
+logic. Lower complexity, no drift.
+
+**FE follow-up:** none — FE already renders the live cap.
+
+---
 
 <details>
 <summary>BG-52 (resolved) — original frontend brief retained for context</summary>
