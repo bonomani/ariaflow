@@ -11,7 +11,78 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (2)
+
+### BG-54: Drop hardcoded `allow-overwrite: true` in dispatch — let aria2 rename or fail safely
+
+**Paired frontend gap:** FE-44 (no FE change required if default flips to safe behavior; FE may want a "force re-download" toggle later)
+
+**Symptom:** re-adding the same URL of an already-downloaded file
+silently overwrites the existing file. No warning, no `.1` rename, no
+indication to the operator that the previous download is being
+clobbered. Confirmed via the user's recent test (Ubuntu ISO added
+twice → both completed at the same path with different aria2 GIDs).
+
+**Root cause** (`packages/core/src/aria2/dispatch.ts:73-79`):
+
+```ts
+const options: Aria2Options = {
+  "max-download-limit": aria2SpeedValue(opts.capBytesPerSec),
+  "allow-overwrite": "true",   // ← always on, no override
+  continue: "true",
+  "max-tries": String(opts.prefs.max_tries ?? 5),
+  "retry-wait": String(opts.prefs.retry_wait ?? 10),
+};
+```
+
+`allow-overwrite: true` is unconditionally injected. This:
+
+1. **Defeats `auto-file-renaming: true`** (aria2's default). The rename
+   logic only fires when overwrite is denied. With overwrite forced,
+   the renaming code path is dead — visible as both options coexisting
+   in `GET /api/aria2/option?gid=X` despite being mutually exclusive.
+2. **Silent data loss on re-add.** A previously-completed file is
+   overwritten with no operator confirmation. Combined with the
+   intentional "don't dedupe terminal items" behavior in
+   `queue/ops.ts`, the operator can lose data with no signal.
+3. **Couples to `continue: true` confusingly.** With overwrite=true,
+   `continue` only matters for partials *of the current run*; cross-run
+   resume against a fully-downloaded file just overwrites instead of
+   noop'ing.
+
+**Two coherent options:**
+
+A. **Drop `allow-overwrite: true` entirely.** aria2 falls back to its
+   default (`false`), and `auto-file-renaming: true` (also default)
+   gives `.1` / `.2` renames automatically. Operator gets non-destructive
+   behavior on re-add. Resume of a partial via `continue: true` still
+   works because aria2 resumes from the `.aria2` control file
+   regardless of overwrite setting.
+
+B. **Make it a preference.** Add `allow_overwrite_existing` to the
+   declaration vocabulary, default `false`. Operator who wants the
+   current behavior can opt back in. Backend reads
+   `prefValue(declaration, "allow_overwrite_existing", false)` and
+   sets the aria2 option accordingly.
+
+**Recommendation: option A.** No new pref surface, principle of
+least surprise, aria2 defaults already produce the safe behavior.
+
+**Acceptance:**
+
+1. Add a download. Let it complete.
+2. Add the same URL again.
+3. Old file untouched on disk; new download arrives as
+   `<name>.1` (auto-file-renaming kicks in). Action log shows
+   `outcome: "added", detail: { renamed_to: "<name>.1" }` if backend
+   wants to expose that, but not required.
+
+**FE follow-up:** none for option A. Optionally surface a
+"force re-download" item action in the future if operators ask
+for it (would set `allow-overwrite=true` per-item via `select_file`-
+style override). Not required now.
+
+---
 
 ### BG-53: Per-download `max-download-limit` not refreshed on probe; in-flight transfers drift below the displayed cap
 
