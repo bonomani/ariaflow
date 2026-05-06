@@ -4,6 +4,7 @@ import {
   TARGETS,
   detectAriaflowInstalledVia,
   prefValue,
+  resolvePkgManager,
   type AriaflowInstalledVia,
 } from "@ariaflow/core";
 import type { CliContext } from "../context.js";
@@ -31,7 +32,7 @@ interface OutdatedResult {
  */
 function brewOutdated(): Promise<OutdatedResult> {
   return new Promise((resolve) => {
-    const proc = spawn("brew", ["outdated", "--json=v2", "ariaflow-server"], {
+    const proc = spawn(resolvePkgManager("brew"), ["outdated", "--json=v2", "ariaflow-server"], {
       stdio: ["ignore", "pipe", "ignore"],
     });
     const chunks: Buffer[] = [];
@@ -62,7 +63,7 @@ function applyUpdate(installedVia: AriaflowInstalledVia): void {
   const detached = (cmd: string, args: string[]): void => {
     spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
   };
-  if (installedVia === "homebrew") detached("brew", ["upgrade", "ariaflow-server"]);
+  if (installedVia === "homebrew") detached(resolvePkgManager("brew"), ["upgrade", "ariaflow-server"]);
 }
 
 const HOUR_S = 3600;

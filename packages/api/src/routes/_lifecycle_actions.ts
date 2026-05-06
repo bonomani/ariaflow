@@ -6,6 +6,7 @@ import {
   detectBinaryInstalledVia,
   detectLaunchdLabel,
   findAria2c,
+  resolvePkgManager,
   type AriaflowInstalledVia,
   type AriaflowManagedBy,
 } from "@ariaflow/core";
@@ -98,21 +99,21 @@ export function dispatchAriaflowUpdate(): ActionDispatchResult {
     return {
       status: 202,
       body: { ok: true, action: "update", installed_via: "homebrew" },
-      after: () => detached("brew", ["upgrade", "ariaflow-server"]),
+      after: () => detached(resolvePkgManager("brew"), ["upgrade", "ariaflow-server"]),
     };
   }
   if (installedVia === "pipx") {
     return {
       status: 202,
       body: { ok: true, action: "update", installed_via: "pipx" },
-      after: () => detached("pipx", ["upgrade", "ariaflow-server"]),
+      after: () => detached(resolvePkgManager("pipx"), ["upgrade", "ariaflow-server"]),
     };
   }
   if (installedVia === "npm") {
     return {
       status: 202,
       body: { ok: true, action: "update", installed_via: "npm" },
-      after: () => detached("npm", ["install", "-g", "@ariaflow/cli@latest"]),
+      after: () => detached(resolvePkgManager("npm"), ["install", "-g", "@ariaflow/cli@latest"]),
     };
   }
   if (installedVia === "source") {
@@ -206,7 +207,7 @@ export function dispatchAria2Update(): ActionDispatchResult {
     return {
       status: 202,
       body: { ok: true, action: "update", installed_via: "homebrew" },
-      after: () => detached("brew", ["upgrade", "aria2"]),
+      after: () => detached(resolvePkgManager("brew"), ["upgrade", "aria2"]),
     };
   }
   if (installedVia === "pipx") {

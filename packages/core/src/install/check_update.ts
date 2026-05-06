@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { resolvePkgManager } from "./pkg_manager.js";
 
 export interface UpdateProbeResult {
   /** True when the package manager has a newer version available. */
@@ -24,7 +25,7 @@ export interface UpdateProbeResult {
  */
 export function brewOutdatedFormula(formula: string): Promise<UpdateProbeResult> {
   return new Promise((resolve) => {
-    const proc = spawn("brew", ["outdated", "--json=v2", formula], {
+    const proc = spawn(resolvePkgManager("brew"), ["outdated", "--json=v2", formula], {
       stdio: ["ignore", "pipe", "ignore"],
     });
     const chunks: Buffer[] = [];

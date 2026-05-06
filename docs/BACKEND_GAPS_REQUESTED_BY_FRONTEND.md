@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-60 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-60: Resolve absolute path to `brew` — `spawn("brew", ...)` fails under launchd
 
@@ -85,6 +88,8 @@ npm / pip dispatches.
 **FE follow-up:** none. The FE already surfaces backend errors via the
 result span on the Check button — once BG-60 lands, the button shows
 real probe output instead of the ENOENT string.
+
+</details>
 
 ---
 
@@ -1170,6 +1175,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-60 | New `resolvePkgManager(name)` helper in `core/install/pkg_manager.ts` — walks `$PATH` first, then well-known prefixes (`/opt/homebrew/bin`, `/usr/local/bin`, `/home/linuxbrew/.linuxbrew/bin`, `~/.local/bin`), falls through to the bare name on miss. Six bare-name spawn sites switched to it: `core/install/check_update.ts` (BG-59 brew probe), `cli/_auto_update_controller.ts` (BG-45 brew probe + brew upgrade), `api/_lifecycle_actions.ts` (BG-43 brew/pipx/npm dispatchers + BG-46 brew aria2 upgrade). Under launchd's minimal PATH (`/usr/bin:/bin:/usr/sbin:/sbin`) all six now resolve to the right absolute path on Apple Silicon, Intel macOS, and Linuxbrew | 2026-05-06 |
 | BG-59 | `POST /api/lifecycle/ariaflow-server/check_update` — read-only package-manager probe. Homebrew installs run `brew outdated --json=v2 ariaflow-server` via the new `brewOutdatedFormula` helper in `core/install/check_update.ts` (parses `formulae[0].installed_versions[0]` → `current_version`, `formulae[0].current_version` → `latest_version`); pipx/npm return 200 with `update_available: null` and a "no probe wired" message; source → 409 `source_install`; null → 409 `unknown_installer`. Action log entry per call: `action: "check_update"`, outcome `changed` when update_available, `unchanged` otherwise, `blocked` on 409. New `ACTIONS.checkUpdate`; `ActionDispatchResult.status` widened from `202 \| 409` to `200 \| 202 \| 409` so the same dispatcher pattern works for the synchronous probe | 2026-05-06 |
 | BG-58 | New `resolveDefaultDownloadDir()` helper in `core/install/download_dir.ts` returns `$XDG_DOWNLOAD_DIR` when set, else `~/Downloads`, else null. `routes/files.ts` `loadDownloadDir` uses it as the fallback when the operator hasn't set the pref; `scheduler/probes.ts` `probeDiskOk` likewise (its `process.cwd()` last-resort stays as the third tier). Explicit pref still wins. Empty-string → still falls back. The `download_dir_unset` 409 only fires now in headless containers with no `$HOME` and no `$XDG_DOWNLOAD_DIR` | 2026-05-06 |
 | BG-57 | `/api/status` summary now describes the unfiltered queue. `routes/status.ts` was passing the post-`applyFilters` slice to `summarizeQueue`, so any non-empty `?status=` made every other filter-bar count read 0. One-line fix: `summarizeQueue(items)` instead of `summarizeQueue(filtered)`; `items: filtered` stays so the visible list still respects the filter | 2026-05-06 |
