@@ -85,6 +85,18 @@ const PREFERENCES: UicPreference[] = [
   },
   { name: "max_disk_usage_percent", value: 90, options: [70, 80, 90, 95, 0], rationale: "stop downloading when disk reaches this % usage (0 = no limit)" },
   { name: "download_dir", value: "", options: [], rationale: "download destination directory (empty = aria2 default / cwd)" },
+  {
+    name: "verify_existing_strategy",
+    value: "local_only",
+    options: ["off", "local_only", "local_and_remote_head", "local_and_sampled_hash"],
+    rationale: "BG-55: gate re-add of an URL whose file is already on disk (off = always re-download)",
+  },
+  {
+    name: "confirm_redownload_default_action",
+    value: "prompt",
+    options: ["prompt", "skip", "rename", "redownload"],
+    rationale: "BG-55: default action when verify gate fires (prompt = awaiting_confirmation)",
+  },
   { name: "torrent_dir", value: "", options: [], rationale: "directory for .torrent files (empty = {config_dir}/torrents/)" },
   {
     name: "auto_discover_peers",

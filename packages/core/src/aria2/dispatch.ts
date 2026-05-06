@@ -76,6 +76,10 @@ function baseOptions(
     "max-tries": String(opts.prefs.max_tries ?? 5),
     "retry-wait": String(opts.prefs.retry_wait ?? 10),
   };
+  // BG-55: per-item override from /api/downloads/:id/confirm so the
+  // operator can reclaim an existing path. Default (BG-54) is aria2's
+  // safe rename; this only flips when the operator explicitly confirms.
+  if (item.allow_overwrite) options["allow-overwrite"] = "true";
 
   const output = (item.output ?? "").trim();
   // Only set `out` when output is a bare filename (no path component);

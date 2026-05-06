@@ -1,5 +1,7 @@
 import { ACTIONS, TARGETS } from "../storage/actions.js";
 import { randomUUID } from "node:crypto";
+import { statSync } from "node:fs";
+import { basename, isAbsolute, join } from "node:path";
 import type { ActionLog } from "../storage/action-log.js";
 import type { DeclarationStore } from "../storage/declaration.js";
 import type { QueueStore } from "../storage/queue.js";
@@ -8,6 +10,42 @@ import { detectDownloadMode, summarizeQueue } from "./policy.js";
 import { findLiveItemByUrl } from "./lookup.js";
 import { prefValue } from "../contracts/declaration.js";
 import { TERMINAL_STATUSES, type ItemStatus, type QueueItemRecord } from "./types.js";
+
+/**
+ * BG-55 phase 2: Tier 1 (`local_only`) verification.
+ * Returns the absolute path that exists on disk (if any) for the URL's
+ * basename under download_dir. Returns null when the gate doesn't fire
+ * (strategy off / no download_dir / file absent / can't stat).
+ */
+function verifyExistingTier1(
+  url: string,
+  downloadDir: string,
+  output: string | null,
+): string | null {
+  if (!downloadDir) return null;
+  let expectedName: string | null = null;
+  if (output && output.trim()) {
+    const trimmed = output.trim();
+    expectedName = basename(trimmed) === trimmed ? trimmed : null;
+  }
+  if (!expectedName) {
+    try {
+      const u = new URL(url);
+      expectedName = basename(u.pathname) || null;
+    } catch {
+      return null;
+    }
+  }
+  if (!expectedName) return null;
+  const path = isAbsolute(expectedName) ? expectedName : join(downloadDir, expectedName);
+  try {
+    const st = statSync(path);
+    if (st.isFile()) return path;
+  } catch {
+    /* ENOENT or perms — no file */
+  }
+  return null;
+}
 
 export interface AddInput {
   url: string;
@@ -71,6 +109,32 @@ export class QueueOps {
     const defaultRule = String(prefValue(declaration, "post_action_rule", "pending"));
     const resolvedOutput = (input.output?.trim() || null) ?? null;
     const resolvedRule = (input.post_action_rule?.trim() || "") || defaultRule;
+
+    // BG-55: filesystem-first verification gate. If a file with the
+    // expected basename already exists under download_dir, we don't
+    // queue immediately — the operator gets a confirmation row.
+    const strategy = String(
+      prefValue(declaration, "verify_existing_strategy", "local_only"),
+    );
+    const defaultAction = String(
+      prefValue(declaration, "confirm_redownload_default_action", "prompt"),
+    );
+    const downloadDir = String(prefValue(declaration, "download_dir", "") ?? "");
+    let initialStatus: ItemStatus = "queued";
+    let existingPath: string | null = null;
+    let allowOverwriteFlag = false;
+    if (strategy !== "off" && downloadDir) {
+      existingPath = verifyExistingTier1(input.url, downloadDir, resolvedOutput);
+      if (existingPath) {
+        if (defaultAction === "skip") initialStatus = "removed";
+        else if (defaultAction === "rename") initialStatus = "queued";
+        else if (defaultAction === "redownload") {
+          initialStatus = "queued";
+          allowOverwriteFlag = true;
+        } else initialStatus = "awaiting_confirmation";
+      }
+    }
+
     const sid = state.session_id;
     const created_at = this.now();
     const mode = detectDownloadMode({
@@ -85,7 +149,7 @@ export class QueueOps {
       url: input.url,
       output: resolvedOutput,
       post_action_rule: resolvedRule,
-      status: "queued",
+      status: initialStatus,
       desired_state: "running",
       priority: input.priority ?? 0,
       mode,
@@ -99,6 +163,9 @@ export class QueueOps {
         : null,
     };
     if (input.distribute) item.distribute = true;
+    if (existingPath) item.output_path = existingPath;
+    if (allowOverwriteFlag) item.allow_overwrite = true;
+    if (initialStatus === "removed") item.removed_at = created_at;
 
     items.push(item);
     await this.queue.save(items);
@@ -107,7 +174,15 @@ export class QueueOps {
       action: ACTIONS.queueAdd,
       target: TARGETS.queue,
       outcome: "changed",
-      reason: "queue_item_created",
+      reason: existingPath
+        ? initialStatus === "awaiting_confirmation"
+          ? "verify_existing_match"
+          : initialStatus === "removed"
+            ? "duplicate_skipped"
+            : allowOverwriteFlag
+              ? "verify_redownload"
+              : "verify_rename"
+        : "queue_item_created",
       before,
       after: { summary: summarizeQueue(items), item_id: item.id },
       detail: {

@@ -231,6 +231,61 @@ export function registerDownloadsRoutes({ app, deps }: RouteContext): void {
     return { ok: true, item: next };
   });
 
+  // BG-55: verify-then-confirm decision endpoints. Each accepts only an
+  // item that's currently `awaiting_confirmation` and lands an
+  // action-log entry naming the operator's choice.
+  const decideAwaiting = async (
+    id: string,
+    decision: "confirm" | "skip" | "rename",
+    reply: FastifyReply,
+  ): Promise<unknown> => {
+    if (!validateIdParam(id, reply)) return;
+    const found = await loadItemOr404(deps, id, reply);
+    if (!found) return;
+    const { items, item } = found;
+    if (item.status !== "awaiting_confirmation") {
+      return reply
+        .code(409)
+        .send(errorPayload("not_awaiting_confirmation", `item is ${String(item.status)}`));
+    }
+    const before = { ...item };
+    if (decision === "skip") {
+      item.status = "removed";
+      item.removed_at = new Date().toISOString();
+    } else {
+      item.status = "queued";
+      if (decision === "confirm") item.allow_overwrite = true;
+    }
+    await deps.queueStore.save(items);
+    await deps.actionLog.record({
+      action: ACTIONS.queueItemTransition,
+      target: TARGETS.queueItem,
+      outcome: "changed",
+      reason: `confirm_redownload:${decision}`,
+      before: { item: before },
+      after: { item: { ...item } },
+      detail: { item_id: item.id, decision },
+    });
+    if (decision !== "skip" && deps.startScheduler) {
+      const s = await deps.stateStore.load();
+      if (!s.running && !s.paused) {
+        const start = deps.startScheduler;
+        await callStartScheduler(deps.stateStore, () => start());
+      }
+    }
+    return reply.send({ ok: true, item });
+  };
+
+  app.post<{ Params: { id: string } }>("/api/downloads/:id/confirm", (req, reply) =>
+    decideAwaiting(req.params.id, "confirm", reply),
+  );
+  app.post<{ Params: { id: string } }>("/api/downloads/:id/skip", (req, reply) =>
+    decideAwaiting(req.params.id, "skip", reply),
+  );
+  app.post<{ Params: { id: string } }>("/api/downloads/:id/rename", (req, reply) =>
+    decideAwaiting(req.params.id, "rename", reply),
+  );
+
   app.post<{ Params: { id: string } }>("/api/downloads/:id/files", async (req, reply) => {
     const obj = requireObjectBody(req.body, reply, "expected {select: [1, 3, 5]}");
     if (!obj) return;

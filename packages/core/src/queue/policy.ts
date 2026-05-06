@@ -3,6 +3,7 @@ import { ITEM_STATUSES, type DownloadMode, type ItemStatus, type QueueItemRecord
 const ALLOWED_ACTIONS: Record<ItemStatus, readonly string[]> = {
   discovering: [],
   queued: ["pause", "remove"],
+  awaiting_confirmation: ["confirm", "skip", "rename", "remove"],
   waiting: ["pause", "remove"],
   active: ["pause", "remove"],
   paused: ["resume", "remove"],

@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-55 (resolved — Tier 1 + decision endpoints; Tier 2/3 deferred) — original frontend brief retained for context</summary>
 
 ### BG-55: Verify-then-confirm flow for re-add of an already-downloaded URL
 
@@ -159,6 +162,8 @@ care about server-side updates should pick a stricter tier.
 - Add the new status to `ITEM_STATUSES` and the filter buckets.
 - Surface `awaiting_confirmation` count in the filter bar (e.g.
   between `active` and `paused`).
+
+</details>
 
 ---
 
@@ -794,6 +799,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-55 | Tier 1 verify-then-confirm landed (Tier 2/3 deferred — file infra in place when wanted). Phase 1: `output_path` + optional `remote_etag`/`remote_last_modified` fields on `QueueItemRecord`; `scheduler/poll.ts` captures `output_path` from `tellStatus(gid).files[0].path` on completion. Phase 2: new `awaiting_confirmation` status added to `ITEM_STATUSES` + `ALLOWED_ACTIONS` (confirm/skip/rename/remove). New declaration prefs `verify_existing_strategy` (default `local_only`, options off/local_only/local_and_remote_head/local_and_sampled_hash) and `confirm_redownload_default_action` (default `prompt`, options prompt/skip/rename/redownload). `QueueOps.add` runs `verifyExistingTier1` (stat `<download_dir>/<basename(url) or output>`); on hit, applies the default action — `prompt` → status `awaiting_confirmation`, `skip` → `removed`+`duplicate_skipped`, `rename` → `queued` (BG-54 auto-rename), `redownload` → `queued` with `allow_overwrite` flag. `dispatch.ts` honors per-item `allow_overwrite` (defaults remain BG-54 safe). Three new endpoints `POST /api/downloads/:id/{confirm,skip,rename}` flip status + log `confirm_redownload:<decision>`; confirm/rename auto-kick the scheduler when drained. Tier 2 (HEAD probe) and Tier 3 (sampled hash) not implemented — strategy field accepts those values but currently behaves as Tier 1 | 2026-05-06 |
 | BG-54 | Dropped hardcoded `"allow-overwrite": "true"` from `baseOptions` in `packages/core/src/aria2/dispatch.ts`. aria2 now falls back to its default (`allow-overwrite: false` + `auto-file-renaming: true`), so re-adding a completed URL produces `<name>.1` instead of silently clobbering the existing file. `continue: true` still resumes partials via the `.aria2` control file regardless of overwrite setting. Test assertion updated in `dispatch.test.ts` | 2026-05-06 |
 | BG-53 | Per-download `max-download-limit` is now refreshed alongside the global cap on every probe. After `setMaxOverallDownloadLimit`, both `routes/bandwidth.ts` (manual `POST /api/bandwidth/probe`) and the BG-52 periodic timer in `_scheduler_controller.ts` walk `tellActive(["gid"])` and call `setMaxDownloadLimit(client, gid, cap)` for each in-flight transfer. Per-gid failures are swallowed individually so one bad gid doesn't block the rest; if `tellActive` itself fails, the global cap is still applied | 2026-05-06 |
 | BG-52 | Periodic bandwidth probe wired in `_scheduler_controller.ts`. After the loop launches, a `setInterval` re-runs `runBandwidthProbe` every `bandwidth_probe_interval_seconds` while `state.running && !state.paused && state.active_gid` (re-reading the declaration each tick so live changes apply). Each run updates `state.last_bandwidth_probe`/`last_bandwidth_probe_at`, applies the new cap to aria2 via `setMaxOverallDownloadLimit`/`setMaxOverallUploadLimit` (in-flight transfers adapt live), and records an action-log entry with `reason: "scheduler_periodic"`. Timer is `unref`'d, cleared on stop/crash/normal exit; interval≤0 disables | 2026-05-06 |
