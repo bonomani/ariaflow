@@ -8,7 +8,6 @@ import type { ActionLog } from "../storage/action-log.js";
 import type { DeclarationStore } from "../storage/declaration.js";
 import type { QueueStore } from "../storage/queue.js";
 import { buildPrivateTorrent } from "../torrent/build.js";
-import type { QueueItemRecord } from "../queue/types.js";
 
 export interface PostActionDeps {
   queueStore: QueueStore;

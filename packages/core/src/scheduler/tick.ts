@@ -5,7 +5,7 @@ import type { ActionLog } from "../storage/action-log.js";
 import type { DeclarationStore } from "../storage/declaration.js";
 import type { QueueStore } from "../storage/queue.js";
 import { maxSimultaneousDownloads } from "../transfers/helpers.js";
-import { TERMINAL_STATUSES, type ItemStatus } from "../queue/types.js";
+import { type ItemStatus } from "../queue/types.js";
 import { isRetryReady } from "./retry.js";
 
 export interface SchedulerTickDeps {
