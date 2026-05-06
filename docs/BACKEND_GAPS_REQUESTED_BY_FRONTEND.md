@@ -11,7 +11,55 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-59: Manual `check_update` endpoint for ariaflow-server (read-only probe)
+
+**Paired frontend gap:** FE-51 (FE button + state already shipped; backend endpoint pending)
+
+**Why:** the operator wants a "Check for update" button on the
+ariaflow-server System Health row that probes the package manager for
+an available upgrade *without* dispatching it. The current BG-45
+auto-update poller does check + dispatch internally, but there's no way
+to trigger just the check from the UI on demand. Same pattern just
+shipped for the dashboard side
+(`POST /api/web/lifecycle/ariaflow-dashboard/check_update`).
+
+**Requested endpoint:**
+
+```
+POST /api/lifecycle/ariaflow-server/check_update
+  → { ok: true,
+      installed_via: "homebrew" | "pipx" | "npm" | "source" | null,
+      current_version: string,
+      latest_version: string | null,
+      update_available: boolean | null
+    }
+```
+
+**Behaviour:**
+
+- Reuses whatever package-manager probe the BG-45 poller already uses
+  internally (`brew outdated --json --formula ariaflow-server` or the
+  pipx/npm equivalent). Just expose it as an endpoint.
+- Read-only: no `brew upgrade` dispatched.
+- Source installs return `{ok: false, error: "source_install"}`.
+- Action log entry per call (`action: "check_update", target:
+  "ariaflow-server", outcome: "unchanged" | "changed" | "failed"`).
+
+**FE state today:** `checkBackendUpdate()` already POSTs to that path;
+returns "Check failed (404)" until backend ships.
+
+**Acceptance:**
+
+1. POST on homebrew install, no upgrade: `{ok, update_available: false}`.
+2. POST on homebrew install with newer bottle: `{ok, update_available: true, latest_version: <newer>}`.
+3. POST on source install: `{ok: false, error: "source_install"}`.
+4. Action log shows the probe outcome.
+
+**FE follow-up:** none. Already wired.
+
+---
 
 <details>
 <summary>BG-58 (resolved) — original frontend brief retained for context</summary>
