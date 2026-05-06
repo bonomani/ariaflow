@@ -11,7 +11,84 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-60: Resolve absolute path to `brew` — `spawn("brew", ...)` fails under launchd
+
+**Paired frontend gap:** none (operator-visible bug; FE just shows the
+`Check failed (...ENOENT brew)` string when it surfaces).
+
+**Symptom:** clicking "Check for update" on the ariaflow-server row
+returns `[Errno 2] No such file or directory: 'brew'` (or the
+JS / Node equivalent `spawn ENOENT brew`). Same crash will hit BG-45's
+periodic auto-update poller silently — the operator's auto-update
+toggle never actually does anything when ariaflow-server runs under
+launchd.
+
+**Root cause:** macOS launchd spawns processes with a minimal default
+PATH (`/usr/bin:/bin:/usr/sbin:/sbin`) which excludes `/opt/homebrew/bin`
+where brew lives on Apple Silicon, and `/usr/local/bin` on Intel /
+Linuxbrew. Two call sites pass the bare command name to spawn:
+
+```
+packages/core/src/install/check_update.ts:27
+  const proc = spawn("brew", ["outdated", "--json=v2", formula], { ... });
+
+packages/cli/src/commands/_auto_update_controller.ts:34
+  const proc = spawn("brew", ["outdated", "--json=v2", "ariaflow-server"], { ... });
+```
+
+Same fix landed FE-side this commit (`ariaflow-dashboard
+src/ariaflow_dashboard/install_self.py`'s
+`_resolve_pkg_manager()`) — backend should mirror.
+
+**Recommended fix:** add a small helper that resolves `brew` (and
+`pipx`, when wired) by checking `process.env.PATH` first, then known
+locations:
+
+```ts
+function resolvePkgManager(name: string): string {
+  // 1. PATH lookup (succeeds under login shell; fails under launchd)
+  const fromPath = which(name);
+  if (fromPath) return fromPath;
+  // 2. Known install locations
+  const candidates = [
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "/home/linuxbrew/.linuxbrew/bin",
+    `${process.env.HOME}/.local/bin`,
+  ];
+  for (const dir of candidates) {
+    const candidate = join(dir, name);
+    if (statSync(candidate, { throwIfNoEntry: false })?.isFile()) return candidate;
+  }
+  // 3. Fall through with bare name; spawn will ENOENT and the
+  //    caller's catch already handles it.
+  return name;
+}
+```
+
+Use it at both spawn sites above. Same pattern for any future pipx /
+npm / pip dispatches.
+
+**Acceptance:**
+
+1. Run ariaflow-server under launchd (the standard macOS install path).
+2. POST `/api/lifecycle/ariaflow-server/check_update` → 200 with the
+   real probe result (not ENOENT).
+3. Toggle auto-update on, set interval to 1 minute, wait → action log
+   shows `auto_update_check` entries with `outcome: "unchanged"` /
+   `"changed"`, never `outcome: "failed", reason: "ENOENT"`.
+4. macOS Intel + Linux test environments still resolve correctly via
+   path-3 fallbacks.
+
+**FE follow-up:** none. The FE already surfaces backend errors via the
+result span on the Check button — once BG-60 lands, the button shows
+real probe output instead of the ENOENT string.
+
+---
+
+
 
 <details>
 <summary>BG-59 (resolved) — original frontend brief retained for context</summary>
