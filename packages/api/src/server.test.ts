@@ -1442,6 +1442,74 @@ describe("scheduler routes", () => {
   });
 });
 
+describe("BG-49: scheduler action endpoints return canonical state envelope", () => {
+  it("POST /api/scheduler/pause returns canonical state envelope", async () => {
+    const res = await app.inject({ method: "POST", url: "/api/scheduler/pause" });
+    const body = res.json();
+    expect(body.state).toMatchObject({
+      dispatch_paused: true,
+      running: false,
+    });
+    expect(typeof body.state.scheduler_status).toBe("string");
+    expect(body.state).toHaveProperty("session_id");
+    expect(typeof body.state._rev).toBe("number");
+  });
+
+  it("POST /api/scheduler/resume returns state with dispatch_paused=false", async () => {
+    await app.inject({ method: "POST", url: "/api/scheduler/pause" });
+    const res = await app.inject({ method: "POST", url: "/api/scheduler/resume" });
+    expect(res.json().state).toMatchObject({
+      dispatch_paused: false,
+      running: false,
+    });
+  });
+
+  it("POST /api/scheduler/start returns state.scheduler_status reflecting post-start state", async () => {
+    const { app: wired, state } = await makeWiredServer(dir, {
+      startScheduler: async () => {
+        await state.update((s) => {
+          s.running = true;
+        });
+        return { started: true, reason: "started" };
+      },
+    });
+    try {
+      const res = await wired.inject({ method: "POST", url: "/api/scheduler/start" });
+      const body = res.json();
+      expect(body.state).toMatchObject({
+        running: true,
+        dispatch_paused: false,
+      });
+      expect(typeof body.state.scheduler_status).toBe("string");
+    } finally {
+      await wired.close();
+    }
+  });
+
+  it("POST /api/scheduler/stop returns state.scheduler_status='stopped'", async () => {
+    const { app: wired, state } = await makeWiredServer(dir, {
+      stopScheduler: async () => {
+        await state.update((s) => {
+          s.running = false;
+        });
+        return { stopped: true, reason: "stopped" };
+      },
+    });
+    try {
+      await state.update((s) => {
+        s.running = true;
+      });
+      const res = await wired.inject({ method: "POST", url: "/api/scheduler/stop" });
+      expect(res.json().state).toMatchObject({
+        scheduler_status: "stopped",
+        running: false,
+      });
+    } finally {
+      await wired.close();
+    }
+  });
+});
+
 describe("BG-25: scheduler start/stop lifecycle", () => {
   it("POST /api/scheduler/start 503s when no startScheduler dep is wired", async () => {
     const res = await app.inject({ method: "POST", url: "/api/scheduler/start" });

@@ -12,6 +12,23 @@ import {
 import { withMeta } from "../freshness.js";
 import type { RouteContext } from "./_context.js";
 import { computeSchedulerStatus } from "./_scheduler_status.js";
+import type { ServerDeps } from "../server.js";
+import type { ServerState } from "@ariaflow/core";
+
+// BG-49: canonical post-action state envelope returned by every scheduler
+// action endpoint so the FE can splat it into `lastStatus.state` and skip
+// optimistic guesses. Mirrors the subset of `state` the dashboard reads
+// from /api/status.
+async function buildStateEnvelope(deps: ServerDeps, state: ServerState) {
+  const { status } = await computeSchedulerStatus(deps, state);
+  return {
+    scheduler_status: status,
+    running: Boolean(state.running),
+    dispatch_paused: Boolean(state.paused),
+    session_id: state.session_id,
+    _rev: Number(state._rev ?? 0),
+  };
+}
 
 export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
   app.get("/api/scheduler", async () => {
@@ -54,7 +71,12 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
       reason: "api_request",
       detail: { aria2_pause_all: aria2Paused },
     });
-    return { ok: true, paused: next.paused, _rev: Number(next._rev ?? 0) };
+    return {
+      ok: true,
+      paused: next.paused,
+      _rev: Number(next._rev ?? 0),
+      state: await buildStateEnvelope(deps, next),
+    };
   });
 
   // BG-48: /api/scheduler/contract is the operator-facing name.
@@ -195,11 +217,13 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
       const start = deps.startScheduler;
       startResult = await callStartScheduler(deps.stateStore, () => start());
     }
+    const post2 = await deps.stateStore.load();
     return {
       ok: true,
       paused: next.paused,
-      _rev: Number(next._rev ?? 0),
+      _rev: Number(post2._rev ?? next._rev ?? 0),
       ...(startResult ? { started: startResult.started, start_reason: startResult.reason } : {}),
+      state: await buildStateEnvelope(deps, post2),
     };
   });
 
@@ -216,7 +240,13 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
     }
     const before = await deps.stateStore.load();
     if (before.running) {
-      return { ok: true, started: false, reason: "already_running", running: true };
+      return {
+        ok: true,
+        started: false,
+        reason: "already_running",
+        running: true,
+        state: await buildStateEnvelope(deps, before),
+      };
     }
     const start = deps.startScheduler;
     const result = await callStartScheduler(deps.stateStore, () => start());
@@ -233,6 +263,7 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
       reason: result.reason,
       running: Boolean(after.running),
       _rev: Number(after._rev ?? 0),
+      state: await buildStateEnvelope(deps, after),
     };
   });
 
@@ -252,7 +283,14 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
         stopped: false,
         reason: "not_running",
       }));
-      return { ok: true, stopped: false, reason: "not_running", running: false };
+      const after = await deps.stateStore.load();
+      return {
+        ok: true,
+        stopped: false,
+        reason: "not_running",
+        running: false,
+        state: await buildStateEnvelope(deps, after),
+      };
     }
     const result = await callStopScheduler(deps.stateStore, () => stop());
     const after = await deps.stateStore.load();
@@ -268,6 +306,7 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
       reason: result.reason,
       running: Boolean(after.running),
       _rev: Number(after._rev ?? 0),
+      state: await buildStateEnvelope(deps, after),
     };
   });
 }

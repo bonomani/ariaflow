@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-49 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-49: Return canonical post-action state from /api/scheduler/{start,stop,pause,resume}
 
@@ -70,6 +73,8 @@ post-action enum, not a guess.
 1. All four routes return `state: { scheduler_status, running, dispatch_paused, session_id, _rev }`.
 2. The `state` block matches what `GET /api/status` would return immediately after.
 3. Tests: assert `state.scheduler_status === 'starting'` after /start, `=== 'stopped'` after /stop, `=== 'paused'` after /pause, `=== 'running' | 'idle'` after /resume (depending on whether there's an active gid).
+
+</details>
 
 ---
 
@@ -291,6 +296,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-49 | All four scheduler action routes (`/api/scheduler/{start,stop,pause,resume}`) now return a canonical `state: { scheduler_status, running, dispatch_paused, session_id, _rev }` envelope alongside their existing flat fields. New `buildStateEnvelope(deps, state)` helper in `routes/scheduler.ts` reuses `computeSchedulerStatus` so the `scheduler_status` value matches what `GET /api/status` would return immediately after. Existing flat `started/stopped/paused/_rev` fields stay for back-compat. Note: `scheduler_status` reflects current state — when scheduler intent is "stopped", a /pause flips `dispatch_paused` but keeps `scheduler_status:"stopped"` (intent unchanged); test assertions match that semantic. 4 new tests in BG-49 describe block | 2026-05-06 |
 | BG-48 | New `POST /api/scheduler/contract` endpoint registered alongside `/api/scheduler/ucc`; both delegate to the same handler. Action-log token flipped from `"ucc"` to `"contract"` for both routes — `ACTIONS.schedulerUcc` kept as a deprecated alias of `ACTIONS.schedulerContract` so existing `ACTIONS.X` callers don't have to update in lock-step (both resolve to `"contract"`). `meta.contract` field shape unchanged (`{contract: "UCC", version: "2.0"}`); the FE doesn't need that value renamed (per BG-48 brief — only the wire-name was the concern). One test renamed to assert `action: "contract"`; one new test covers the `/contract` route shape | 2026-05-05 |
 | BG-47 | `deriveWaitReason()` reordered: `queue_empty` is now checked before `bandwidth_probe_pending`, so an empty queue with no probe yet correctly reads `idle · queue empty` instead of "probe pending". Hard blockers (`aria2_unreachable` / `preflight_blocked` / `disk_full`) still win first. The probe itself isn't gated on queue contents — it runs once at scheduler-loop startup as a preloop step (`packages/cli/src/commands/_scheduler_controller.ts`); that's fine because the wait_reason now correctly defaults to `queue_empty` when there's nothing to schedule. One probe-pending test split into two so the assertion isolates the probe path with a pending item; one new test covers the BG-47 reorder explicitly | 2026-05-05 |
 | BG-46 | `installed_via` now exposed on `lifecycle.aria2.result`, detected from the resolved `aria2c` path via the new `detectBinaryInstalledVia(binPath)` helper (shared logic with `detectAriaflowInstalledVia`, "source" verdict suppressed for third-party binaries). New action `POST /api/lifecycle/aria2/update` mirrors the ariaflow-server update flow: `brew upgrade aria2` (homebrew) / 409 with explanatory error for pipx/npm (aria2 isn't distributed via those) / 409 unknown_installer when path doesn't match. Detached subprocess + post-`reply.raw.finish` side-effect pattern reused from BG-43 | 2026-05-05 |
