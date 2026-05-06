@@ -14,6 +14,84 @@
 ## Open (0)
 
 <details>
+<summary>BG-51 (withdrawn — false alarm) — original brief retained for context</summary>
+
+### BG-51 (WITHDRAWN): Scheduler stuck `idle` (no wait_reason) after Add kicks it
+
+Filed 2026-05-06 then withdrawn the same day. Operator initially
+reported "stays like that forever" but both items did dispatch and
+complete within ~12s. The auto-kick logic at `downloads.ts:56-64`
+worked correctly; the perceived hang was just dispatch latency.
+
+No action needed.
+
+</details>
+
+---
+
+<details>
+<summary>BG-51 (original brief)</summary>
+
+### BG-51: Scheduler stuck `idle` (no wait_reason) after Add kicks it
+
+**Paired frontend gap:** FE-41 (no FE change — backend dispatch hole)
+
+**Symptom on the dashboard (v0.1.515):**
+
+1. Queue empty, scheduler idle (`idle · queue empty`).
+2. Operator adds a download (https://releases.ubuntu.com/26.04/ubuntu-26.04-desktop-amd64.iso).
+3. Backend POST `/api/downloads` succeeds; queued item appears.
+4. Backend's auto-kick logic (`downloads.ts:56-64` —
+   `!s.running && !s.paused && created.some(c => !c.duplicate)` →
+   `callStartScheduler`) fires.
+5. Badge transitions to plain `idle` (no wait_reason). **Item stays
+   queued forever.** No retry, no error, no bandwidth probe pending.
+
+The `wait_reason` is `null` despite an idle scheduler with a queued
+item. Per `deriveWaitReason` (status.ts:83-98), `null` means: aria2
+reachable + preflight ok + disk ok + queue NOT empty + probe fresh →
+nothing should be blocking dispatch. Yet nothing dispatches.
+
+**Hypothesis:**
+
+- `callStartScheduler` sets intent=running and the loop runs one
+  iteration but exits without dispatching (no apparent reason from the
+  derivation contract).
+- OR the loop is running (running=true, no active_gid) but the
+  dispatcher tier isn't actually picking the queued item up.
+
+The wire contract says "idle + null wait_reason" should never persist
+when there's work to do. Either the loop is exiting early (and a
+wait_reason should reflect why), or the dispatcher isn't tied to the
+queue change event.
+
+**Reproduction:**
+
+1. Start with empty queue, scheduler running (idle · queue empty).
+2. POST a single non-duplicate URL to `/api/downloads`.
+3. Wait. Item should transition to `active` within seconds (aria2
+   gid assigned). Currently it stays `queued` indefinitely.
+
+**Acceptance:**
+
+1. After Add into a drained-idle scheduler, the queued item enters
+   `active` (or `discovering` for metalinks/torrents) within one
+   scheduler tick.
+2. If for any reason the loop can't dispatch, `wait_reason` reflects
+   the reason (new value if needed, e.g. `loop_not_running`).
+3. The "idle + null wait_reason + non-empty queue" combination is
+   impossible by contract.
+
+No FE change needed: dashboard renders whatever `state.scheduler_status`
+and `state.wait_reason` report. Once the dispatch hole is closed, the
+operator sees `running` (or a meaningful wait_reason) instead of
+silent idle.
+
+---
+
+
+
+<details>
 <summary>BG-50 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-50: `deriveSchedulerStatus` should report `paused` when paused, even if loop is drained
