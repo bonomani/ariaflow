@@ -11,7 +11,67 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-49: Return canonical post-action state from /api/scheduler/{start,stop,pause,resume}
+
+**Paired frontend gap:** FE-39 (FE currently guesses `scheduler_status` optimistically after each action)
+
+**Why:** Today the four scheduler action endpoints return four different
+flat shapes:
+
+| Route | Returns |
+|---|---|
+| `POST /api/scheduler/start` | `{ok, started, running, ...}` |
+| `POST /api/scheduler/stop` | `{ok, stopped, ...}` |
+| `POST /api/scheduler/pause` | `{ok, paused: true, _rev}` |
+| `POST /api/scheduler/resume` | `{ok, paused: false, _rev, ...}` (no `resumed` field — success means `paused === false`) |
+
+The FE just shipped a fix (v0.1.508) that handles all four explicitly,
+but it still has to *guess* what `scheduler_status` will become because
+the response doesn't include it. The optimistic enum write
+(`scheduler_status='starting'` after /start, `'paused'` after /pause,
+etc.) is a best-effort patch until SSE / next poll arrives.
+
+This guess can be wrong: e.g. /start on a system that immediately has
+work to do skips 'starting' and goes to 'running'. The FE flickers
+'starting → running'. Worse, on /resume the FE has to inspect
+`currentTransfer` to decide between 'running' and 'idle' — duplicating
+backend logic that already lives in `deriveSchedulerStatus`.
+
+**Proposal:** every scheduler action response includes the canonical
+post-action state envelope, so the FE can splat it into `lastStatus.state`
+and skip optimism entirely:
+
+```json
+{
+  "ok": true,
+  "started": true,
+  "state": {
+    "scheduler_status": "starting",
+    "running": true,
+    "dispatch_paused": false,
+    "session_id": "...",
+    "_rev": 42
+  }
+}
+```
+
+Same `state` block on /stop, /pause, /resume. Existing flat fields
+(`started`, `stopped`, `paused`) stay for back-compat for one release.
+
+**Impact:** FE `schedulerAction()` and `_pauseResume()` can drop the
+optimistic-write logic (~15 lines) and the `currentTransfer`-based
+'running vs idle' guess on /resume. UI flips instantly to the *real*
+post-action enum, not a guess.
+
+**Acceptance:**
+
+1. All four routes return `state: { scheduler_status, running, dispatch_paused, session_id, _rev }`.
+2. The `state` block matches what `GET /api/status` would return immediately after.
+3. Tests: assert `state.scheduler_status === 'starting'` after /start, `=== 'stopped'` after /stop, `=== 'paused'` after /pause, `=== 'running' | 'idle'` after /resume (depending on whether there's an active gid).
+
+---
 
 <details>
 <summary>BG-48 (resolved) — original frontend brief retained for context</summary>
