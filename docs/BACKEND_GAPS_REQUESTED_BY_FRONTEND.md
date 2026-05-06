@@ -11,7 +11,59 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-62: Chain `brew upgrade` with bootout+bootstrap so the server runs the new bottle
+
+**Symptom:** click Update on the ariaflow-server row → upgrade succeeds
+→ brew cleanup deletes old Cellar → running Node process keeps its
+`__dirname` paths into the deleted dir → stale code / 404s on assets
+until manual Restart. Same class of bug the dashboard just fixed in
+v0.1.552 (chained shell `brew upgrade && launchctl bootout; launchctl
+bootstrap`).
+
+**Root cause** at `packages/api/src/routes/_lifecycle_actions.ts:123`:
+
+```ts
+after: () => detached(resolvePkgManager("brew"), ["upgrade", "ariaflow-server"]),
+```
+
+Plus the symmetric pipx call at line 130. Auto-update poller
+(`packages/cli/src/commands/_auto_update_controller.ts`) has the same
+gap — fires brew upgrade without any restart afterwards, so
+periodic upgrades silently leave the server on stale code.
+
+**Fix** (mirrors `ariaflow-dashboard install_self.py`):
+
+```ts
+const brew = resolvePkgManager("brew");
+const target = `gui/${process.getuid()}/${label}`;
+const domain = `gui/${process.getuid()}`;
+const plist = path.join(os.homedir(), "Library/LaunchAgents", `${label}.plist`);
+const chain = autoRestart && fs.existsSync(plist)
+  ? `${brew} upgrade ariaflow-server && launchctl bootout ${target} 2>/dev/null; launchctl bootstrap ${domain} ${plist}`
+  : `${brew} upgrade ariaflow-server`;
+after: () => detached("sh", ["-c", chain]),
+```
+
+Gate on `autoRestart` (new BG-45 declaration pref `auto_restart_after_upgrade`,
+default true). Falls back to upgrade-only on non-launchd / when plist
+not in the standard location. Same wiring for the auto-update
+controller.
+
+**Acceptance:**
+
+1. Update click → after ~5-10s, `/api/lifecycle` returns the new
+   ariaflow-server version + new PID, no manual restart.
+2. Auto-update poller + auto_restart pref both true → cycle runs
+   end-to-end without operator action.
+3. Operator can opt out via `auto_restart_after_upgrade: false`;
+   restart then becomes manual (existing behaviour).
+
+**FE follow-up:** none. Version chip already reflects whatever
+`/api/lifecycle.result.version` reports.
+
+---
 
 <details>
 <summary>BG-61 (resolved) — original frontend brief retained for context</summary>
