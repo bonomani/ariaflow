@@ -131,7 +131,13 @@ export function dispatchAriaflowUpdate(
       : () => detached("sh", ["-c", cmd]);
 
   if (installedVia === "homebrew") {
-    const cmd = `${resolvePkgManager("brew")} upgrade ariaflow-server`;
+    // BG-66: re-link before the restart so an "installed but not
+    // linked" cellar (interrupted install / manual unlink / install.sh
+    // race) is recovered too. Idempotent: succeeds whether the
+    // formula is already linked, just installed, or both. 2>/dev/null
+    // because brew prints diagnostics on the no-op path.
+    const brew = resolvePkgManager("brew");
+    const cmd = `${brew} upgrade ariaflow-server ; ${brew} link --overwrite ariaflow-server 2>/dev/null`;
     return {
       status: 202,
       body: {

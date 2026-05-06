@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-66 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-66: Update chain should re-link before bootstrap (unlinked-cellar recovery)
 
@@ -88,6 +91,8 @@ the chain, matches what an operator would type manually to recover.
 `_chain_restart`) has the same `;`-only chain — should also gain a
 `brew link --overwrite` step. That's an FE change, separate commit
 to keep the FE/BE diffs aligned.
+
+</details>
 
 ---
 
@@ -1543,6 +1548,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-66 | Both homebrew upgrade chains now insert `brew link --overwrite ariaflow-server 2>/dev/null` between `brew upgrade` and the restart so an "installed but not linked" cellar (interrupted install / manual unlink / install.sh race) recovers automatically. Idempotent: succeeds whether the formula is already linked, just installed, or both. Sites: `dispatchAriaflowUpdate` (homebrew branch only — pipx/npm have no link concept) and `applyUpdate` in the auto-update controller | 2026-05-06 |
 | BG-65 | Both upgrade-then-restart chains switched from `&&` to `;` (`api/_lifecycle_actions.ts` `dispatchAriaflowUpdate`, `cli/_auto_update_controller.ts` `applyUpdate`). A no-op `brew upgrade` (stale cellar case — running version lags installed) now still triggers the bootout+bootstrap so the running process realigns to the cellar. Trade-off accepted in the brief: a failed upgrade still bounces, briefly, on the unchanged version | 2026-05-06 |
 | BG-64 | `last_probed_at` (epoch seconds, `Math.floor(Date.now()/1000)`) stamped on every `result` block in `/api/lifecycle` (`buildAriaflowServerRow`, `buildAria2Row`, `buildNetworkqualityRow` in `_lifecycle_rows.ts`). Same field added to the BG-63 `lifecycle_changed` SSE payload (`LifecycleSnapshot`); the diff function ignores it so a fresh timestamp alone doesn't trigger an emit | 2026-05-06 |
 | BG-63 | New `createLifecycleProbeController` in `cli/_lifecycle_probe_controller.ts` runs a snapshot every `lifecycle_probe_interval_seconds` (default 60; 0 disables) covering `aria2_running` (probeAria2Reachable), `aria2_installed` (findAria2c), `networkquality_installed` (findNetworkQuality), `auto_start_installed` (aria2AutoStartInstalled). On any axis flip it `bus.publish("lifecycle_changed", snapshot)` (already mapped to topic `lifecycle` in `event-topics.ts`) and lands an action-log entry `system_lifecycle / lifecycle_probe_flip`. Skips when `scheduler_intent === "stopped"` so background work pauses with operator intent. Wired in `cmdServe` alongside the auto-update controller; stops cleanly on close. New `lifecycle_probe_interval_seconds` declaration pref | 2026-05-06 |

@@ -68,12 +68,17 @@ function applyUpdate(installedVia: AriaflowInstalledVia, autoRestart: boolean): 
   };
   if (installedVia !== "homebrew") return;
   const brew = resolvePkgManager("brew");
+  // BG-66: re-link between upgrade and restart so an unlinked cellar
+  // (interrupted install / manual unlink) is recovered. Idempotent.
+  const upgradeAndLink =
+    `${brew} upgrade ariaflow-server ; ` +
+    `${brew} link --overwrite ariaflow-server 2>/dev/null`;
   const restartSuffix = autoRestart ? buildPostUpgradeRestartSuffix() : null;
   if (restartSuffix) {
     // BG-65: ';' not '&&' so a no-op upgrade (stale cellar) still restarts.
-    detached("sh", ["-c", `${brew} upgrade ariaflow-server ; ${restartSuffix}`]);
+    detached("sh", ["-c", `${upgradeAndLink} ; ${restartSuffix}`]);
   } else {
-    detached(brew, ["upgrade", "ariaflow-server"]);
+    detached("sh", ["-c", upgradeAndLink]);
   }
 }
 
