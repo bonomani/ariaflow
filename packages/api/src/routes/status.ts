@@ -156,7 +156,9 @@ export function registerStatusRoute({ app, deps, metrics }: RouteContext): void 
         "ariaflow-server": buildIdentity(deps),
         health,
         items: filtered,
-        summary: summarizeQueue(filtered),
+        // BG-57: summary describes the queue, not the filtered slice — the
+        // FE filter bar reads its counts here regardless of which filter is on.
+        summary: summarizeQueue(items),
         state: stateOut,
         bandwidth: buildBandwidthBlock(state),
         _rev: Number(state._rev ?? 0),

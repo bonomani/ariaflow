@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-57 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-57: `/api/status` summary should be of the *unfiltered* queue
 
@@ -57,6 +60,8 @@ unless the operator already filters to that bucket.
 
 **FE follow-up:** none. The FE already trusts the backend summary
 for the filter bar.
+
+</details>
 
 ---
 
@@ -965,6 +970,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-57 | `/api/status` summary now describes the unfiltered queue. `routes/status.ts` was passing the post-`applyFilters` slice to `summarizeQueue`, so any non-empty `?status=` made every other filter-bar count read 0. One-line fix: `summarizeQueue(items)` instead of `summarizeQueue(filtered)`; `items: filtered` stays so the visible list still respects the filter | 2026-05-06 |
 | BG-56 | Folder ops within `<download_dir>` shipped via new `packages/api/src/routes/files.ts`. Five endpoints — `GET /api/files` (single-level by default; `?recursive=true` capped at depth 3; joins each entry against the queue history via `output_path` for `history_match`), `POST /api/files/rename` ({path,new_name}; new_name must be a bare filename), `POST /api/files/move` ({path,new_subdir}), `DELETE /api/files` ({path,recursive?}; non-empty dir without `recursive: true` → 409), `POST /api/files/clean` ({status?,older_than_days?,orphaned?}; `orphaned: true` is reconcile-only, no disk side-effect). Path safety: `resolveSafe` realpath-canonicalizes the target (or its parent for non-existing destinations) and rejects anything that resolves outside the realpath of `<download_dir>`, plus a sep-aware `..`-traversal check before realpath to defeat symlink-creation races. After every mutation, queue rows whose `output_path` matches the source are updated (rename/move) or flagged `file_present_on_disk: false` (delete). Action-log entries use new `ACTIONS.file{Rename,Move,Delete,Clean}` + `TARGETS.files`. New optional `file_present_on_disk` field on `QueueItemRecord` | 2026-05-06 |
 | BG-55 | Tier 1 verify-then-confirm landed (Tier 2/3 deferred — file infra in place when wanted). Phase 1: `output_path` + optional `remote_etag`/`remote_last_modified` fields on `QueueItemRecord`; `scheduler/poll.ts` captures `output_path` from `tellStatus(gid).files[0].path` on completion. Phase 2: new `awaiting_confirmation` status added to `ITEM_STATUSES` + `ALLOWED_ACTIONS` (confirm/skip/rename/remove). New declaration prefs `verify_existing_strategy` (default `local_only`, options off/local_only/local_and_remote_head/local_and_sampled_hash) and `confirm_redownload_default_action` (default `prompt`, options prompt/skip/rename/redownload). `QueueOps.add` runs `verifyExistingTier1` (stat `<download_dir>/<basename(url) or output>`); on hit, applies the default action — `prompt` → status `awaiting_confirmation`, `skip` → `removed`+`duplicate_skipped`, `rename` → `queued` (BG-54 auto-rename), `redownload` → `queued` with `allow_overwrite` flag. `dispatch.ts` honors per-item `allow_overwrite` (defaults remain BG-54 safe). Three new endpoints `POST /api/downloads/:id/{confirm,skip,rename}` flip status + log `confirm_redownload:<decision>`; confirm/rename auto-kick the scheduler when drained. Tier 2 (HEAD probe) and Tier 3 (sampled hash) not implemented — strategy field accepts those values but currently behaves as Tier 1 | 2026-05-06 |
 | BG-54 | Dropped hardcoded `"allow-overwrite": "true"` from `baseOptions` in `packages/core/src/aria2/dispatch.ts`. aria2 now falls back to its default (`allow-overwrite: false` + `auto-file-renaming: true`), so re-adding a completed URL produces `<name>.1` instead of silently clobbering the existing file. `continue: true` still resumes partials via the `.aria2` control file regardless of overwrite setting. Test assertion updated in `dispatch.test.ts` | 2026-05-06 |
