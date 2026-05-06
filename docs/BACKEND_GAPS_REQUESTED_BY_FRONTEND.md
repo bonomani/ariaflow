@@ -11,7 +11,68 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-52: Bandwidth probe never re-runs — `bandwidth_probe_interval_seconds` is dead
+
+**Paired frontend gap:** FE-42 (FE renders "overdue" warning correctly; just waiting for probe to actually re-fire)
+
+**Symptom on the dashboard:** with a download in flight, the bandwidth
+panel shows `Probed 8m 13s ago` with an `overdue` chip. `auto every 180s`
+is configured. The probe never re-runs unless the operator clicks
+"Run probe" manually.
+
+**What's broken:**
+
+1. Operator declares `bandwidth_probe_interval_seconds: 180` (default,
+   declaration.ts:44).
+2. Backend reads this value:
+   - In `deriveWaitReason` (`status.ts:93`) to compute probe staleness
+     for `bandwidth_probe_pending`
+   - In `_scheduler_status.ts:49` to expose it on the wire
+3. **Nothing schedules a periodic probe.** The probe runs only at
+   `_scheduler_controller.ts:87` (one-shot at scheduler preloop) and
+   on manual `POST /api/bandwidth/probe`.
+4. After 180s, `deriveWaitReason` correctly classifies the probe as
+   stale → `bandwidth_probe_pending`. Except wait_reason is null while
+   scheduler is `running`, so the operator only sees "stale" via the
+   FE's `bw_probe_stale` derivation against `last_probe_at`.
+
+**Three coherent options:**
+
+A. **Periodic auto-probe (recommended).** A timer in the scheduler
+   controller re-runs `runBandwidthProbe` every
+   `bandwidth_probe_interval_seconds`. Skip if scheduler is `paused`
+   or `stopped`. While `running` (active download), the probe will
+   compete with download traffic — that's expected; networkquality is
+   short and the operator can disable auto-probe via interval=0 if it
+   matters.
+
+B. **Idle-only probe.** Re-probe only when scheduler enters/leaves
+   idle, plus on `pause`/`resume`. Avoids contention but the cap
+   value can grow stale during a long-running download.
+
+C. **Remove the interval pref.** If periodic probing is intentionally
+   not implemented, drop `bandwidth_probe_interval_seconds` from the
+   declaration vocabulary so the FE doesn't surface a knob with no
+   effect, and rename the staleness threshold to something like
+   `bandwidth_probe_max_age_seconds` to make the semantics honest.
+
+**Acceptance:**
+
+1. With `bandwidth_probe_interval_seconds: 60`, leave the dashboard
+   open for 5 minutes during an active download.
+2. The bandwidth panel's "Probed X ago" timestamp ticks back to a
+   small value at least every 60s; `overdue` chip never fires.
+3. Action log shows `bandwidth_probe` entries at the configured
+   cadence with `reason: "scheduler_periodic"` (or similar).
+4. Setting interval=0 disables periodic probing; manual probe still
+   works.
+
+**FE follow-up:** none. The FE already renders whatever
+`last_probe_at` reports.
+
+---
 
 <details>
 <summary>BG-51 (withdrawn — false alarm) — original brief retained for context</summary>
