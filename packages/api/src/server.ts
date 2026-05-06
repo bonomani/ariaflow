@@ -23,6 +23,7 @@ import { registerPeersRoutes } from "./routes/peers.js";
 import { registerEventsRoutes } from "./routes/events.js";
 import { registerStatusRoute } from "./routes/status.js";
 import { registerDownloadsRoutes } from "./routes/downloads.js";
+import { registerFilesRoutes } from "./routes/files.js";
 import { registerDeclarationRoutes } from "./routes/declaration.js";
 import { registerBandwidthRoutes } from "./routes/bandwidth.js";
 import { registerAria2Routes } from "./routes/aria2.js";
@@ -202,6 +203,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerEventsRoutes(ctx);
   registerStatusRoute(ctx);
   registerDownloadsRoutes(ctx);
+  registerFilesRoutes(ctx);
   registerDeclarationRoutes(ctx);
   registerBandwidthRoutes(ctx);
   registerAria2Routes(ctx);
