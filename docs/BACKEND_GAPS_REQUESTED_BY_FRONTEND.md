@@ -98,8 +98,25 @@ which is the right default: silence beats false positives.
 
 **New declaration preferences:**
 
-- `verify_existing_strategy`: `"local_only" | "local_and_remote_head" | "off"` (default `"local_only"`)
+- `verify_existing_strategy`: `"local_only" | "local_and_remote_head" | "local_and_sampled_hash" | "off"` (default `"local_only"`)
 - `confirm_redownload_default_action`: `"prompt" | "skip" | "rename" | "redownload"` (default `"prompt"`) — for non-interactive callers (CLI / scripted batch adds), the FE-less path needs a default
+
+**Verification rigor — none of these prove "same file" absolutely.**
+They produce a confidence judgement appropriate to ariaflow's
+single-operator self-hosted use case. The full-file hash isn't an
+option here: an 8 GiB file would take minutes to read from disk, which
+is unacceptable as a UX gate.
+
+| Strategy | Method | Cost | Catches | Misses |
+|---|---|---|---|---|
+| `local_only` | `fs.stat(path).size === totalLength` | ~0ms | gone / truncated / wrong size | content corruption with matching size, manual replacement |
+| `local_and_remote_head` | + `HEAD url`, compare `Content-Length` / `ETag` / `Last-Modified` | ~100ms (1 round trip, no body) | server has newer version | local corruption since download |
+| `local_and_sampled_hash` | + hash 4 KiB at head / middle / tail (aria2 piece boundaries) | ~ms (3 disk reads) | most local corruption | adversarial same-size byte flips at non-sampled offsets |
+| `off` | skip verification entirely | 0ms | nothing | always assume "have it" or "don't have it" per a fallback rule |
+
+Default `local_only` is right for the common case (single operator,
+single machine, file system trusted). Operators on shared FS or who
+care about server-side updates should pick a stricter tier.
 
 **Acceptance:**
 
