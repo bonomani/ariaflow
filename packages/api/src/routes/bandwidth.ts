@@ -1,9 +1,8 @@
 import {
   ACTIONS,
   TARGETS,
-  aria2,
+  applyBandwidthCap,
   bandwidthConfigFrom,
-  bandwidthUnits,
   runBandwidthProbe,
 } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
@@ -23,40 +22,7 @@ export function registerBandwidthRoutes({ app, deps }: RouteContext): void {
       s.last_bandwidth_probe_at = Date.now() / 1000;
     });
 
-    if (deps.aria2 && typeof probeRec.cap_bytes_per_sec === "number") {
-      try {
-        await aria2.setMaxOverallDownloadLimit(deps.aria2, probeRec.cap_bytes_per_sec);
-      } catch {
-        /* RPC failure is logged-only; the probe still applies locally */
-      }
-      // BG-53: refresh per-gid max-download-limit on every active
-      // transfer. aria2 enforces min(per-download, global), so a stale
-      // per-download cap silently throttles below the new global.
-      try {
-        const active = await aria2.tellActive(deps.aria2, ["gid"]);
-        for (const row of active) {
-          const gid = (row as { gid?: string }).gid;
-          if (!gid) continue;
-          try {
-            await aria2.setMaxDownloadLimit(deps.aria2, gid, probeRec.cap_bytes_per_sec);
-          } catch {
-            /* per-gid failures don't block the rest */
-          }
-        }
-      } catch {
-        /* tellActive failed — global cap still applied above */
-      }
-      const upCapBytes = Math.trunc(
-        Number(probeRec.up_cap_mbps ?? 0) * bandwidthUnits.BYTES_PER_MEGABIT,
-      );
-      if (upCapBytes > 0) {
-        try {
-          await aria2.setMaxOverallUploadLimit(deps.aria2, upCapBytes);
-        } catch {
-          /* same */
-        }
-      }
-    }
+    if (deps.aria2) await applyBandwidthCap(deps.aria2, probeRec);
 
     await deps.actionLog.record({
       action: ACTIONS.bandwidthProbe,

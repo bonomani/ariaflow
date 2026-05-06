@@ -1,6 +1,13 @@
 import { promises as fsp, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
-import { ACTIONS, TARGETS, errorPayload, prefValue } from "@ariaflow/core";
+import {
+  ACTIONS,
+  TARGETS,
+  errorPayload,
+  markMissingByPath,
+  prefValue,
+  updateOutputPath,
+} from "@ariaflow/core";
 import type { FastifyReply } from "fastify";
 import { requireObjectBody, type RouteContext } from "./_context.js";
 
@@ -102,8 +109,7 @@ export function registerFilesRoutes({ app, deps }: RouteContext): void {
     const items = await deps.queueStore.load();
     const byPath = new Map<string, (typeof items)[number]>();
     for (const it of items) {
-      const p = (it as { output_path?: string | null }).output_path;
-      if (p) byPath.set(p, it);
+      if (it.output_path) byPath.set(it.output_path, it);
     }
 
     interface FileRow {
@@ -189,14 +195,7 @@ export function registerFilesRoutes({ app, deps }: RouteContext): void {
         .send(errorPayload("rename_failed", err instanceof Error ? err.message : "rename failed"));
     }
     const items = await deps.queueStore.load();
-    let touched = false;
-    for (const it of items) {
-      if ((it as { output_path?: string | null }).output_path === src.abs) {
-        (it as { output_path: string }).output_path = dst.abs;
-        touched = true;
-      }
-    }
-    if (touched) await deps.queueStore.save(items);
+    if (updateOutputPath(items, src.abs, dst.abs)) await deps.queueStore.save(items);
     await deps.actionLog.record({
       action: ACTIONS.fileRename,
       target: TARGETS.files,
@@ -242,14 +241,7 @@ export function registerFilesRoutes({ app, deps }: RouteContext): void {
         .send(errorPayload("move_failed", err instanceof Error ? err.message : "move failed"));
     }
     const items = await deps.queueStore.load();
-    let touched = false;
-    for (const it of items) {
-      if ((it as { output_path?: string | null }).output_path === src.abs) {
-        (it as { output_path: string }).output_path = dstAbs;
-        touched = true;
-      }
-    }
-    if (touched) await deps.queueStore.save(items);
+    if (updateOutputPath(items, src.abs, dstAbs)) await deps.queueStore.save(items);
     await deps.actionLog.record({
       action: ACTIONS.fileMove,
       target: TARGETS.files,
@@ -284,14 +276,7 @@ export function registerFilesRoutes({ app, deps }: RouteContext): void {
       await fsp.unlink(target.abs);
     }
     const items = await deps.queueStore.load();
-    let touched = false;
-    for (const it of items) {
-      if ((it as { output_path?: string | null }).output_path === target.abs) {
-        (it as { file_present_on_disk?: boolean }).file_present_on_disk = false;
-        touched = true;
-      }
-    }
-    if (touched) await deps.queueStore.save(items);
+    if (markMissingByPath(items, new Set([target.abs]))) await deps.queueStore.save(items);
     await deps.actionLog.record({
       action: ACTIONS.fileDelete,
       target: TARGETS.files,
@@ -315,39 +300,35 @@ export function registerFilesRoutes({ app, deps }: RouteContext): void {
     const now = Date.now();
     let deleted = 0;
     let freedBytes = 0;
-    let touched = false;
 
     if (orphaned) {
       // Reconcile-only: flag history rows whose file is gone. No disk
       // side-effect.
-      let flagged = 0;
+      const missing = new Set<string>();
       for (const it of items) {
-        const p = (it as { output_path?: string | null }).output_path;
-        if (!p) continue;
+        if (!it.output_path) continue;
         try {
-          await fsp.stat(p);
+          await fsp.stat(it.output_path);
         } catch {
-          (it as { file_present_on_disk?: boolean }).file_present_on_disk = false;
-          flagged += 1;
-          touched = true;
+          missing.add(it.output_path);
         }
       }
-      if (touched) await deps.queueStore.save(items);
+      if (markMissingByPath(items, missing)) await deps.queueStore.save(items);
       await deps.actionLog.record({
         action: ACTIONS.fileClean,
         target: TARGETS.files,
         outcome: "changed",
         reason: "orphaned_reconcile",
-        detail: { flagged },
+        detail: { flagged: missing.size },
       });
-      return reply.send({ ok: true, flagged });
+      return reply.send({ ok: true, flagged: missing.size });
     }
 
+    const deletedPaths = new Set<string>();
     for (const it of items) {
       if (status && it.status !== status) continue;
-      const p = (it as { output_path?: string | null }).output_path;
+      const p = it.output_path;
       if (!p) continue;
-      // Bound to root
       const rel = relative(root, p);
       if (rel.startsWith("..") || isAbsolute(rel)) continue;
       if (olderDays > 0) {
@@ -360,13 +341,12 @@ export function registerFilesRoutes({ app, deps }: RouteContext): void {
         await fsp.unlink(p);
         deleted += 1;
         freedBytes += st.size;
-        (it as { file_present_on_disk?: boolean }).file_present_on_disk = false;
-        touched = true;
+        deletedPaths.add(p);
       } catch {
         /* skip files that no longer exist */
       }
     }
-    if (touched) await deps.queueStore.save(items);
+    if (markMissingByPath(items, deletedPaths)) await deps.queueStore.save(items);
     await deps.actionLog.record({
       action: ACTIONS.fileClean,
       target: TARGETS.files,

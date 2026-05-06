@@ -2,9 +2,8 @@ import {
   ACTIONS,
   TARGETS,
   Aria2Client,
-  aria2 as aria2Rpc,
+  applyBandwidthCap,
   bandwidthConfigFrom,
-  bandwidthUnits,
   deduplicateActiveTransfers,
   prefValue,
   reconcileLiveQueue,
@@ -72,39 +71,7 @@ export function createSchedulerController(
           s.last_bandwidth_probe = fresh;
           s.last_bandwidth_probe_at = Date.now() / 1000;
         });
-        if (aria2 && typeof fresh.cap_bytes_per_sec === "number") {
-          try {
-            await aria2Rpc.setMaxOverallDownloadLimit(aria2, fresh.cap_bytes_per_sec);
-          } catch {
-            /* RPC failure is logged-only */
-          }
-          // BG-53: refresh per-gid limit so in-flight transfers track
-          // the new cap (aria2 enforces min(per-download, global)).
-          try {
-            const activeRows = await aria2Rpc.tellActive(aria2, ["gid"]);
-            for (const row of activeRows) {
-              const gid = (row as { gid?: string }).gid;
-              if (!gid) continue;
-              try {
-                await aria2Rpc.setMaxDownloadLimit(aria2, gid, fresh.cap_bytes_per_sec);
-              } catch {
-                /* per-gid failures don't block the rest */
-              }
-            }
-          } catch {
-            /* tellActive failed — global cap still applied */
-          }
-          const upCapBytes = Math.trunc(
-            Number(fresh.up_cap_mbps ?? 0) * bandwidthUnits.BYTES_PER_MEGABIT,
-          );
-          if (upCapBytes > 0) {
-            try {
-              await aria2Rpc.setMaxOverallUploadLimit(aria2, upCapBytes);
-            } catch {
-              /* same */
-            }
-          }
-        }
+        if (aria2) await applyBandwidthCap(aria2, fresh);
         await ctx.actions.record({
           action: ACTIONS.bandwidthProbe,
           target: TARGETS.bandwidth,
