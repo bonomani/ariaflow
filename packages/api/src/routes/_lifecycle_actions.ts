@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import {
   brewOutdatedFormula,
   detectAriaflowInstalledVia,
@@ -44,13 +47,31 @@ export function dispatchAriaflowRestart(): ActionDispatchResult {
       };
     }
     const target = `gui/${process.getuid?.() ?? 0}/${label}`;
+    // BG-61: prefer bootout+bootstrap over `kickstart -k`. kickstart
+    // silently no-ops in some plist configurations (KeepAlive=false,
+    // RunAtLoad combinations) and across macOS versions; the modern
+    // unload+load is reliable. Fall back to kickstart only when the
+    // plist isn't in ~/Library/LaunchAgents.
+    const plistPath = join(homedir(), "Library", "LaunchAgents", `${label}.plist`);
+    const useBootout = existsSync(plistPath);
+    const domain = target.replace(/\/[^/]+$/, "");
+    const after = useBootout
+      ? () =>
+          detached("sh", [
+            "-c",
+            `launchctl bootout ${target} 2>/dev/null; launchctl bootstrap ${domain} ${plistPath}`,
+          ])
+      : () => detached("launchctl", ["kickstart", "-k", target]);
     return {
       status: 202,
-      body: { ok: true, action: "restart", managed_by: "launchd", launchctl_target: target },
-      // Detached so the parent doesn't block waiting for kickstart's
-      // pipe; kickstart -k bounces us, the OS sends SIGTERM, fastify
-      // is mid-flight returning the 202.
-      after: () => detached("launchctl", ["kickstart", "-k", target]),
+      body: {
+        ok: true,
+        action: "restart",
+        managed_by: "launchd",
+        launchctl_target: target,
+        method: useBootout ? "bootout_bootstrap" : "kickstart",
+      },
+      after,
     };
   }
   if (managedBy === "systemd") {
