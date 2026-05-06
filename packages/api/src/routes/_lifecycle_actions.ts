@@ -124,7 +124,10 @@ export function dispatchAriaflowUpdate(
   const restartSuffix = opts.autoRestart ? buildPostUpgradeRestartSuffix() : null;
   const chained = (cmd: string): (() => void) =>
     restartSuffix
-      ? () => detached("sh", ["-c", `${cmd} && ${restartSuffix}`])
+      // BG-65: ';' not '&&' so a no-op brew upgrade (stale cellar
+      // case — running version lags installed) still triggers the
+      // restart and realigns the running process to the cellar.
+      ? () => detached("sh", ["-c", `${cmd} ; ${restartSuffix}`])
       : () => detached("sh", ["-c", cmd]);
 
   if (installedVia === "homebrew") {

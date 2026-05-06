@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-65 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-65: Update chain should restart even when `brew upgrade` is a no-op (stale-cellar recovery)
 
@@ -80,6 +83,8 @@ is a reasonable default.
    immediately).
 
 **FE follow-up:** none. Already shipped the symmetric fix.
+
+</details>
 
 ---
 
@@ -1460,6 +1465,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-65 | Both upgrade-then-restart chains switched from `&&` to `;` (`api/_lifecycle_actions.ts` `dispatchAriaflowUpdate`, `cli/_auto_update_controller.ts` `applyUpdate`). A no-op `brew upgrade` (stale cellar case — running version lags installed) now still triggers the bootout+bootstrap so the running process realigns to the cellar. Trade-off accepted in the brief: a failed upgrade still bounces, briefly, on the unchanged version | 2026-05-06 |
 | BG-64 | `last_probed_at` (epoch seconds, `Math.floor(Date.now()/1000)`) stamped on every `result` block in `/api/lifecycle` (`buildAriaflowServerRow`, `buildAria2Row`, `buildNetworkqualityRow` in `_lifecycle_rows.ts`). Same field added to the BG-63 `lifecycle_changed` SSE payload (`LifecycleSnapshot`); the diff function ignores it so a fresh timestamp alone doesn't trigger an emit | 2026-05-06 |
 | BG-63 | New `createLifecycleProbeController` in `cli/_lifecycle_probe_controller.ts` runs a snapshot every `lifecycle_probe_interval_seconds` (default 60; 0 disables) covering `aria2_running` (probeAria2Reachable), `aria2_installed` (findAria2c), `networkquality_installed` (findNetworkQuality), `auto_start_installed` (aria2AutoStartInstalled). On any axis flip it `bus.publish("lifecycle_changed", snapshot)` (already mapped to topic `lifecycle` in `event-topics.ts`) and lands an action-log entry `system_lifecycle / lifecycle_probe_flip`. Skips when `scheduler_intent === "stopped"` so background work pauses with operator intent. Wired in `cmdServe` alongside the auto-update controller; stops cleanly on close. New `lifecycle_probe_interval_seconds` declaration pref | 2026-05-06 |
 | BG-62 | `brew upgrade ariaflow-server` is now chained with the BG-61 launchd bootout+bootstrap so the running process picks up the new bottle without a manual restart. New `auto_restart_after_upgrade` declaration pref (default true) gates the chain. Helper `buildPostUpgradeRestartSuffix()` in `core/install/restart_chain.ts` returns the `launchctl bootout <target> 2>/dev/null; launchctl bootstrap <domain> <plist>` shell suffix or null when not applicable (non-launchd, no detectable label, plist not in `~/Library/LaunchAgents`). Wired into `dispatchAriaflowUpdate({ autoRestart })` (homebrew + pipx) — the lifecycle route loads the pref and passes it — and into the BG-45 auto-update controller's `applyUpdate(installedVia, autoRestart)`. Response body and audit log carry `auto_restart: bool` so the operator sees which path fired | 2026-05-06 |

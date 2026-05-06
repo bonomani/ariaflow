@@ -70,7 +70,8 @@ function applyUpdate(installedVia: AriaflowInstalledVia, autoRestart: boolean): 
   const brew = resolvePkgManager("brew");
   const restartSuffix = autoRestart ? buildPostUpgradeRestartSuffix() : null;
   if (restartSuffix) {
-    detached("sh", ["-c", `${brew} upgrade ariaflow-server && ${restartSuffix}`]);
+    // BG-65: ';' not '&&' so a no-op upgrade (stale cellar) still restarts.
+    detached("sh", ["-c", `${brew} upgrade ariaflow-server ; ${restartSuffix}`]);
   } else {
     detached(brew, ["upgrade", "ariaflow-server"]);
   }
