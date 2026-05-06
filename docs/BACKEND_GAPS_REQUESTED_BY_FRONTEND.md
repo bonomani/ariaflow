@@ -11,7 +11,46 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-61: launchd restart uses `kickstart -k` — unreliable, switch to bootout+bootstrap
+
+**Symptom:** click Restart on the ariaflow-server row, response says
+'restart requested', but the running process is still the old one
+with stale code. Confirmed live on the dashboard side (`ariaflow-
+dashboard` v0.1.551 just switched away from kickstart for this
+reason); the backend uses the same pattern at
+`packages/api/src/routes/_lifecycle_actions.ts:53`:
+
+```ts
+after: () => detached("launchctl", ["kickstart", "-k", target]),
+```
+
+`launchctl kickstart -k` silently no-ops in some plist configurations
+(KeepAlive=false, RunAtLoad combinations) and across macOS versions.
+The reliable hammer is bootout + bootstrap (the modern equivalent of
+the legacy unload+load).
+
+**Recommended fix** (mirrors the FE fix in install_self.py):
+
+```ts
+const plist = path.join(os.homedir(), "Library/LaunchAgents", `${label}.plist`);
+const domain = target.replace(/\/[^/]+$/, ""); // "gui/<uid>"
+const cmd =
+  `launchctl bootout ${target} 2>/dev/null; ` +
+  `launchctl bootstrap ${domain} ${plist}`;
+detached("sh", ["-c", cmd]);
+```
+
+Fall back to kickstart only when the plist isn't in
+~/Library/LaunchAgents.
+
+**Acceptance:** click Restart after `brew upgrade ariaflow-server`;
+PID changes; action log shows `restart, outcome: changed`.
+
+**FE follow-up:** none.
+
+---
 
 <details>
 <summary>BG-60 (resolved) — original frontend brief retained for context</summary>
