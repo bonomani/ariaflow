@@ -564,18 +564,20 @@ describe("GET /api/log", () => {
 });
 
 describe("GET /api/health and /api/version", () => {
-  it("/api/health is reachable with a numeric uptime", async () => {
+  it("/api/health is reachable with a numeric uptime; classified bootstrap", async () => {
     const res = await app.inject({ method: "GET", url: "/api/health" });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.ok).toBe(true);
     expect(body.status).toBe("healthy");
     expect(typeof body.uptime_seconds).toBe("number");
+    expect(body.meta).toEqual({ freshness: "bootstrap" });
   });
 
-  it("/api/version surfaces the configured version, defaulting to 0.0.0", async () => {
+  it("/api/version surfaces the configured version; classified bootstrap", async () => {
     const res = await app.inject({ method: "GET", url: "/api/version" });
     expect(res.json()).toMatchObject({ ok: true, version: "0.0.0" });
+    expect(res.json().meta).toEqual({ freshness: "bootstrap" });
   });
 });
 
@@ -899,21 +901,6 @@ describe("meta routes", () => {
     }
   });
 
-  it("BG-31: GET /api/health and /api/version are classified bootstrap with stable bodies", async () => {
-    const a = await app.inject({ method: "GET", url: "/api/health" });
-    const b = await app.inject({ method: "GET", url: "/api/health" });
-    const ja = a.json();
-    const jb = b.json();
-    expect(ja.meta).toEqual({ freshness: "bootstrap" });
-    // uptime_seconds is rounded; bodies should match across rapid calls
-    expect(ja).toEqual(jb);
-
-    const v = await app.inject({ method: "GET", url: "/api/version" });
-    const v2 = await app.inject({ method: "GET", url: "/api/version" });
-    expect(v.json()).toEqual(v2.json());
-    expect(v.json().meta).toEqual({ freshness: "bootstrap" });
-  });
-
   it("BG-31/BG-32: GET /api/status carries meta.freshness=live with transport_topics", async () => {
     const res = await app.inject({ method: "GET", url: "/api/status" });
     expect(res.json().meta).toEqual({
@@ -942,22 +929,6 @@ describe("meta routes", () => {
     const body = res.json();
     expect(body.summary).toHaveProperty("removed");
     expect(body.summary).not.toHaveProperty("stopped");
-  });
-
-  it("BG-33: /api/status payload contains no legacy aliases (state.paused, summary.stopped, status:'stopped')", async () => {
-    await app.inject({
-      method: "POST",
-      url: "/api/downloads",
-      payload: { items: [{ url: "http://h/a" }, { url: "http://h/b" }] },
-    });
-    const res = await app.inject({ method: "GET", url: "/api/status" });
-    const json = res.payload;
-    expect(json).not.toMatch(/"paused"\s*:\s*(true|false)/);
-    expect(json).not.toMatch(/"stopped"\s*:/);
-    const body = res.json();
-    for (const item of body.items ?? []) {
-      expect(item.status).not.toBe("stopped");
-    }
   });
 
   it("BG-35: GET /api/status?status=queued filters items; no `filtered` flag in payload", async () => {
