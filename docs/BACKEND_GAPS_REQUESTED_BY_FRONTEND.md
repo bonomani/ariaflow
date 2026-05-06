@@ -11,7 +11,68 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-63: Backend self-runs periodic lifecycle probes + emits `lifecycle_changed` on flips
+
+**Paired frontend gap:** FE-53 (FE drops the warm 30s `/api/lifecycle` poll once backend self-monitors)
+
+**Why:** lifecycle probes (aria2 RPC reachability, networkquality
+binary present, launchd plist installed, version check) currently
+run **lazily on FE request**. Without an FE polling, the backend
+never notices when aria2 dies, networkquality is removed externally,
+plist is unloaded by another tool. Discovered while attempting to
+make the FE event-driven (`ariaflow-dashboard` v0.1.569 → v0.1.570
+revert): removing FE polling silently disabled health monitoring.
+
+**Requested:** backend grows its own probe loop alongside the
+existing bandwidth probe and auto-update poller.
+
+```ts
+// in _scheduler_controller.ts or a new _health_controller.ts:
+const lifecycleTimer = setInterval(async () => {
+  const before = lastProbeSnapshot;
+  const next = await runAllLifecycleProbes(deps);
+  if (lifecycleSnapshotChanged(before, next)) {
+    deps.bus?.publish("lifecycle_changed", next);
+  }
+  lastProbeSnapshot = next;
+}, intervalSeconds * 1000);
+```
+
+**Behaviour:**
+
+1. While `scheduler_intent === 'running'`, probe every
+   `lifecycle_probe_interval_seconds` (new declaration pref,
+   default 60s).
+2. Compare to last snapshot; emit `lifecycle_changed` SSE only on
+   axis flips (`running`, `installed`, `current`, `expected_version`,
+   `auto_start.installed`).
+3. `GET /api/lifecycle` keeps returning the live probe + caches —
+   FE on tab visit still gets fresh data without waiting.
+4. Probe loop pauses when scheduler is stopped (operator explicitly
+   doesn't want background work).
+
+**FE follow-up (FE-53):** drop the 30s warm poll for `/api/lifecycle`.
+The `lifecycle_changed` SSE listener already exists in FE v0.1.569 —
+just sits idle today because backend never emits the event without an
+operator action.
+
+**Acceptance:**
+
+1. Server idle (no FE). Kill aria2 externally → within 60s,
+   backend's action log shows `lifecycle_changed` with
+   `aria2.running: false`.
+2. Re-launch aria2 → within 60s, `lifecycle_changed` with
+   `aria2.running: true`.
+3. `lifecycle_probe_interval_seconds: 30` halves the cadence.
+4. Stop scheduler → probe loop pauses; restart → resumes.
+
+**Cost:** one new pref, one new timer, one publish call. Probe cost
+already paid per `/api/lifecycle` request — amortised here across
+operator activity instead of dependent on it.
+
+---
 
 <details>
 <summary>BG-62 (resolved) — original frontend brief retained for context</summary>
