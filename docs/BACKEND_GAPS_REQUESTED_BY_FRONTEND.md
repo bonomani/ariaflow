@@ -75,12 +75,26 @@ auditable.
 
 **New persisted fields on QueueItemRecord:**
 
-- `output_path: string` — absolute path the file was written to
-  (so verification can stat it). Already implicit via aria2's
-  `tellStatus` but should be persisted at completion.
+- `output_path: string` — absolute path the file was written to. **Must
+  be captured at completion time** because aria2 garbage-collects
+  completed GIDs and `tellStatus(gid)` stops returning the path. Hook
+  point: `scheduler/poll.ts` already detects the `complete` transition
+  (`reconcile`); grab `tellStatus(gid).files[0].path` there and persist
+  on the queue record before the GID disappears from the active set.
+  Backfill: items completed *before* this field landed have no
+  `output_path` → verification treats them as unverifiable and queues
+  normally (no false skips).
 - `remote_etag?: string` — captured at completion via aria2's
   `responseHeaders` if available. Optional.
 - `remote_last_modified?: string` — same source, optional.
+
+**URL match strategy:** strict string match against the operator-
+submitted URL (the same key `queue/lookup.ts` uses today for live
+duplicate detection). Query-string differences are a different URL.
+Server-side redirects don't matter — both adds use the same submitted
+URL. Operators who paste a slightly different URL (with/without
+trailing slash, different cache-buster) won't get a duplicate match,
+which is the right default: silence beats false positives.
 
 **New declaration preferences:**
 
