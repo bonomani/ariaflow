@@ -6,6 +6,7 @@ import {
   errorPayload,
   markMissingByPath,
   prefValue,
+  resolveDefaultDownloadDir,
   updateOutputPath,
 } from "@ariaflow/core";
 import type { FastifyReply } from "fastify";
@@ -21,9 +22,12 @@ async function loadDownloadDir(
 ): Promise<string | null> {
   const declaration = await deps.declarationStore.load();
   const raw = String(prefValue(declaration, "download_dir", "") ?? "").trim();
-  if (!raw) return null;
+  // BG-58: fall back to platform default ($XDG_DOWNLOAD_DIR / ~/Downloads)
+  // when the operator hasn't set the pref. Explicit pref still wins.
+  const candidate = raw || resolveDefaultDownloadDir();
+  if (!candidate) return null;
   try {
-    return await fsp.realpath(raw);
+    return await fsp.realpath(candidate);
   } catch {
     return null;
   }

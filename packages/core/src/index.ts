@@ -57,6 +57,7 @@ export { Aria2Client, Aria2RpcError, type Aria2ClientOptions } from "./aria2/cli
 export * as aria2 from "./aria2/methods.js";
 export { dispatchDownload, dispatchPrefsFrom, type DispatchPrefs } from "./aria2/dispatch.js";
 export { applyBandwidthCap } from "./aria2/cap.js";
+export { resolveDefaultDownloadDir } from "./install/download_dir.js";
 export { verifyExistingTier1 } from "./queue/verify.js";
 export { updateOutputPath, markMissingByPath } from "./queue/history_sync.js";
 export {

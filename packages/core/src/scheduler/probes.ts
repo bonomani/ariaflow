@@ -1,6 +1,7 @@
 import type { Aria2Client } from "../aria2/client.js";
 import type { Declaration } from "../contracts/declaration.js";
 import { prefValue } from "../contracts/declaration.js";
+import { resolveDefaultDownloadDir } from "../install/download_dir.js";
 import { checkDiskSpace, maxDiskPercent } from "./helpers.js";
 
 /**
@@ -37,7 +38,9 @@ export async function probeDiskOk(
   try {
     const max = maxDiskPercent(declaration);
     const downloadDir = String(prefValue(declaration, "download_dir", "") ?? "");
-    const probePath = downloadDir || process.cwd();
+    // BG-58: same fallback chain as routes/files.ts so the disk gate
+    // doesn't fail on a fresh install with no download_dir set.
+    const probePath = downloadDir || resolveDefaultDownloadDir() || process.cwd();
     const { statfsSync } = await import("node:fs");
     return checkDiskSpace({
       maxPercent: max,
