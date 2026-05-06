@@ -11,7 +11,117 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-55: Verify-then-confirm flow for re-add of an already-downloaded URL
+
+**Paired frontend gap:** FE-45 (UI for the new `awaiting_confirmation` state + three decision actions)
+
+**Builds on:** BG-54 (drops `allow-overwrite: true`, makes the safe default land first).
+
+**Why this matters:** ariaflow downloads are typically multi-GB. A
+mistaken re-add silently wastes a full transfer in bandwidth, time,
+and disk. BG-54's `.1` auto-rename avoids data loss but still pays
+the full re-download cost. For huge files, the operator wants a
+chance to say "I already have it, skip" before any bytes flow.
+
+**Design — verify cheaply, then ask the operator:**
+
+When `queue/ops.add()` finds a *terminal-status* item with the same
+URL, run a verification gate before inserting the new item:
+
+1. **Local stat** (always): does `prior_item.output_path` exist?
+   does its size match `prior_item.totalLength`?
+   - Fast (~0ms), no network.
+2. **Remote HEAD** (optional, configurable): `HEAD url`. Compare:
+   - `Content-Length` against `prior_item.totalLength`
+   - `ETag` against `prior_item.remote_etag` (new field)
+   - `Last-Modified` against `prior_item.remote_last_modified` (new field)
+   - One round trip, no body — affordable even for huge files.
+
+Two outcomes:
+
+- **Verified existing** (local stat passes; remote HEAD agrees or is
+  skipped): insert the new item with `status: "awaiting_confirmation"`
+  and `detail: { existing_id, existing_path, existing_size, remote_changed: false }`.
+  Don't dispatch yet.
+- **Verification failed** (file gone, size mismatch, ETag changed):
+  insert as `queued` and dispatch normally. Action log records the
+  reason so the operator sees why a re-download fired (`detail: {
+  reason: "verify_local_size_mismatch", expected: ..., actual: ... }`
+  or `reason: "remote_etag_changed"`).
+
+**New queue status:** `awaiting_confirmation` (added to BG-30's
+8-status set → 9). Surfaces in `summary.awaiting_confirmation` count
+and in `items[].status`.
+
+**Three decision endpoints:**
+
+```
+POST /api/downloads/:id/confirm    → status flips to queued, dispatched
+                                      with allow-overwrite=true (per-item
+                                      override) so the existing path is
+                                      reclaimed
+POST /api/downloads/:id/skip       → moves to removed, reason
+                                      "duplicate_skipped"; no bytes
+                                      transferred
+POST /api/downloads/:id/rename     → moves to queued, dispatched without
+                                      overwrite so aria2 auto-renames to
+                                      <name>.1; both files coexist
+```
+
+Each decision lands an action-log entry so the operator's choice is
+auditable.
+
+**New persisted fields on QueueItemRecord:**
+
+- `output_path: string` — absolute path the file was written to
+  (so verification can stat it). Already implicit via aria2's
+  `tellStatus` but should be persisted at completion.
+- `remote_etag?: string` — captured at completion via aria2's
+  `responseHeaders` if available. Optional.
+- `remote_last_modified?: string` — same source, optional.
+
+**New declaration preferences:**
+
+- `verify_existing_strategy`: `"local_only" | "local_and_remote_head" | "off"` (default `"local_only"`)
+- `confirm_redownload_default_action`: `"prompt" | "skip" | "rename" | "redownload"` (default `"prompt"`) — for non-interactive callers (CLI / scripted batch adds), the FE-less path needs a default
+
+**Acceptance:**
+
+1. Add a download. Let it complete. Persisted item has
+   `output_path` populated.
+2. Add the same URL again. The new item appears with
+   `status: "awaiting_confirmation"`.
+3. Three actions all work: confirm dispatches with overwrite, skip
+   removes, rename dispatches without overwrite (aria2 produces `.1`).
+4. Delete the file on disk. Re-add: verification fails, item goes
+   straight to `queued` with action-log reason
+   `verify_local_missing`.
+5. Set `verify_existing_strategy: "local_and_remote_head"`. Add a URL
+   whose server returns a different ETag than recorded: item goes
+   straight to `queued` with reason `remote_etag_changed`. Operator
+   sees in the activity log why re-download fired.
+6. Set `confirm_redownload_default_action: "skip"`. Re-add via CLI
+   without the FE: item goes to `removed` automatically with reason
+   `duplicate_skipped` instead of waiting for a prompt.
+
+**FE follow-up (FE-45):**
+
+- Render an `awaiting_confirmation` row variant in the queue panel
+  with a banner: "Already have <name> (<size>) at <path>. [Skip]
+  [Re-download] [Add as .1]"
+- (If `remote_changed: true` ever surfaces) banner reads
+  "Server has a newer version of <name> (ETag changed). [Re-download]
+  [Skip]"
+- Wire three new item actions to the new endpoints.
+- Add the new status to `ITEM_STATUSES` and the filter buckets.
+- Surface `awaiting_confirmation` count in the filter bar (e.g.
+  between `active` and `paused`).
+
+---
+
+
 
 <details>
 <summary>BG-54 (resolved) — original frontend brief retained for context</summary>
