@@ -11,7 +11,72 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-58: `download_dir` should default to the platform's standard download folder
+
+**Paired frontend gap:** FE-50 (no FE change once backend has a sensible default)
+
+**Symptom on the dashboard:** fresh install, no operator action — open
+the Downloaded tab → "Download folder not configured." 409
+`download_dir_unset` from `GET /api/files`. The operator has to navigate
+to Options and explicitly set `download_dir` to something like
+`/Users/bc/Downloads` for anything to work, even though aria2 (in its
+own default config) is already writing files to `~/Downloads`.
+
+That's a setup tax the operator shouldn't have to pay. The reasonable
+default is "use the platform's standard download folder."
+
+**Requested behaviour:**
+
+When `prefValue(declaration, "download_dir")` returns empty / unset,
+fall back to a platform default in this order:
+
+1. `$XDG_DOWNLOAD_DIR` (Linux freedesktop spec)
+2. `~/Downloads` (macOS, fallback Linux, fallback Windows in WSL)
+3. (Last resort) the OS user's home dir + `/Downloads`
+
+The fallback only kicks in for an unset / empty pref. Setting the pref
+explicitly still wins — that's the override case (operator wants files
+in `/Volumes/BigDisk/grabs/` or wherever).
+
+**Hooks:**
+
+- `loadDownloadDir()` in `packages/api/src/routes/files.ts:12-23` —
+  the central resolver. Add the platform fallback inside the `if (!raw)`
+  branch before returning null.
+- `bandwidth/probes.ts:39` — uses the same `prefValue(declaration,
+  "download_dir", "")` for the disk-space check. Should benefit from the
+  same fallback (otherwise the disk gate fails on a fresh install too).
+- aria2's own `dir` option — separately, when the dashboard kicks aria2
+  via `setOptions` / dispatch, the cap pipeline could also reuse this
+  resolved directory. Out of scope for this gap, but worth noting:
+  today operators have to align two settings (aria2's `dir` and
+  ariaflow's `download_dir`) by hand. With BG-58 they both pick up the
+  same default.
+
+**Acceptance:**
+
+1. Fresh install with no `download_dir` pref. `GET /api/files` returns
+   200 with the listing of `~/Downloads`, NOT 409.
+2. Set `download_dir` explicitly to `/tmp/ariaflow-test`. `GET /api/files`
+   lists `/tmp/ariaflow-test`. Override wins.
+3. Unset `download_dir` again (delete the pref). Falls back to default.
+4. On a system with `$XDG_DOWNLOAD_DIR=/foo/bar` set in the
+   ariaflow-server process env, the fallback uses `/foo/bar` (Linux only).
+5. The `download_dir_unset` 409 path stays as a last-resort: only fires
+   if even the platform default can't be resolved (e.g. headless
+   container with no `$HOME`). The error code is unchanged so the FE
+   still shows its "Download folder not configured" CTA in that edge
+   case.
+
+**FE follow-up:** none. The "configured / unset" UI states the FE
+already renders via `filesError === 'download_dir_unset'` keep working;
+the unset state just becomes much rarer (only the headless edge case).
+
+---
+
+
 
 <details>
 <summary>BG-57 (resolved) — original frontend brief retained for context</summary>
