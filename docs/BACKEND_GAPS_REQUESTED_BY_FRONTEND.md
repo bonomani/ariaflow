@@ -11,7 +11,85 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-66: Update chain should re-link before bootstrap (unlinked-cellar recovery)
+
+**Symptom (operator-reported):** when the Cellar is in "installed but
+not linked" state — typically after an interrupted install, a manual
+brew operation, or `install.sh` script — the Update chain runs but
+the bootstrap step fails because `/opt/homebrew/bin/ariaflow-server`
+symlink is missing. Same EX_CONFIG (78) trap we hit on the dashboard
+side previously, just here driven by the unlinked-formula condition
+rather than a Python syntax error.
+
+**Why current chain doesn't fix it:**
+
+```ts
+detached("sh", ["-c", `${brew} upgrade ariaflow-server ; ${restartSuffix}`]);
+```
+
+`brew upgrade` on an already-installed-but-unlinked formula prints
+"X is installed but not linked, run `brew link X`" and exits 0
+without re-linking. The chain then proceeds to bootout+bootstrap
+which fails because the binary's symlink is gone.
+
+**Three options ranked by simplicity:**
+
+A. **Insert `brew link --overwrite` between upgrade and bootstrap:**
+
+```ts
+const cmd = `${brew} upgrade ariaflow-server ; ` +
+            `${brew} link --overwrite ariaflow-server 2>/dev/null ; ` +
+            `${restartSuffix}`;
+detached("sh", ["-c", cmd]);
+```
+
+Idempotent — succeeds whether already linked, just installed, or
+both. One extra `;`-chained subprocess, no new dependency.
+
+B. **Use `brew services restart` for the whole update chain:**
+
+```ts
+const cmd = `${brew} upgrade ariaflow-server && ${brew} services restart ariaflow-server`;
+```
+
+`brew services restart` internally runs `brew install --force-bottle`
+if needed (handles unlinked state), then bootstraps. Cleanest but
+loses the explicit bootout step which makes the kill-then-relaunch
+behavior less transparent.
+
+C. **Migrate to `brew services restart` everywhere:** including the
+auto-update poller, the Recover button (already does this), and the
+manual Update button. Most uniform but biggest change.
+
+**Recommendation: A.** Smallest diff, idempotent, doesn't re-architect
+the chain, matches what an operator would type manually to recover.
+
+**Apply same fix to:**
+- `core/src/install/restart_chain.ts` — buildPostUpgradeRestartSuffix
+  (or wherever the chain string is constructed for both manual Update
+  and the auto-update poller)
+- `cli/src/commands/_auto_update_controller.ts` — applyUpdate
+
+**Acceptance:**
+
+1. Reproduce the unlinked state:
+   ```sh
+   brew unlink ariaflow-server
+   ```
+2. Confirm `/opt/homebrew/bin/ariaflow-server` is gone.
+3. Click Update on the ariaflow-server row.
+4. After ~10s, /api/lifecycle reports server running on the latest
+   version. PID changed. Symlink restored.
+5. Same recovery via auto-update poller path.
+
+**FE follow-up:** none. The dashboard self path (`install_self.py`
+`_chain_restart`) has the same `;`-only chain — should also gain a
+`brew link --overwrite` step. That's an FE change, separate commit
+to keep the FE/BE diffs aligned.
+
+---
 
 <details>
 <summary>BG-65 (resolved) — original frontend brief retained for context</summary>
