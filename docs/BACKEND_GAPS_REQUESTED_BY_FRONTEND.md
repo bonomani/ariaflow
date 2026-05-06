@@ -11,7 +11,77 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-65: Update chain should restart even when `brew upgrade` is a no-op (stale-cellar recovery)
+
+**Symptom (operator-reported):** click Update on the ariaflow-server
+row, version stays at 0.1.305 even though brew has 0.1.312 installed
+in the Cellar. Process kept running off the old cellar dir.
+
+**Root cause** at `cli/src/commands/_auto_update_controller.ts:73`
+and `core/src/install/restart_chain.ts` consumers:
+
+```ts
+detached("sh", ["-c", `${brew} upgrade ariaflow-server && ${restartSuffix}`]);
+```
+
+The `&&` short-circuits when `brew upgrade` is a no-op (already on
+latest version brew knows about). The bootout+bootstrap restart
+never fires. Running process stays pinned to whatever Cellar dir it
+was originally started from — which `brew cleanup` may have already
+removed.
+
+This was the dashboard's exact problem; fixed FE-side at
+`ariaflow-dashboard` v0.1.580 by switching `&&` to `;` in the same
+chain (`install_self.py`):
+
+```py
+# was: brew upgrade ariaflow-dashboard && launchctl bootout && bootstrap
+# now: brew upgrade ariaflow-dashboard ; launchctl bootout ; bootstrap
+```
+
+Same one-character change applies to backend:
+
+```ts
+detached("sh", ["-c", `${brew} upgrade ariaflow-server ; ${restartSuffix}`]);
+```
+
+After the fix, three cases all behave correctly:
+
+| Case | brew exit | Outcome |
+|---|---|---|
+| Normal upgrade available | 0 (changed) | restart fires → new bottle running |
+| Stale cellar (running ≠ installed) | 0 (no-op) | restart fires anyway → cellar realigned |
+| Upgrade failure (network / conflict) | non-zero | restart fires → brief bounce on unchanged version, operator can retry |
+
+The "brief bounce on unchanged version after a failed brew upgrade"
+is a minor regression vs the current "silent no-op" behaviour, but
+acceptable: operator who clicked Update did so explicitly, restart
+is a reasonable default.
+
+**Apply same fix to:**
+- `cli/src/commands/_auto_update_controller.ts:73` (auto-update poller)
+- `api/src/routes/lifecycle.ts:96` (manual Update button via
+  dispatchAriaflowUpdate, which builds the chain in
+  `_lifecycle_actions.ts`)
+- `core/src/install/dispatchAriaflowUpdate.ts` if the chain is built
+  there
+
+**Acceptance:**
+
+1. Manually break the cellar: `brew upgrade ariaflow-server` from
+   terminal, then verify running process still shows old version
+   (e.g. via `/api/lifecycle.['ariaflow-server'].result.version`).
+2. Click Update on the dashboard's ariaflow-server row.
+3. Within ~10s, /api/lifecycle reports the new version. PID changed.
+4. Same flow via auto-update poller: trigger by setting
+   `auto_update_check_hours: 1` and waiting (or test hook to fire
+   immediately).
+
+**FE follow-up:** none. Already shipped the symmetric fix.
+
+---
 
 <details>
 <summary>BG-64 (resolved) — original frontend brief retained for context</summary>
