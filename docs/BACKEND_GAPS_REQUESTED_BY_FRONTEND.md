@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-52 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-52: Bandwidth probe never re-runs — `bandwidth_probe_interval_seconds` is dead
 
@@ -71,6 +74,8 @@ C. **Remove the interval pref.** If periodic probing is intentionally
 
 **FE follow-up:** none. The FE already renders whatever
 `last_probe_at` reports.
+
+</details>
 
 ---
 
@@ -505,6 +510,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-52 | Periodic bandwidth probe wired in `_scheduler_controller.ts`. After the loop launches, a `setInterval` re-runs `runBandwidthProbe` every `bandwidth_probe_interval_seconds` while `state.running && !state.paused && state.active_gid` (re-reading the declaration each tick so live changes apply). Each run updates `state.last_bandwidth_probe`/`last_bandwidth_probe_at`, applies the new cap to aria2 via `setMaxOverallDownloadLimit`/`setMaxOverallUploadLimit` (in-flight transfers adapt live), and records an action-log entry with `reason: "scheduler_periodic"`. Timer is `unref`'d, cleared on stop/crash/normal exit; interval≤0 disables | 2026-05-06 |
 | BG-50 | `deriveSchedulerStatus` (`packages/core/src/scheduler/status.ts`) reordered: persistent `paused` flag now wins over the `!running` short-circuit, so a drained-but-paused loop (intent=running, running=false, paused=true, session open) reports `'paused'` instead of `'idle'`. The `intent=stopped` short-circuit still wins first (a paused state without operator-running-intent stays `'stopped'`). One new test in `status.test.ts` covers the BG-50 case; existing `running`/`idle`/`starting`/`stopped` tests untouched and still pass | 2026-05-06 |
 | BG-49 | All four scheduler action routes (`/api/scheduler/{start,stop,pause,resume}`) now return a canonical `state: { scheduler_status, running, dispatch_paused, session_id, _rev }` envelope alongside their existing flat fields. New `buildStateEnvelope(deps, state)` helper in `routes/scheduler.ts` reuses `computeSchedulerStatus` so the `scheduler_status` value matches what `GET /api/status` would return immediately after. Existing flat `started/stopped/paused/_rev` fields stay for back-compat. Note: `scheduler_status` reflects current state — when scheduler intent is "stopped", a /pause flips `dispatch_paused` but keeps `scheduler_status:"stopped"` (intent unchanged); test assertions match that semantic. 4 new tests in BG-49 describe block | 2026-05-06 |
 | BG-48 | New `POST /api/scheduler/contract` endpoint registered alongside `/api/scheduler/ucc`; both delegate to the same handler. Action-log token flipped from `"ucc"` to `"contract"` for both routes — `ACTIONS.schedulerUcc` kept as a deprecated alias of `ACTIONS.schedulerContract` so existing `ACTIONS.X` callers don't have to update in lock-step (both resolve to `"contract"`). `meta.contract` field shape unchanged (`{contract: "UCC", version: "2.0"}`); the FE doesn't need that value renamed (per BG-48 brief — only the wire-name was the concern). One test renamed to assert `action: "contract"`; one new test covers the `/contract` route shape | 2026-05-05 |

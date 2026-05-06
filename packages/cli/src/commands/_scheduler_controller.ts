@@ -2,8 +2,11 @@ import {
   ACTIONS,
   TARGETS,
   Aria2Client,
+  aria2 as aria2Rpc,
   bandwidthConfigFrom,
+  bandwidthUnits,
   deduplicateActiveTransfers,
+  prefValue,
   reconcileLiveQueue,
   runBandwidthProbe,
   runSchedulerLoop,
@@ -39,6 +42,66 @@ export function createSchedulerController(
 ): SchedulerController {
   let ctrl: AbortController | undefined;
   let done: Promise<unknown> = Promise.resolve();
+  let probeTimer: ReturnType<typeof setInterval> | undefined;
+
+  const stopProbeTimer = () => {
+    if (probeTimer) {
+      clearInterval(probeTimer);
+      probeTimer = undefined;
+    }
+  };
+
+  // BG-52: periodic bandwidth probe while the loop is running and
+  // something is actively downloading. Re-reads declaration each tick
+  // so interval changes apply live; interval<=0 disables.
+  const startProbeTimer = async () => {
+    if (!aria2 || probeTimer) return;
+    const declaration = await ctx.declaration.load();
+    const intervalSec =
+      Number(prefValue(declaration, "bandwidth_probe_interval_seconds", 180)) || 0;
+    if (intervalSec <= 0) return;
+    probeTimer = setInterval(async () => {
+      try {
+        const state = await ctx.state.load();
+        if (!state.running || state.paused) return;
+        if (!state.active_gid) return;
+        const decl = await ctx.declaration.load();
+        const config = bandwidthConfigFrom(decl);
+        const fresh = await runBandwidthProbe({ config });
+        await ctx.state.update((s) => {
+          s.last_bandwidth_probe = fresh;
+          s.last_bandwidth_probe_at = Date.now() / 1000;
+        });
+        if (aria2 && typeof fresh.cap_bytes_per_sec === "number") {
+          try {
+            await aria2Rpc.setMaxOverallDownloadLimit(aria2, fresh.cap_bytes_per_sec);
+          } catch {
+            /* RPC failure is logged-only */
+          }
+          const upCapBytes = Math.trunc(
+            Number(fresh.up_cap_mbps ?? 0) * bandwidthUnits.BYTES_PER_MEGABIT,
+          );
+          if (upCapBytes > 0) {
+            try {
+              await aria2Rpc.setMaxOverallUploadLimit(aria2, upCapBytes);
+            } catch {
+              /* same */
+            }
+          }
+        }
+        await ctx.actions.record({
+          action: ACTIONS.bandwidthProbe,
+          target: TARGETS.bandwidth,
+          outcome: fresh.source === "networkquality" ? "changed" : "unchanged",
+          reason: "scheduler_periodic",
+          detail: fresh as unknown as Record<string, unknown>,
+        });
+      } catch (err) {
+        console.error("periodic bandwidth probe failed:", err);
+      }
+    }, intervalSec * 1000);
+    probeTimer.unref?.();
+  };
 
   const launch = async (): Promise<{ started: boolean; reason: string }> => {
     if (!aria2) return { started: false, reason: "aria2_unavailable" };
@@ -104,6 +167,7 @@ export function createSchedulerController(
         // Loop exited normally (drained / max_iterations) — clear the
         // controller so launch() can spin up a fresh loop when new
         // items arrive.
+        stopProbeTimer();
         ctrl = undefined;
         done = Promise.resolve();
       },
@@ -135,6 +199,7 @@ export function createSchedulerController(
         } catch {
           /* same */
         }
+        stopProbeTimer();
         ctrl = undefined;
         done = Promise.resolve();
       },
@@ -143,6 +208,7 @@ export function createSchedulerController(
     // write lands before we report success — callers immediately read
     // /api/status after /start and would otherwise race the flip.
     await new Promise<void>((r) => setImmediate(r));
+    await startProbeTimer();
     return { started: true, reason: "started" };
   };
 
@@ -150,6 +216,7 @@ export function createSchedulerController(
     if (!ctrl || ctrl.signal.aborted) {
       return { stopped: false, reason: "not_running" };
     }
+    stopProbeTimer();
     ctrl.abort();
     await done;
     ctrl = undefined;
