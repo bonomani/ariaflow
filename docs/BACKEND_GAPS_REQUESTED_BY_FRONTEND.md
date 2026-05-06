@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-50 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-50: `deriveSchedulerStatus` should report `paused` when paused, even if loop is drained
 
@@ -73,6 +76,8 @@ regardless of whether the loop is mid-iteration or drained.
 
 No FE change needed once this lands. The dashboard renders whatever
 `state.scheduler_status` reports.
+
+</details>
 
 ---
 
@@ -361,6 +366,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-50 | `deriveSchedulerStatus` (`packages/core/src/scheduler/status.ts`) reordered: persistent `paused` flag now wins over the `!running` short-circuit, so a drained-but-paused loop (intent=running, running=false, paused=true, session open) reports `'paused'` instead of `'idle'`. The `intent=stopped` short-circuit still wins first (a paused state without operator-running-intent stays `'stopped'`). One new test in `status.test.ts` covers the BG-50 case; existing `running`/`idle`/`starting`/`stopped` tests untouched and still pass | 2026-05-06 |
 | BG-49 | All four scheduler action routes (`/api/scheduler/{start,stop,pause,resume}`) now return a canonical `state: { scheduler_status, running, dispatch_paused, session_id, _rev }` envelope alongside their existing flat fields. New `buildStateEnvelope(deps, state)` helper in `routes/scheduler.ts` reuses `computeSchedulerStatus` so the `scheduler_status` value matches what `GET /api/status` would return immediately after. Existing flat `started/stopped/paused/_rev` fields stay for back-compat. Note: `scheduler_status` reflects current state — when scheduler intent is "stopped", a /pause flips `dispatch_paused` but keeps `scheduler_status:"stopped"` (intent unchanged); test assertions match that semantic. 4 new tests in BG-49 describe block | 2026-05-06 |
 | BG-48 | New `POST /api/scheduler/contract` endpoint registered alongside `/api/scheduler/ucc`; both delegate to the same handler. Action-log token flipped from `"ucc"` to `"contract"` for both routes — `ACTIONS.schedulerUcc` kept as a deprecated alias of `ACTIONS.schedulerContract` so existing `ACTIONS.X` callers don't have to update in lock-step (both resolve to `"contract"`). `meta.contract` field shape unchanged (`{contract: "UCC", version: "2.0"}`); the FE doesn't need that value renamed (per BG-48 brief — only the wire-name was the concern). One test renamed to assert `action: "contract"`; one new test covers the `/contract` route shape | 2026-05-05 |
 | BG-47 | `deriveWaitReason()` reordered: `queue_empty` is now checked before `bandwidth_probe_pending`, so an empty queue with no probe yet correctly reads `idle · queue empty` instead of "probe pending". Hard blockers (`aria2_unreachable` / `preflight_blocked` / `disk_full`) still win first. The probe itself isn't gated on queue contents — it runs once at scheduler-loop startup as a preloop step (`packages/cli/src/commands/_scheduler_controller.ts`); that's fine because the wait_reason now correctly defaults to `queue_empty` when there's nothing to schedule. One probe-pending test split into two so the assertion isolates the probe path with a pending item; one new test covers the BG-47 reorder explicitly | 2026-05-05 |

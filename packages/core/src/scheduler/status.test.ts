@@ -83,6 +83,19 @@ describe("deriveSchedulerStatus", () => {
       }),
     ).toBe("idle");
   });
+
+  it("BG-50: returns 'paused' when paused even if loop is drained (running=false, session open)", () => {
+    expect(
+      deriveSchedulerStatus({
+        ...baseState(),
+        scheduler_intent: "running",
+        running: false,
+        paused: true,
+        session_id: "abc-123",
+        session_started_at: "2026-05-06T00:00:00Z",
+      }),
+    ).toBe("paused");
+  });
 });
 
 const idleInputs = (overrides: Partial<Parameters<typeof deriveWaitReason>[0]> = {}) => ({

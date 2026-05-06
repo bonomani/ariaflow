@@ -23,14 +23,15 @@ const PENDING_STATUSES = new Set(["queued", "waiting", "active"]);
  *
  * Truth table:
  *   intent=stopped                                → "stopped"
- *   intent=running, no session yet                → "starting"
- *     (genuine bootstrap window: operator hit start but the loop's
- *      first tick hasn't opened a session)
+ *   intent=running, paused=true                   → "paused"
+ *     (BG-50: persistent dispatch-pause wins over loop-cycle state —
+ *      the operator's intent is "no dispatch", regardless of whether
+ *      the loop is mid-iteration or drained)
+ *   intent=running, running=false, no session yet → "starting"
  *   intent=running, running=false, session open   → "idle"
  *     (loop drained — runSchedulerLoop sets running=false on a clean
  *      drain/max_iterations exit; the operator still wants it
  *      running, so the next /api/downloads add will re-kick it)
- *   intent=running, running=true, paused=true     → "paused"
  *   intent=running, running=true, active_gid      → "running"
  *   intent=running, running=true, !active_gid     → "idle"
  *
@@ -40,14 +41,11 @@ const PENDING_STATUSES = new Set(["queued", "waiting", "active"]);
 export function deriveSchedulerStatus(state: ServerState): SchedulerStatus {
   const intent = state.scheduler_intent ?? "stopped";
   if (intent === "stopped") return "stopped";
+  if (state.paused) return "paused";
   if (!state.running) {
-    // Loop has run at least once iff a session was opened. If the
-    // session is still open (or a closed session is present), the loop
-    // ran and exited cleanly — treat as idle, not starting.
     const hasOpenSession = Boolean(state.session_id);
     return hasOpenSession ? "idle" : "starting";
   }
-  if (state.paused) return "paused";
   return state.active_gid ? "running" : "idle";
 }
 
