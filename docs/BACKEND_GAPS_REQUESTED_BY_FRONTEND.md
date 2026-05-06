@@ -11,7 +11,56 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-57: `/api/status` summary should be of the *unfiltered* queue
+
+**Paired frontend gap:** FE-47 (no FE change once backend swaps the summary source)
+
+**Symptom:** with any non-`all` queueFilter active, every count chip
+on the filter bar except the active one reads 0. The operator on
+"Active" can't see how many items are queued/error/awaiting_confirmation
+without switching filters.
+
+**Root cause** (`packages/api/src/routes/status.ts:158-159`):
+
+```ts
+items: filtered,
+summary: summarizeQueue(filtered),   // ← also filtered
+```
+
+When the FE sends `?status=active`, `filtered` excludes everything
+else, so `summarizeQueue` returns `{ active: N }` and zero for the
+rest. The FE filterCounts getter trusts the backend summary, so the
+filter bar reads 0 for awaiting_confirmation, queued, error, etc.
+
+**Fix:** summarize the unfiltered queue, filter only `items`:
+
+```ts
+items: filtered,
+summary: summarizeQueue(items),     // unfiltered, full counts
+```
+
+The client expects `summary` to describe the *queue*, not the
+visible-after-filter slice. The same applies to FE's "Confirm" badge
+that reads `summary.awaiting_confirmation` — currently invisible
+unless the operator already filters to that bucket.
+
+**Acceptance:**
+
+1. Add 1 queued + 1 active + 1 awaiting_confirmation item.
+2. GET `/api/status?status=active` → `summary.queued === 1`,
+   `summary.awaiting_confirmation === 1`, `items.length === 1`
+   (the active one).
+3. Existing tests pass — `summary` is unchanged when statusFilter
+   is empty.
+
+**FE follow-up:** none. The FE already trusts the backend summary
+for the filter bar.
+
+---
+
+
 
 <details>
 <summary>BG-56 (resolved) — original frontend brief retained for context</summary>
