@@ -25,31 +25,42 @@ and disk. BG-54's `.1` auto-rename avoids data loss but still pays
 the full re-download cost. For huge files, the operator wants a
 chance to say "I already have it, skip" before any bytes flow.
 
-**Design — verify cheaply, then ask the operator:**
+**Design — filesystem-first verification, then ask the operator:**
 
-When `queue/ops.add()` finds a *terminal-status* item with the same
-URL, run a verification gate before inserting the new item:
+The download folder is ground truth. The queue history is *supplementary
+metadata* (when did we last fetch, what was the ETag) — not the primary
+existence check. This catches files downloaded outside ariaflow
+(manual wget/curl, browser, prior installation, files the operator
+copied in) which a queue-history-only approach would miss.
 
-1. **Local stat** (always): does `prior_item.output_path` exist?
-   does its size match `prior_item.totalLength`?
-   - Fast (~0ms), no network.
-2. **Remote HEAD** (optional, configurable): `HEAD url`. Compare:
-   - `Content-Length` against `prior_item.totalLength`
-   - `ETag` against `prior_item.remote_etag` (new field)
-   - `Last-Modified` against `prior_item.remote_last_modified` (new field)
-   - One round trip, no body — affordable even for huge files.
+When `queue/ops.add()` runs (and the URL has no live duplicate), the
+gate is:
 
-Two outcomes:
+1. **Determine expected filename**:
+   - **HEAD url** if `verify_existing_strategy` ≥ Tier 2 → trust
+     `Content-Disposition: attachment; filename="..."` first, fall
+     back to URL last path segment.
+   - **Otherwise** (Tier 1 only) → URL last path segment
+     (best-effort; may differ from what aria2 will actually write).
+2. **Stat `<download_dir>/<expected_filename>`**.
+3. Outcomes:
 
-- **Verified existing** (local stat passes; remote HEAD agrees or is
-  skipped): insert the new item with `status: "awaiting_confirmation"`
-  and `detail: { existing_id, existing_path, existing_size, remote_changed: false }`.
-  Don't dispatch yet.
-- **Verification failed** (file gone, size mismatch, ETag changed):
-  insert as `queued` and dispatch normally. Action log records the
-  reason so the operator sees why a re-download fired (`detail: {
-  reason: "verify_local_size_mismatch", expected: ..., actual: ... }`
-  or `reason: "remote_etag_changed"`).
+| File at expected path | Size matches HEAD `Content-Length` | Outcome |
+|---|---|---|
+| no | — | `queued` (no prompt; nothing to confirm) |
+| yes | yes (or HEAD skipped) | `awaiting_confirmation` |
+| yes | no | depends on strategy: Tier 2 → `awaiting_confirmation` with `remote_changed: true`; Tier 1 → `queued` (assume re-fetch wanted) |
+
+4. **Enrichment from queue history** — when an `awaiting_confirmation`
+   row is created, look up any prior terminal-status item for the same
+   URL and attach detail:
+   - "Last downloaded by ariaflow on `<date>`" (if history match)
+   - "Source unknown — file present in folder but never downloaded by
+     ariaflow" (if no history match)
+   - Recorded `prior_item.remote_etag` for comparison against HEAD
+     response
+
+   The history is a UX hint to the operator, not the gate itself.
 
 **New queue status:** `awaiting_confirmation` (added to BG-30's
 8-status set → 9). Surfaces in `summary.awaiting_confirmation` count
@@ -73,28 +84,27 @@ POST /api/downloads/:id/rename     → moves to queued, dispatched without
 Each decision lands an action-log entry so the operator's choice is
 auditable.
 
-**New persisted fields on QueueItemRecord:**
+**New persisted fields on QueueItemRecord (UX enrichment only — not load-bearing for the gate):**
 
-- `output_path: string` — absolute path the file was written to. **Must
-  be captured at completion time** because aria2 garbage-collects
-  completed GIDs and `tellStatus(gid)` stops returning the path. Hook
-  point: `scheduler/poll.ts` already detects the `complete` transition
-  (`reconcile`); grab `tellStatus(gid).files[0].path` there and persist
-  on the queue record before the GID disappears from the active set.
-  Backfill: items completed *before* this field landed have no
-  `output_path` → verification treats them as unverifiable and queues
-  normally (no false skips).
+- `output_path: string` — absolute path the file was actually written
+  to. Captured at completion via `tellStatus(gid).files[0].path` in
+  the existing `scheduler/poll.ts` reconcile hook before aria2
+  garbage-collects the GID. Used by the FE to render "Last downloaded
+  here on `<date>`" hints. Backfill: items completed before this field
+  landed have it null — gate still works because gate stats the
+  filesystem directly, not this field.
 - `remote_etag?: string` — captured at completion via aria2's
-  `responseHeaders` if available. Optional.
+  `responseHeaders` if available. Optional. Compared against fresh
+  HEAD response when Tier 2 verification fires.
 - `remote_last_modified?: string` — same source, optional.
 
-**URL match strategy:** strict string match against the operator-
-submitted URL (the same key `queue/lookup.ts` uses today for live
-duplicate detection). Query-string differences are a different URL.
-Server-side redirects don't matter — both adds use the same submitted
-URL. Operators who paste a slightly different URL (with/without
-trailing slash, different cache-buster) won't get a duplicate match,
-which is the right default: silence beats false positives.
+**Why filesystem-first matters more than queue history:**
+
+A queue-history-only design misses files downloaded outside ariaflow
+(manual wget, browser, previous installation, operator copy-in).
+Those are common in real workflows — operators often have an existing
+download collection from before they installed ariaflow. The gate has
+to treat the folder as authoritative.
 
 **New declaration preferences:**
 
