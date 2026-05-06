@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import {
+  brewOutdatedFormula,
   detectAriaflowInstalledVia,
   detectAriaflowManagedBy,
   detectBinaryInstalledVia,
@@ -16,7 +17,7 @@ export const ARIA2_SERVICE_TARGETS = new Set([
 ]);
 
 interface ActionDispatchResult {
-  status: 202 | 409;
+  status: 200 | 202 | 409;
   body: Record<string, unknown>;
   /** Optional post-response side effect (process.exit, spawn, etc.). */
   after?: () => void;
@@ -127,6 +128,65 @@ export function dispatchAriaflowUpdate(): ActionDispatchResult {
   return {
     status: 409,
     body: {
+      error: "unknown_installer",
+      installed_via: null,
+      message: "could not detect an installer for this process",
+    },
+  };
+}
+
+/**
+ * BG-59: read-only probe of the package manager for an ariaflow-server
+ * upgrade. Mirrors dispatchAriaflowUpdate's installer detection but
+ * never dispatches `brew upgrade`. Returns 200 with the verdict on
+ * supported installers; 409 on source/null.
+ */
+export async function dispatchAriaflowCheckUpdate(
+  currentVersion: string,
+): Promise<ActionDispatchResult> {
+  const installedVia: AriaflowInstalledVia = detectAriaflowInstalledVia();
+  if (installedVia === "homebrew") {
+    const probe = await brewOutdatedFormula("ariaflow-server");
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        installed_via: "homebrew",
+        current_version: probe.current_version ?? currentVersion,
+        latest_version: probe.latest_version,
+        update_available: probe.available,
+        ...(probe.message ? { message: probe.message } : {}),
+      },
+    };
+  }
+  if (installedVia === "pipx" || installedVia === "npm") {
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        installed_via: installedVia,
+        current_version: currentVersion,
+        latest_version: null,
+        update_available: null,
+        message: `no check-update probe wired for installed_via=${installedVia}`,
+      },
+    };
+  }
+  if (installedVia === "source") {
+    return {
+      status: 409,
+      body: {
+        ok: false,
+        error: "source_install",
+        installed_via: "source",
+        message: "running from a git checkout — no package manager to query",
+      },
+    };
+  }
+  return {
+    status: 409,
+    body: {
+      ok: false,
       error: "unknown_installer",
       installed_via: null,
       message: "could not detect an installer for this process",

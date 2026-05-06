@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-59 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-59: Manual `check_update` endpoint for ariaflow-server (read-only probe)
 
@@ -58,6 +61,8 @@ returns "Check failed (404)" until backend ships.
 4. Action log shows the probe outcome.
 
 **FE follow-up:** none. Already wired.
+
+</details>
 
 ---
 
@@ -1088,6 +1093,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-59 | `POST /api/lifecycle/ariaflow-server/check_update` — read-only package-manager probe. Homebrew installs run `brew outdated --json=v2 ariaflow-server` via the new `brewOutdatedFormula` helper in `core/install/check_update.ts` (parses `formulae[0].installed_versions[0]` → `current_version`, `formulae[0].current_version` → `latest_version`); pipx/npm return 200 with `update_available: null` and a "no probe wired" message; source → 409 `source_install`; null → 409 `unknown_installer`. Action log entry per call: `action: "check_update"`, outcome `changed` when update_available, `unchanged` otherwise, `blocked` on 409. New `ACTIONS.checkUpdate`; `ActionDispatchResult.status` widened from `202 \| 409` to `200 \| 202 \| 409` so the same dispatcher pattern works for the synchronous probe | 2026-05-06 |
 | BG-58 | New `resolveDefaultDownloadDir()` helper in `core/install/download_dir.ts` returns `$XDG_DOWNLOAD_DIR` when set, else `~/Downloads`, else null. `routes/files.ts` `loadDownloadDir` uses it as the fallback when the operator hasn't set the pref; `scheduler/probes.ts` `probeDiskOk` likewise (its `process.cwd()` last-resort stays as the third tier). Explicit pref still wins. Empty-string → still falls back. The `download_dir_unset` 409 only fires now in headless containers with no `$HOME` and no `$XDG_DOWNLOAD_DIR` | 2026-05-06 |
 | BG-57 | `/api/status` summary now describes the unfiltered queue. `routes/status.ts` was passing the post-`applyFilters` slice to `summarizeQueue`, so any non-empty `?status=` made every other filter-bar count read 0. One-line fix: `summarizeQueue(items)` instead of `summarizeQueue(filtered)`; `items: filtered` stays so the visible list still respects the filter | 2026-05-06 |
 | BG-56 | Folder ops within `<download_dir>` shipped via new `packages/api/src/routes/files.ts`. Five endpoints — `GET /api/files` (single-level by default; `?recursive=true` capped at depth 3; joins each entry against the queue history via `output_path` for `history_match`), `POST /api/files/rename` ({path,new_name}; new_name must be a bare filename), `POST /api/files/move` ({path,new_subdir}), `DELETE /api/files` ({path,recursive?}; non-empty dir without `recursive: true` → 409), `POST /api/files/clean` ({status?,older_than_days?,orphaned?}; `orphaned: true` is reconcile-only, no disk side-effect). Path safety: `resolveSafe` realpath-canonicalizes the target (or its parent for non-existing destinations) and rejects anything that resolves outside the realpath of `<download_dir>`, plus a sep-aware `..`-traversal check before realpath to defeat symlink-creation races. After every mutation, queue rows whose `output_path` matches the source are updated (rename/move) or flagged `file_present_on_disk: false` (delete). Action-log entries use new `ACTIONS.file{Rename,Move,Delete,Clean}` + `TARGETS.files`. New optional `file_present_on_disk` field on `QueueItemRecord` | 2026-05-06 |

@@ -50,6 +50,8 @@ export const ACTIONS = {
   autoStartReconciled: "auto_start_reconciled",
   autoUpdateCheck: "auto_update_check",
   autoUpdateApplied: "auto_update_applied",
+  // BG-59: manual read-only probe of the package manager
+  checkUpdate: "check_update",
   // BG-56: file ops within <download_dir>
   fileRename: "rename",
   fileMove: "move",

@@ -15,6 +15,7 @@ import {
 import {
   ARIA2_SERVICE_TARGETS,
   dispatchAria2Update,
+  dispatchAriaflowCheckUpdate,
   dispatchAriaflowRestart,
   dispatchAriaflowUpdate,
 } from "./_lifecycle_actions.js";
@@ -47,6 +48,31 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
 
       const beforeState = await deps.stateStore.load();
       const before = { lifecycle: { state: beforeState } };
+
+      // BG-59: read-only update probe — synchronous, returns the
+      // verdict in the body. No side effect.
+      if (target === "ariaflow-server" && action === "check_update") {
+        const dispatch = await dispatchAriaflowCheckUpdate(deps.version ?? "0.0.0");
+        await deps.actionLog.record({
+          action: ACTIONS.checkUpdate,
+          target,
+          outcome:
+            dispatch.status === 200
+              ? dispatch.body.update_available === true
+                ? "changed"
+                : "unchanged"
+              : "blocked",
+          reason: action,
+          before,
+          after: { target, action, ...dispatch.body },
+          detail: { target, action, ...dispatch.body },
+        });
+        return reply.code(dispatch.status).send({
+          target,
+          action,
+          ...dispatch.body,
+        });
+      }
 
       // BG-43: ariaflow-server/{restart,update} dispatch via supervisor /
       // installer detection. Returns 202 on success and runs the side
