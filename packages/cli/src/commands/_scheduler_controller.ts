@@ -78,6 +78,22 @@ export function createSchedulerController(
           } catch {
             /* RPC failure is logged-only */
           }
+          // BG-53: refresh per-gid limit so in-flight transfers track
+          // the new cap (aria2 enforces min(per-download, global)).
+          try {
+            const activeRows = await aria2Rpc.tellActive(aria2, ["gid"]);
+            for (const row of activeRows) {
+              const gid = (row as { gid?: string }).gid;
+              if (!gid) continue;
+              try {
+                await aria2Rpc.setMaxDownloadLimit(aria2, gid, fresh.cap_bytes_per_sec);
+              } catch {
+                /* per-gid failures don't block the rest */
+              }
+            }
+          } catch {
+            /* tellActive failed — global cap still applied */
+          }
           const upCapBytes = Math.trunc(
             Number(fresh.up_cap_mbps ?? 0) * bandwidthUnits.BYTES_PER_MEGABIT,
           );

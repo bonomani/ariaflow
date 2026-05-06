@@ -72,7 +72,6 @@ function baseOptions(
 ): Aria2Options {
   const options: Aria2Options = {
     "max-download-limit": aria2SpeedValue(opts.capBytesPerSec),
-    "allow-overwrite": "true",
     continue: "true",
     "max-tries": String(opts.prefs.max_tries ?? 5),
     "retry-wait": String(opts.prefs.retry_wait ?? 10),

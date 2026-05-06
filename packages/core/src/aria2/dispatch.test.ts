@@ -53,7 +53,6 @@ describe("dispatchDownload", () => {
     expect(uris).toEqual(["http://h/file.iso"]);
     expect(options).toMatchObject({
       "max-download-limit": "1000000",
-      "allow-overwrite": "true",
       continue: "true",
       "max-tries": "5",
       "retry-wait": "10",

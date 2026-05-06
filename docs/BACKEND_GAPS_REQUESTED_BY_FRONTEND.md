@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (2)
+## Open (0)
+
+<details>
+<summary>BG-54 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-54: Drop hardcoded `allow-overwrite: true` in dispatch — let aria2 rename or fail safely
 
@@ -82,7 +85,12 @@ least surprise, aria2 defaults already produce the safe behavior.
 for it (would set `allow-overwrite=true` per-item via `select_file`-
 style override). Not required now.
 
+</details>
+
 ---
+
+<details>
+<summary>BG-53 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-53: Per-download `max-download-limit` not refreshed on probe; in-flight transfers drift below the displayed cap
 
@@ -133,6 +141,8 @@ transfer; per-download is redundant when there's no per-item budgeting
 logic. Lower complexity, no drift.
 
 **FE follow-up:** none — FE already renders the live cap.
+
+</details>
 
 ---
 
@@ -633,6 +643,8 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-54 | Dropped hardcoded `"allow-overwrite": "true"` from `baseOptions` in `packages/core/src/aria2/dispatch.ts`. aria2 now falls back to its default (`allow-overwrite: false` + `auto-file-renaming: true`), so re-adding a completed URL produces `<name>.1` instead of silently clobbering the existing file. `continue: true` still resumes partials via the `.aria2` control file regardless of overwrite setting. Test assertion updated in `dispatch.test.ts` | 2026-05-06 |
+| BG-53 | Per-download `max-download-limit` is now refreshed alongside the global cap on every probe. After `setMaxOverallDownloadLimit`, both `routes/bandwidth.ts` (manual `POST /api/bandwidth/probe`) and the BG-52 periodic timer in `_scheduler_controller.ts` walk `tellActive(["gid"])` and call `setMaxDownloadLimit(client, gid, cap)` for each in-flight transfer. Per-gid failures are swallowed individually so one bad gid doesn't block the rest; if `tellActive` itself fails, the global cap is still applied | 2026-05-06 |
 | BG-52 | Periodic bandwidth probe wired in `_scheduler_controller.ts`. After the loop launches, a `setInterval` re-runs `runBandwidthProbe` every `bandwidth_probe_interval_seconds` while `state.running && !state.paused && state.active_gid` (re-reading the declaration each tick so live changes apply). Each run updates `state.last_bandwidth_probe`/`last_bandwidth_probe_at`, applies the new cap to aria2 via `setMaxOverallDownloadLimit`/`setMaxOverallUploadLimit` (in-flight transfers adapt live), and records an action-log entry with `reason: "scheduler_periodic"`. Timer is `unref`'d, cleared on stop/crash/normal exit; interval≤0 disables | 2026-05-06 |
 | BG-50 | `deriveSchedulerStatus` (`packages/core/src/scheduler/status.ts`) reordered: persistent `paused` flag now wins over the `!running` short-circuit, so a drained-but-paused loop (intent=running, running=false, paused=true, session open) reports `'paused'` instead of `'idle'`. The `intent=stopped` short-circuit still wins first (a paused state without operator-running-intent stays `'stopped'`). One new test in `status.test.ts` covers the BG-50 case; existing `running`/`idle`/`starting`/`stopped` tests untouched and still pass | 2026-05-06 |
 | BG-49 | All four scheduler action routes (`/api/scheduler/{start,stop,pause,resume}`) now return a canonical `state: { scheduler_status, running, dispatch_paused, session_id, _rev }` envelope alongside their existing flat fields. New `buildStateEnvelope(deps, state)` helper in `routes/scheduler.ts` reuses `computeSchedulerStatus` so the `scheduler_status` value matches what `GET /api/status` would return immediately after. Existing flat `started/stopped/paused/_rev` fields stay for back-compat. Note: `scheduler_status` reflects current state — when scheduler intent is "stopped", a /pause flips `dispatch_paused` but keeps `scheduler_status:"stopped"` (intent unchanged); test assertions match that semantic. 4 new tests in BG-49 describe block | 2026-05-06 |
