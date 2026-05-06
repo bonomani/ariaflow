@@ -1561,7 +1561,7 @@ describe("BG-25: scheduler start/stop lifecycle", () => {
   // BG-40: a failed start must roll back scheduler_intent so /api/scheduler.status
   // doesn't wedge at "starting" forever.
   it("POST /api/scheduler/start reverts intent on failed start (e.g. aria2_unavailable)", async () => {
-    const { app: wired, state } = await makeWiredServer(dir, {
+    const { app: wired } = await makeWiredServer(dir, {
       startScheduler: async () => ({ started: false, reason: "aria2_unavailable" }),
       stopScheduler: async () => ({ stopped: false, reason: "not_running" }),
     });
