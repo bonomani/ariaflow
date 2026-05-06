@@ -1,5 +1,5 @@
 import { promises as fsp, statSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { ACTIONS, TARGETS, errorPayload, prefValue } from "@ariaflow/core";
 import type { FastifyReply } from "fastify";
 import { requireObjectBody, type RouteContext } from "./_context.js";
