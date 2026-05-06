@@ -14,9 +14,6 @@ export const ACTIONS = {
   schedulerPause: "pause",
   schedulerResume: "resume",
   schedulerPreflight: "preflight",
-  // BG-48: "contract" is the operator-facing word; "ucc" stays in
-  // the codebase as the contract spec name (UCC v2.0) but the
-  // audit-log token is now "contract".
   schedulerContract: "contract",
   // scheduler loop internals (target=scheduler)
   schedulerPre: "scheduler_pre",

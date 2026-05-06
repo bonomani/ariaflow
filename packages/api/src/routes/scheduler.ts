@@ -79,10 +79,6 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
     };
   });
 
-  // BG-48: /api/scheduler/contract is the operator-facing name.
-  // /api/scheduler/ucc stays for one release of back-compat; both
-  // call the same handler and both emit `action: "contract"` in the
-  // audit log (see ACTIONS.schedulerContract → "contract").
   const runContract = async () => {
     const declaration = await deps.declarationStore.load();
     const aria2Available = (await probeAria2Reachable(deps.aria2)) === true;
@@ -155,7 +151,6 @@ export function registerSchedulerRoutes({ app, deps }: RouteContext): void {
   };
 
   app.post("/api/scheduler/contract", runContract);
-  app.post("/api/scheduler/ucc", runContract);
 
   app.post("/api/scheduler/preflight", async () => {
     const declaration = await deps.declarationStore.load();

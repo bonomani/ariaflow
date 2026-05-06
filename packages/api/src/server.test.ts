@@ -1367,8 +1367,8 @@ describe("scheduler routes", () => {
     expect(calls).toContain("aria2.unpauseAll");
   });
 
-  it("POST /api/scheduler/ucc returns failed envelope when preflight gates fail", async () => {
-    const res = await app.inject({ method: "POST", url: "/api/scheduler/ucc" });
+  it("POST /api/scheduler/contract returns failed envelope when preflight gates fail", async () => {
+    const res = await app.inject({ method: "POST", url: "/api/scheduler/contract" });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.meta).toEqual({ contract: "UCC", version: "2.0" });
@@ -1381,21 +1381,13 @@ describe("scheduler routes", () => {
     expect(body.preflight.hard_failures).toContain("aria2_available");
   });
 
-  it("POST /api/scheduler/ucc records a 'contract' action entry (BG-48)", async () => {
-    await app.inject({ method: "POST", url: "/api/scheduler/ucc" });
+  it("POST /api/scheduler/contract records a 'contract' action entry", async () => {
+    await app.inject({ method: "POST", url: "/api/scheduler/contract" });
     const log = await app.inject({ method: "GET", url: "/api/actions" });
     const entries = log.json().entries as Array<{ action: string; outcome: string }>;
     const entry = entries.find((e) => e.action === "contract");
     expect(entry).toBeDefined();
     expect(entry!.outcome).toBe("failed");
-  });
-
-  it("POST /api/scheduler/contract is the BG-48 alias and emits the same shape", async () => {
-    const res = await app.inject({ method: "POST", url: "/api/scheduler/contract" });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.meta).toEqual({ contract: "UCC", version: "2.0" });
-    expect(body.preflight).toBeDefined();
   });
 
   it("POST /api/scheduler/preflight returns the gate result and logs an action", async () => {
@@ -1975,17 +1967,6 @@ describe("aria2 option routes", () => {
     }
   });
 
-  it("get_global_option (legacy alias) shares the same shape", async () => {
-    const mock = await mockServerWithAria2(dir, () => ({ split: "16" }));
-    try {
-      const res = await mock.inject({ method: "GET", url: "/api/aria2/global_option" });
-      const body = res.json();
-      expect(body.split).toBe("16");
-      expect(body.options).toBeUndefined();
-    } finally {
-      await mock.close();
-    }
-  });
 });
 
 async function mockServerWithAria2(
