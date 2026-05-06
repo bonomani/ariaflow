@@ -101,6 +101,14 @@ export async function pollActiveItems(deps: PollDeps): Promise<PollResult> {
       if (item.status !== "complete") {
         item.status = "complete";
         item.completed_at = stampNow();
+        // BG-55 phase 1: capture the absolute path aria2 wrote to so a
+        // future re-add can stat the file directly. Best-effort —
+        // aria2 may have already GC'd the gid by the time we ask.
+        const files = (info as { files?: Array<{ path?: string }> }).files;
+        const firstPath = Array.isArray(files) ? files[0]?.path : undefined;
+        if (typeof firstPath === "string" && firstPath.length > 0) {
+          item.output_path = firstPath;
+        }
         completed.push({ id: item.id, gid });
         dirty = true;
         await deps.actionLog.record({

@@ -67,6 +67,17 @@ export interface QueueItemRecord {
   /** File listing populated by the aria2 poller (per-file metadata). */
   files?: unknown[];
   /**
+   * BG-55: absolute path aria2 wrote the completed file to, captured
+   * from `tellStatus(gid).files[0].path` at completion. Used by the
+   * re-add gate's filesystem-first verification (best-effort hint;
+   * the gate stats the FS directly, so a missing field is fine).
+   */
+  output_path?: string | null;
+  /** BG-55: optional ETag captured at completion (Tier 2 verification). */
+  remote_etag?: string | null;
+  /** BG-55: optional Last-Modified captured at completion (Tier 2 verification). */
+  remote_last_modified?: string | null;
+  /**
    * BG-28(b): live progress fields mirrored from aria2's tellStatus
    * (camelCase to match the dashboard's wire shape — these are the
    * canonical names, the snake_case aliases were retired). Optional
