@@ -84,6 +84,7 @@ export function buildAriaflowServerRow(deps: ServerDeps): ComponentRow {
       completion: null,
       version: expectedVersion,
       expected_version: expectedVersion,
+      last_probed_at: Math.floor(Date.now() / 1000),
     },
   };
 }
@@ -156,6 +157,7 @@ export function buildAria2Row(
       ...(probe.version ? { version: probe.version } : {}),
       ...(probe.binPath ? { path: probe.binPath } : {}),
       ...(probe.err ? { message: probe.err } : {}),
+      last_probed_at: Math.floor(Date.now() / 1000),
     },
   };
 }
@@ -187,6 +189,7 @@ export function buildNetworkqualityRow(state: ServerState): ComponentRow {
       observation: nq.installed && nq.usable ? "ok" : "failed",
       message: nq.message,
       ...(nq.command ? { command: nq.command } : {}),
+      last_probed_at: Math.floor(Date.now() / 1000),
     },
   };
 }

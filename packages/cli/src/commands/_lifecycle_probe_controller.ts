@@ -22,6 +22,8 @@ interface LifecycleSnapshot {
   aria2_installed: boolean;
   networkquality_installed: boolean;
   auto_start_installed: boolean;
+  /** BG-64: epoch seconds the snapshot was taken. */
+  last_probed_at: number;
 }
 
 async function snapshot(aria2: Aria2Client | undefined): Promise<LifecycleSnapshot> {
@@ -31,9 +33,11 @@ async function snapshot(aria2: Aria2Client | undefined): Promise<LifecycleSnapsh
     aria2_installed: Boolean(findAria2c()),
     networkquality_installed: Boolean(findNetworkQuality()),
     auto_start_installed: aria2AutoStartInstalled(),
+    last_probed_at: Math.floor(Date.now() / 1000),
   };
 }
 
+/** Diff ignores `last_probed_at` so the timestamp alone doesn't trigger an emit. */
 function snapshotsEqual(a: LifecycleSnapshot, b: LifecycleSnapshot): boolean {
   return (
     a.aria2_running === b.aria2_running &&
