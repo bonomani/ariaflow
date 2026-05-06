@@ -11,7 +11,72 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-50: `deriveSchedulerStatus` should report `paused` when paused, even if loop is drained
+
+**Paired frontend gap:** FE-40 (no FE change needed — pure backend derivation tweak)
+
+**Symptom on the dashboard:** when the scheduler is `idle` (loop drained,
+intent=running, session open) and the operator clicks **Pause**:
+
+1. FE dispatches `POST /api/scheduler/pause`.
+2. Backend persists `state.paused = true` ✓
+3. BG-49 envelope returns `state.scheduler_status: 'idle'` ✗
+4. Badge stays `idle`. The Pause click looks like a no-op to the operator
+   even though the dispatch-paused flag *was* set and *will* block the
+   next dispatch (e.g. when a new download is added).
+
+**Root cause** (`packages/core/src/scheduler/status.ts:40-52`):
+
+```ts
+if (intent === "stopped") return "stopped";
+if (!state.running) {
+  return hasOpenSession ? "idle" : "starting";   // returns BEFORE checking paused
+}
+if (state.paused) return "paused";
+return state.active_gid ? "running" : "idle";
+```
+
+The `!state.running` branch fires first and short-circuits, so `paused` is
+only ever surfaced while the loop is actively dispatching.
+
+**Operator mental model:** "I clicked Pause. The dispatcher is paused.
+Future work won't fire until I resume. The badge should say `paused`."
+Whether the loop happens to be in-cycle right now is an implementation
+detail.
+
+**Requested behaviour:** check `paused` before the `!running` branch:
+
+```ts
+if (intent === "stopped") return "stopped";
+if (state.paused) return "paused";   // NEW: persistent intent wins
+if (!state.running) {
+  return hasOpenSession ? "idle" : "starting";
+}
+return state.active_gid ? "running" : "idle";
+```
+
+After this change, `paused` reflects the persistent dispatch-paused flag
+regardless of whether the loop is mid-iteration or drained.
+
+**Acceptance:**
+
+1. With `intent=running, running=false, session_id=set, paused=true` →
+   `deriveSchedulerStatus` returns `'paused'` (was `'idle'`).
+2. With `intent=running, running=true, paused=true` → still `'paused'`
+   (unchanged).
+3. Existing tests for `running` / `idle` / `starting` / `stopped` keep
+   passing — only the new `paused-while-drained` case changes.
+4. /api/scheduler/pause and /api/scheduler/resume responses (BG-49
+   envelope) reflect the new derivation.
+
+No FE change needed once this lands. The dashboard renders whatever
+`state.scheduler_status` reports.
+
+---
+
+
 
 <details>
 <summary>BG-49 (resolved) — original frontend brief retained for context</summary>
