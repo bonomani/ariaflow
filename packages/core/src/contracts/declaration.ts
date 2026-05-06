@@ -148,6 +148,13 @@ const PREFERENCES: UicPreference[] = [
     options: [6, 12, 24, 48, 168],
     rationale: "hours between auto-update checks when auto_update is enabled",
   },
+  {
+    name: "auto_restart_after_upgrade",
+    value: true,
+    options: [true, false],
+    rationale:
+      "BG-62: chain a launchd bootout+bootstrap after `brew upgrade` so the running process picks up the new bottle without a manual restart",
+  },
 ];
 
 const GATES: UicGate[] = [

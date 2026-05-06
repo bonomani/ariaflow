@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   brewOutdatedFormula,
+  buildPostUpgradeRestartSuffix,
   detectAriaflowInstalledVia,
   detectAriaflowManagedBy,
   detectBinaryInstalledVia,
@@ -113,21 +114,43 @@ export function dispatchAriaflowRestart(): ActionDispatchResult {
  * installer. The package manager runs detached; the running process
  * keeps serving until the next restart picks up the new version.
  */
-export function dispatchAriaflowUpdate(): ActionDispatchResult {
+export function dispatchAriaflowUpdate(
+  opts: { autoRestart?: boolean } = {},
+): ActionDispatchResult {
   const installedVia: AriaflowInstalledVia = detectAriaflowInstalledVia();
+  // BG-62: chain a launchd bootout+bootstrap after the upgrade so the
+  // running process picks up the new bottle. Suffix is null when not
+  // applicable (non-launchd / plist not in ~/Library/LaunchAgents).
+  const restartSuffix = opts.autoRestart ? buildPostUpgradeRestartSuffix() : null;
+  const chained = (cmd: string): (() => void) =>
+    restartSuffix
+      ? () => detached("sh", ["-c", `${cmd} && ${restartSuffix}`])
+      : () => detached("sh", ["-c", cmd]);
 
   if (installedVia === "homebrew") {
+    const cmd = `${resolvePkgManager("brew")} upgrade ariaflow-server`;
     return {
       status: 202,
-      body: { ok: true, action: "update", installed_via: "homebrew" },
-      after: () => detached(resolvePkgManager("brew"), ["upgrade", "ariaflow-server"]),
+      body: {
+        ok: true,
+        action: "update",
+        installed_via: "homebrew",
+        auto_restart: Boolean(restartSuffix),
+      },
+      after: chained(cmd),
     };
   }
   if (installedVia === "pipx") {
+    const cmd = `${resolvePkgManager("pipx")} upgrade ariaflow-server`;
     return {
       status: 202,
-      body: { ok: true, action: "update", installed_via: "pipx" },
-      after: () => detached(resolvePkgManager("pipx"), ["upgrade", "ariaflow-server"]),
+      body: {
+        ok: true,
+        action: "update",
+        installed_via: "pipx",
+        auto_restart: Boolean(restartSuffix),
+      },
+      after: chained(cmd),
     };
   }
   if (installedVia === "npm") {

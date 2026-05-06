@@ -60,6 +60,7 @@ export { applyBandwidthCap } from "./aria2/cap.js";
 export { resolveDefaultDownloadDir } from "./install/download_dir.js";
 export { brewOutdatedFormula, type UpdateProbeResult } from "./install/check_update.js";
 export { resolvePkgManager } from "./install/pkg_manager.js";
+export { buildPostUpgradeRestartSuffix } from "./install/restart_chain.js";
 export { verifyExistingTier1 } from "./queue/verify.js";
 export { updateOutputPath, markMissingByPath } from "./queue/history_sync.js";
 export {

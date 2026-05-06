@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import {
   ACTIONS,
   TARGETS,
+  buildPostUpgradeRestartSuffix,
   detectAriaflowInstalledVia,
   prefValue,
   resolvePkgManager,
@@ -56,14 +57,23 @@ async function checkForUpdate(installedVia: AriaflowInstalledVia): Promise<Outda
   return { available: false, message: `no outdated check for installed_via=${installedVia ?? "null"}` };
 }
 
-function applyUpdate(installedVia: AriaflowInstalledVia): void {
+function applyUpdate(installedVia: AriaflowInstalledVia, autoRestart: boolean): void {
   // Mirrors BG-43's manual /api/lifecycle/ariaflow-server/update path:
   // detached + unref so the running process keeps serving until the
-  // next supervisor-driven restart picks up the new binary.
+  // next supervisor-driven restart picks up the new binary. BG-62
+  // chains a launchd bootout+bootstrap when the pref + supervisor
+  // both say so, so the new bottle takes effect without operator action.
   const detached = (cmd: string, args: string[]): void => {
     spawn(cmd, args, { detached: true, stdio: "ignore" }).unref();
   };
-  if (installedVia === "homebrew") detached(resolvePkgManager("brew"), ["upgrade", "ariaflow-server"]);
+  if (installedVia !== "homebrew") return;
+  const brew = resolvePkgManager("brew");
+  const restartSuffix = autoRestart ? buildPostUpgradeRestartSuffix() : null;
+  if (restartSuffix) {
+    detached("sh", ["-c", `${brew} upgrade ariaflow-server && ${restartSuffix}`]);
+  } else {
+    detached(brew, ["upgrade", "ariaflow-server"]);
+  }
 }
 
 const HOUR_S = 3600;
@@ -98,7 +108,10 @@ export function createAutoUpdateController(ctx: CliContext): AutoUpdateControlle
         detail: { installed_via: installedVia, available: result.available, message: result.message },
       });
       if (result.available) {
-        applyUpdate(installedVia);
+        const autoRestart = Boolean(
+          prefValue(declaration, "auto_restart_after_upgrade", true),
+        );
+        applyUpdate(installedVia, autoRestart);
         await ctx.actions.record({
           action: ACTIONS.autoUpdateApplied,
           target: TARGETS.system,

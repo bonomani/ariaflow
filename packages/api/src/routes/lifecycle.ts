@@ -2,6 +2,7 @@ import {
   ACTIONS,
   errorPayload,
   installAria2Service,
+  prefValue,
   uninstallAria2Service,
 } from "@ariaflow/core";
 import { withMeta } from "../freshness.js";
@@ -83,12 +84,16 @@ export function registerLifecycleRoutes({ app, deps }: RouteContext): void {
         (target === "ariaflow-server" && (action === "restart" || action === "update")) ||
         (target === "aria2" && action === "update")
       ) {
+        // BG-62: read auto_restart_after_upgrade so the brew/pipx upgrade
+        // can chain a bootout+bootstrap and pick up the new bottle.
+        const declaration = await deps.declarationStore.load();
+        const autoRestart = Boolean(prefValue(declaration, "auto_restart_after_upgrade", true));
         const dispatch =
           target === "aria2"
             ? dispatchAria2Update()
             : action === "restart"
               ? dispatchAriaflowRestart()
-              : dispatchAriaflowUpdate();
+              : dispatchAriaflowUpdate({ autoRestart });
         await deps.actionLog.record({
           action: ACTIONS.systemLifecycle,
           target,
