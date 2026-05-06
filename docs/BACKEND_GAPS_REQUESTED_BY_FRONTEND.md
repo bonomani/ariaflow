@@ -11,7 +11,50 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-64: Stamp `last_probed_at` on each component in `/api/lifecycle`
+
+**Paired frontend gap:** FE-54
+
+**Why:** the FE today can't tell when backend's lifecycle probe loop
+has stopped. All other component failure modes (process dead, RPC
+unreachable, network partition) are caught by /api/status
+reachability or `lifecycle_changed` events. The one gap: silently-
+crashed periodic probe with HTTP still answering. The operator
+parked on the Lifecycle tab sees stale-but-green pills indefinitely.
+
+Without this, the system **displays** lifecycle state. With it, the
+system **monitors** it (can tell the operator when its own monitoring
+stops working).
+
+**Requested field:** `result.last_probed_at` (epoch seconds) on every
+component in `GET /api/lifecycle.components.{name}.result` and on
+the corresponding `lifecycle_changed` SSE payload. Stamped on every
+periodic probe (BG-63 loop) AND on lazy/on-demand probes (when
+operator hits the endpoint).
+
+**FE follow-up (FE-54):**
+
+- New `lifecycleStaleOverlay(record)` getter returns 'stale' when
+  `now - last_probed_at > 2 × probe_interval`.
+- Pill goes yellow + tooltip "monitoring stale (last probed Xm ago)".
+- Operator recovers by re-entering the tab (lazy probe re-stamps).
+- Missing field on older backends: graceful — FE doesn't surface the
+  overlay, current behaviour preserved.
+
+**Acceptance:**
+
+1. `GET /api/lifecycle` returns `last_probed_at` on every component.
+2. BG-63 periodic probe updates the field on each tick.
+3. Test hook: stop the probe scheduler with HTTP still serving.
+   Within 2 × interval, FE pill goes yellow with stale overlay.
+4. Re-enter tab → lazy probe runs → field updated → pill green.
+5. Older backend without the field → FE no overlay, no crash.
+
+**Cost:** one field per component, one assignment per probe.
+
+---
 
 <details>
 <summary>BG-63 (resolved) — original frontend brief retained for context</summary>
