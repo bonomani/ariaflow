@@ -53,6 +53,11 @@ export const ACTIONS = {
   autoStartReconciled: "auto_start_reconciled",
   autoUpdateCheck: "auto_update_check",
   autoUpdateApplied: "auto_update_applied",
+  // BG-56: file ops within <download_dir>
+  fileRename: "rename",
+  fileMove: "move",
+  fileDelete: "delete",
+  fileClean: "clean",
 } as const;
 
 export type ActionName = (typeof ACTIONS)[keyof typeof ACTIONS];
@@ -66,6 +71,7 @@ export const TARGETS = {
   system: "system",
   declaration: "declaration",
   aria2: "aria2",
+  files: "files",
 } as const;
 
 export type ActionTarget = (typeof TARGETS)[keyof typeof TARGETS];

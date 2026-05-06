@@ -79,6 +79,12 @@ export interface QueueItemRecord {
   /** BG-55: optional Last-Modified captured at completion (Tier 2 verification). */
   remote_last_modified?: string | null;
   /**
+   * BG-56: false after the operator deletes the on-disk file via
+   * `/api/files`. Stays undefined for items whose file is on disk
+   * (default-true semantics — absence = present).
+   */
+  file_present_on_disk?: boolean;
+  /**
    * BG-55: per-item override forwarded to aria2 as `allow-overwrite`.
    * Set true by `POST /api/downloads/:id/confirm` so the operator can
    * reclaim the existing path; defaults to undefined (aria2 default

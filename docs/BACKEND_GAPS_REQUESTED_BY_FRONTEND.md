@@ -11,7 +11,119 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-56: Folder operations within `<download_dir>` (rename / move / delete / clean)
+
+**Paired frontend gap:** FE-46 (Downloaded tab actions UI)
+
+**Roadmap doc:** `../ariaflow-dashboard/docs/POST_DOWNLOAD_LIFECYCLE.md` — Phase 1.
+
+**Goal:** let the operator manipulate files **inside the ariaflow-managed
+download folder** from the dashboard. Out of scope: anything outside
+that folder. Operators have Finder / nautilus for the rest.
+
+**Scope guardrails — non-negotiable:**
+
+1. Every path is validated to resolve inside `<download_dir>`
+   (canonicalize, follow symlinks, reject `..` traversal, reject
+   absolute paths outside).
+2. ariaflow never touches the wider filesystem.
+3. Recursive directory operations require an explicit `recursive: true`
+   flag in the request body.
+4. All operations append to the action log with the original and
+   resulting paths so any change is auditable.
+5. After a successful op, sync the affected queue history rows:
+   - rename/move → update `output_path`
+   - delete → flag the row `file_present_on_disk: false` (don't delete
+     the row — the URL/history record stays)
+
+**New endpoints:**
+
+```
+POST   /api/files/rename       { path, new_name }                → 200 / 409
+POST   /api/files/move         { path, new_subdir }              → 200 / 409
+DELETE /api/files              { path, recursive? }              → 204
+POST   /api/files/clean        { older_than_days?, status? }     → 200 + summary
+GET    /api/files                                                → 200 + listing
+```
+
+`GET /api/files` is the inspector: walks `<download_dir>` (single
+level by default; nested with `?recursive=true` capped at depth 3),
+returns:
+
+```json
+{
+  "ok": true,
+  "files": [
+    {
+      "path": "/Users/bc/Downloads/ubuntu.iso",
+      "rel_path": "ubuntu.iso",
+      "size": 6553600000,
+      "modified_at": "2026-04-12T18:34:00Z",
+      "type": "file",
+      "history_match": {
+        "item_id": "abc123",
+        "url": "https://...",
+        "downloaded_at": "2026-04-12T18:34:00Z"
+      }
+    }
+  ]
+}
+```
+
+The `history_match` field is the join with the queue history — null
+for files that ariaflow didn't download (manually-placed files etc).
+This is what powers the "On disk + no history" row state in the
+Downloaded tab.
+
+**Cleanup recipes:** `POST /api/files/clean` accepts:
+
+- `{ status: "complete", older_than_days: 30 }` — delete files
+  for completed items older than N days
+- `{ status: "error" }` — delete files associated with errored items
+  (cleanup of failed retry artifacts)
+- `{ orphaned: true }` — delete history rows where the file is
+  missing on disk (reconcile, no disk side effect)
+
+**Acceptance:**
+
+1. POST `/api/files/rename` with `{path: "/Users/bc/Downloads/ubuntu.iso", new_name: "ubuntu-2604.iso"}`:
+   - 200 with new path
+   - file renamed on disk
+   - queue history row's `output_path` updated
+   - action log: `outcome: "renamed", target: files`
+2. POST with a path *outside* `<download_dir>`: 400 `path_outside_download_dir`.
+3. POST with `..` in path: 400 `path_traversal_rejected`.
+4. DELETE on a non-empty directory without `recursive: true`: 409.
+5. GET `/api/files` returns listing matching `ls <download_dir>`
+   (size, mtime), with `history_match` populated for ariaflow-known
+   downloads.
+6. POST `/api/files/clean` with `{status: "complete", older_than_days: 30}`:
+   removes only matching files, leaves recent ones, returns summary
+   `{ deleted: N, freed_bytes: M }`.
+
+**FE follow-up (FE-46):**
+
+- Downloaded tab gains per-row actions: Rename, Move (subdir picker),
+  Delete (with confirm)
+- Bulk action bar: Clean… → modal with the recipes
+- Disk-usage chip in the tab header: total, by status
+- Three row states from `GET /api/files`:
+  - on disk + history_match → full record
+  - on disk + no history_match → "found in folder, source unknown"
+  - not on disk + history → "missing from disk" with [Re-download] [Forget]
+
+**Open questions for the backend agent (small):**
+
+- What's the canonical way to read `<download_dir>` from the
+  declaration? (suspect `prefValue(declaration, "download_dir")` —
+  same as scheduler/probes uses)
+- Should rename collide-detect against existing files and require an
+  explicit overwrite flag, or just 409 on collision? (recommend 409,
+  no implicit overwrite)
+
+---
 
 <details>
 <summary>BG-55 (resolved — Tier 1 + decision endpoints; Tier 2/3 deferred) — original frontend brief retained for context</summary>
