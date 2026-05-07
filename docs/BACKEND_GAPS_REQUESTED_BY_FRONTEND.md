@@ -11,7 +11,88 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-71: Add `caveats` to the rendered Homebrew formula documenting macOS TCC permission
+
+**Status:** open · **Priority:** low · **Blocks frontend gap:** (none, doc/UX)
+
+**Context:** When ariaflow-server first tries to read or write a file
+under macOS-protected folders (`~/Downloads`, `~/Documents`, `~/Desktop`,
+iCloud, etc.), macOS TCC surfaces a permission dialog. The operator
+clicks Allow once. Subsequent reads work — until something invalidates
+the cached permission:
+
+- Major Node.js bump (path under `/opt/homebrew/Cellar/node/<X>/` changes)
+- macOS major upgrade (Sequoia → Tahoe etc., often resets TCC)
+- `tccutil reset` ran manually
+- `brew uninstall && brew install node`
+
+For the **first install**, the prompt is unavoidable (it's macOS by
+design — see `../ariaflow-dashboard/docs/UPDATE_PROCESSES.md` discussion).
+But operators currently have no documentation explaining what to expect
+or how to make it more durable.
+
+**Operator-visible benefit:** the `brew install` output and
+`brew info ariaflow-server` will surface the caveats — a one-time
+read for the operator that sets expectations and offers a clean
+durable solution (Full Disk Access on `/opt/homebrew/bin/node`).
+
+**Implementation:** the formula is rendered by
+`node packages/cli/dist/index.js formula --tag ... --output ...`.
+The renderer should emit a `caveats` block when targeting macOS:
+
+```ruby
+def caveats
+  <<~EOS
+    macOS Privacy permissions:
+
+    On the first download to a protected folder (~/Downloads,
+    ~/Documents, ~/Desktop, iCloud), macOS will prompt for access.
+    Click "Allow" once.
+
+    For headless / unattended setups, or to make the permission
+    survive Node.js upgrades, grant Full Disk Access to
+    /opt/homebrew/bin/node:
+
+      System Settings → Privacy & Security → Full Disk Access
+      → + → /opt/homebrew/bin/node → enable
+
+    The permission persists across `brew upgrade ariaflow-server`.
+    May re-prompt after a major Node.js version bump or macOS upgrade.
+  EOS
+end
+```
+
+The `caveats` is text-only — it shows up in `brew info` and at
+install time. No code path changes; no runtime impact.
+
+**What this gap does NOT include:**
+- A CLI helper that opens System Settings on the right pane
+  (separate enhancement, see "Future: ariaflow-server doctor --tcc"
+  in the dashboard's design docs)
+- Apple Developer ID signing for path-independent TCC identity
+  (would cost $99/year and need CI changes — see
+  `../ariaflow-dashboard/docs/MULTI_DEVICE_AUTH_DESIGN.md` §B for
+  the full discussion of signing options)
+- Pre-grant via `.mobileconfig` profile (only effective via MDM,
+  not consumer-friendly)
+
+**Effort:** ~15 min (~5-10 lines in the formula renderer + a smoke
+test that the rendered formula contains the caveats block).
+
+**Acceptance:**
+- `brew info ariaflow-server` shows the caveats block on macOS hosts
+- Rendered `Formula/ariaflow-server.rb` has a `def caveats` method
+  (smoke-checkable in release-formula.yml grep)
+- The text mentions: TCC prompt expectation, Full Disk Access path,
+  brew upgrade persistence promise
+
+**References:**
+- macOS TCC docs: https://support.apple.com/guide/security/secf6280f9b1
+- Homebrew formula caveats: https://docs.brew.sh/Formula-Cookbook#caveats
+
+---
 
 <details>
 <summary>BG-70 (resolved) — original frontend brief retained for context</summary>
