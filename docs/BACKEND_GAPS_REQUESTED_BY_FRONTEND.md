@@ -11,7 +11,139 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-73: Clean up + consolidate mDNS TXT records (drop redundant fields, add `ver`/`v`/`role`)
+
+**Status:** open · **Priority:** medium · **Blocks frontend gap:** (none, hygiene + future-proofing)
+
+**Context:** Audit of the TXT records published by `_ariaflow-server._tcp`
+revealed multiple coherence issues across publisher (backend) ↔ consumer
+(dashboard). Worth fixing in one pass since BG-67 (the SPAKE2 pairing
+track planned in `../ariaflow-dashboard/docs/MULTI_DEVICE_AUTH_DESIGN.md`)
+will eventually add `ver` + `fp` fields anyway.
+
+#### Currently published
+
+```
+Service:  _ariaflow-server._tcp.local
+Instance: bcs-Mac-mini
+SRV:      bcs-Mac-mini.local.:8000
+TXT:      path=/api  tls=0  hostname=bcs-Mac-mini
+```
+
+#### Coherence matrix audit
+
+| Field | Published | FE expects | FE uses it? | Status |
+|---|:-:|:-:|:-:|---|
+| `path` | ✅ | ✅ (defaults `/`) | ❌ hardcoded `/api` everywhere | constant, useless |
+| `tls` | ✅ | ✅ (defaults `0`) | ❌ hardcoded `http` | constant, useless |
+| `hostname` | ✅ | ✅ → `txt_hostname` | ✅ for self-discovery filter | **redundant** with SRV target (same value) |
+| `role` | ❌ never set | ✅ filters `role !== 'web'` | filter no-op | **mismatch** — FE expects, BE doesn't emit |
+| `product` | ❌ never set | ✅ parsed | ❌ never displayed | **mismatch** — declared, never set |
+| `version` | ❌ never set | ✅ parsed | ❌ never displayed | **mismatch** — declared, never set |
+
+Three field-level mismatches between publisher and consumer.
+
+#### Triple-redundant hostname
+
+The short hostname appears in:
+- The DNS-SD instance name (visible in `dns-sd -B`)
+- The SRV target (`<hostname>.local.:<port>`)
+- The TXT `hostname` key (verbatim, no `.local.` suffix)
+
+The dashboard's `isSelfService()` self-discovery filter checks
+`txt_hostname` first, then SRV host as fallback. Either alone would
+suffice — the TXT hostname can be dropped if the FE filter is updated
+to use SRV host primary.
+
+#### Recommended target TXT (post-cleanup)
+
+```
+ver=0.2           # protocol version (BG-67 paired use; compat checks at pairing)
+v=0.1.321         # software version (FE display: "v0.1.321 ↑" badge)
+role=server       # already filtered by FE (currently no-op)
+fp=<hash>         # fingerprint of the server's identity pubkey (BG-67)
+```
+
+#### Recommended drops
+
+- ❌ `path` — hardcode `/api` client-side; future-proofing not worth the byte cost
+- ❌ `tls` — hardcode `http://` for now; if HTTPS arrives, change service type
+  to `_ariaflow-server-tls._tcp` (DNS-SD convention) instead of a bool flag
+- ❌ `hostname` — the SRV target carries the same info, dashboard's
+  fallback path already handles it
+- ❌ `product` — encoded in the service type `_ariaflow-server._tcp`
+
+#### Implementation deltas
+
+In `packages/core/src/bonjour/bonjour.ts`, both `buildDnsSdCmd` and
+`buildAvahiCmd`:
+
+```ts
+// Before:
+return [
+  binary, "-R", instanceName(), "_ariaflow-server._tcp", "local",
+  String(opts.port),
+  `path=${path}`,        // drop
+  "tls=0",               // drop
+  `hostname=${shortHostname()}`,   // drop
+];
+
+// After:
+return [
+  binary, "-R", instanceName(), "_ariaflow-server._tcp", "local",
+  String(opts.port),
+  `ver=${PROTOCOL_VERSION}`,   // e.g. "0.2"
+  `v=${SOFTWARE_VERSION}`,     // from package.json or build-time injection
+  "role=server",
+  // fp= comes when BG-67 lands; not added by this BG.
+];
+```
+
+(`PROTOCOL_VERSION` is a compile-time constant. `SOFTWARE_VERSION` is
+already injected via the bundler — see `packages/cli/src/version.ts`
+or equivalent.)
+
+#### Effort
+
+~30 min:
+- 5 min: change `bonjour.ts` to drop 3 fields, add 3 fields
+- 5 min: update `bonjour.test.ts` assertions
+- 10 min: update the smoke check in `release-formula.yml`
+- 10 min: render once locally to verify the output
+
+#### Acceptance
+
+- `dns-sd -L $(hostname) _ariaflow-server._tcp local` shows TXT containing
+  `ver`, `v`, `role`. Does NOT contain `path`, `tls`, `hostname`.
+- Backend tests pass (existing assertions for `path` / `tls` / `hostname`
+  removed; new assertions for `ver` / `v` / `role` added)
+- Dashboard's `discoverBackends()` continues to populate the dropdown
+  correctly (the `txt_hostname` field becomes empty in BackendMetaMap;
+  `isSelfService` falls back to SRV host check, which already works)
+
+#### What this gap does NOT cover
+
+- **Adding `fp` (fingerprint)** — that's BG-67 territory. This BG just
+  prepares the schema by adding `ver` so a future `fp` makes semantic
+  sense.
+- **Frontend cleanup** — `bonjour.py` parses `product` / `version` /
+  `role` but doesn't display the first two. The dashboard agent will
+  do a parallel cleanup once this BG ships, removing the dead
+  parsing for `product` / surfacing `v` for UI.
+- **Dashboard's own `_ariaflow-dashboard._tcp` advertise** — currently
+  promised in `bonjour.py` docstring but no code does it. Out of
+  scope for this BG; will be filed separately if/when needed.
+
+#### References
+
+- DNS-SD TXT record best practices: RFC 6763 §6
+- Existing field semantics in `packages/core/src/bonjour/bonjour.ts:80-110`
+- FE consumer code in `../ariaflow-dashboard/src/ariaflow_dashboard/bonjour.py:175-227`
+- FE filter in `../ariaflow-dashboard/src/ariaflow_dashboard/static/ts/backend.ts:138-148`
+
+---
 
 <details>
 <summary>BG-72 (resolved) — original frontend brief retained for context</summary>
