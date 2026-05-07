@@ -11,7 +11,96 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-72: 🔴 URGENT — Restore green CI on backend `main`; release pipeline blocked since 913e715
+
+**Status:** open · **Priority:** 🔴 critical · **Blocks frontend gap:** all dashboard releases
+
+**Symptom:** every push to `main` since commit `913e715` (test: cover
+BG-52/53 cap helper + BG-56 file routes + BG-57 summary) fails the
+`node` workflow with TypeScript strict-mode errors. Consequences:
+
+1. **Backend releases blocked** — `auto-tag.yml` triggers on
+   `workflow_run: node` success. Failures = no auto-tag = no release.
+   Latest backend release = v0.1.320 (frozen since 2026-05-07 13:40 UTC).
+
+2. **Dashboard releases blocked** — dashboard's `release.yml` job 1
+   (live-contract) builds ariaflow-server from `main`. The build fails
+   identically. 3 dashboard release workflows have failed since v0.1.593:
+
+   ```
+   25500130570  feat: add Sigstore client-side verification (default off)
+   25505760537  fix: persist mDNS-discovered backend display names ...
+   25507089890  docs: design + day-by-day plan for multi-backend ...
+   ```
+
+   Latest dashboard release = v0.1.593 (frozen since 2026-05-07 13:30 UTC).
+
+**Actual TypeScript errors** (from CI log):
+
+```
+packages/core/src/aria2/cap.test.ts(45,38):
+  error TS2379: Argument of type '{ cap_bytes_per_sec: undefined; }'
+  is not assignable to parameter of type 'Partial<ResolvedProbe>'
+  with 'exactOptionalPropertyTypes: true'.
+
+packages/core/src/queue/history_sync.test.ts(22,54):
+  error TS2379: Argument of type '{ output_path: undefined; }'
+  is not assignable to parameter of type 'Partial<QueueItemRecord>'
+  with 'exactOptionalPropertyTypes: true'.
+
+packages/core/src/queue/history_sync.test.ts(34,12):
+  same pattern with '{ id: string; output_path: undefined; }'
+```
+
+**Root cause:** the new test files in `913e715` (and `2384e93` which
+preceded it) pass `{ field: undefined }` literals to functions whose
+parameters use `Partial<T>` with TypeScript's `exactOptionalPropertyTypes:
+true`. Strict mode requires either omitting the property entirely or
+explicitly adding `undefined` to the parameter type. Easy to miss
+locally if `tsc --build` wasn't run before commit.
+
+**Three ways to fix** (pick one, or combine):
+
+A. **Drop the explicit `undefined` literals** — restructure tests to
+   omit those properties altogether instead of setting them to undefined:
+   ```ts
+   // Before
+   makeProbe({ cap_bytes_per_sec: undefined })
+   // After
+   makeProbe({})  // or makeProbe({ /* no cap */ })
+   ```
+
+B. **Widen the helper signature** to accept `T | undefined` per property:
+   ```ts
+   function makeProbe(overrides: { [K in keyof ResolvedProbe]?: ResolvedProbe[K] | undefined }): ResolvedProbe
+   ```
+
+C. **Disable `exactOptionalPropertyTypes` for these tests** via a
+   pragma comment or `// @ts-expect-error` — discouraged, masks
+   future genuine bugs.
+
+**Recommendation:** Option A. Test fixtures shouldn't carry "explicitly
+undefined" semantics — that's exactly what omission is for.
+
+**Effort:** ~10 min. Open the 2 affected test files, remove the 3-4
+`field: undefined` literals, run `pnpm build` locally, push.
+
+**Acceptance:**
+- `pnpm -r build` succeeds locally on a fresh clone of `main`
+- `node.yml` workflow goes green on the next push
+- `auto-tag.yml` fires, producing `v0.1.321+`
+- Dashboard's next push triggers `release.yml` job 1 successfully,
+  unblocking dashboard releases
+
+**Why critical:** every day this stays broken, both repos accumulate
+unmerged work that gets harder to bisect when finally fixed. Also,
+the supply-chain stack we just shipped (BG-67/70/71 Sigstore +
+provenance + caveats) doesn't reach operators because no release
+fires.
+
+---
 
 <details>
 <summary>BG-71 (resolved) — original frontend brief retained for context</summary>
