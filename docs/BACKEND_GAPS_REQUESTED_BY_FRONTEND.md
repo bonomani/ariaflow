@@ -11,7 +11,83 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (2)
+
+### BG-68: Drop singleton `for REPO` loop in `release-tap.yml`
+
+**Status:** open · **Priority:** trivial · **Blocks frontend gap:** (none, hygiene)
+
+**Context:** `.github/workflows/release-tap.yml` line 85 has a shell
+loop over a single-element list:
+
+```yaml
+for REPO in homebrew-ariaflow-server; do
+  echo "--- Updating ${{ env.TAP_OWNER }}/${REPO} ---"
+  rm -rf tap-repo
+  git clone --depth 1 \
+    "https://x-access-token:${{ secrets.TAP_PUSH_TOKEN }}@github.com/${{ env.TAP_OWNER }}/${REPO}.git" \
+    tap-repo
+  ...
+done
+```
+
+**Why it's legacy:** the comment at the top of the file says `Auto-publish
+the rendered formula into the brew tap repo (bonomani/homebrew-ariaflow-server)`
+— singular. The loop iterates exactly once. It's a vestige from a previous
+version where multiple tap repos may have been targeted.
+
+**Recommendation:** flatten the loop into a direct script. Replace the
+`for REPO in ...; do ... done` wrapper with the body referring to
+`${{ env.TAP_REPO }}` directly (already defined in `env:` at line 27).
+
+**Effort:** 5 min. Pure refactor, no behavior change.
+
+**Acceptance:**
+- The `for REPO` and matching `done` are removed.
+- All references to `${REPO}` inside the loop become `${{ env.TAP_REPO }}`.
+- One release tag verifies the workflow still publishes the formula
+  to the tap repo.
+
+---
+
+### BG-69: Align GitHub Actions versions with frontend (v5+, currently v4)
+
+**Status:** open · **Priority:** low · **Blocks frontend gap:** (none, infra hygiene)
+
+**Context:** the frontend repo upgraded its action versions some time
+ago. The backend hasn't, leading to the following drift:
+
+| Action | Frontend version | Backend version |
+|---|:-:|:-:|
+| `actions/checkout` | v5 | v4 |
+| `actions/setup-node` | v5 | v4 |
+| `actions/upload-artifact` | v5 | v4 |
+| `pnpm/action-setup` | v5 | v4 |
+
+**Why align:**
+- Same maintainers, same patterns, easier reasoning when comparing CI
+  behavior between repos
+- v4 → v5 contains node20 → node24 default runner upgrades and a few
+  bug fixes
+- v4 will eventually be deprecated; pre-emptive upgrade now is cheaper
+  than reactive later
+
+**Files to update:**
+- `.github/workflows/node.yml`
+- `.github/workflows/auto-tag.yml`
+- `.github/workflows/release-formula.yml`
+- `.github/workflows/release-tap.yml`
+- `.github/workflows/release-npm.yml`
+
+**Effort:** 15 min for the find-and-replace, plus a release tag to
+verify everything still works.
+
+**Acceptance:**
+- All `@v4` references for the actions above bumped to `@v5`.
+- Existing release pipeline still completes successfully.
+- No semantic changes to job logic.
+
+---
 
 <details>
 <summary>BG-67 (resolved) — original frontend brief retained for context</summary>
