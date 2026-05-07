@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-71 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-71: Add `caveats` to the rendered Homebrew formula documenting macOS TCC permission
 
@@ -91,6 +94,8 @@ test that the rendered formula contains the caveats block).
 **References:**
 - macOS TCC docs: https://support.apple.com/guide/security/secf6280f9b1
 - Homebrew formula caveats: https://docs.brew.sh/Formula-Cookbook#caveats
+
+</details>
 
 ---
 
@@ -1934,6 +1939,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-71 | `renderFormula` in `core/install/formula.ts` now emits a `def caveats ... end` block before the `service do` section, documenting the first-install TCC prompt + the Full Disk Access escape hatch on `/opt/homebrew/bin/node`. Smoke-checked in `release-formula.yml` (`grep -q "def caveats"`, `grep -q "Full Disk Access"`); covered by `formula.test.ts`. Text-only — surfaces in `brew info ariaflow-server` and at install time, no runtime impact | 2026-05-07 |
 | BG-70 | `release-npm.yml` publish job now passes `--provenance` to `pnpm publish` and adds `id-token: write` to its permissions block, so `@ariaflow/{core,api,cli}` ship with a Sigstore-backed npm provenance statement keyed to the CI run. Mirrors BG-67's brew signing for npm/Windows/Linux installers; npmjs.com renders the green "Provenance" badge | 2026-05-07 |
 | BG-69 | All `actions/checkout`, `actions/setup-node`, `actions/upload-artifact`, `pnpm/action-setup` references in `.github/workflows/*.yml` bumped from `@v4` to `@v5`. Pure version bump; no semantic changes. Aligns with `ariaflow-dashboard`'s CI | 2026-05-07 |
 | BG-68 | Flattened the singleton `for REPO in homebrew-ariaflow-server; do ... done` loop in `release-tap.yml` to a direct script using `${{ env.TAP_REPO }}`. The "no formula changes" branch now `exit 0`s instead of `continue`. Pure refactor, no behavior change | 2026-05-07 |

@@ -101,6 +101,28 @@ export function renderFormula({ version, url, sha256 }: RenderFormulaInput): str
     chmod 0755, bin/"ariaflow-server"
   end
 
+  # BG-71: macOS TCC permission expectations + Full Disk Access escape
+  # hatch. Text-only — surfaces in \`brew info\` and at install time.
+  def caveats
+    <<~EOS
+      macOS Privacy permissions:
+
+      On the first download to a protected folder (~/Downloads,
+      ~/Documents, ~/Desktop, iCloud), macOS will prompt for access.
+      Click "Allow" once.
+
+      For headless / unattended setups, or to make the permission
+      survive Node.js upgrades, grant Full Disk Access to
+      /opt/homebrew/bin/node:
+
+        System Settings → Privacy & Security → Full Disk Access
+        → + → /opt/homebrew/bin/node → enable
+
+      The permission persists across \`brew upgrade ariaflow-server\`.
+      May re-prompt after a major Node.js version bump or macOS upgrade.
+    EOS
+  end
+
   service do
     run [
       opt_bin/"ariaflow", "serve",

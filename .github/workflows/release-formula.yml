@@ -69,6 +69,9 @@ jobs:
           grep -q 'depends_on "node"' dist-formula/ariaflow-server.rb
           grep -q 'depends_on "aria2"' dist-formula/ariaflow-server.rb
           grep -q "service do" dist-formula/ariaflow-server.rb
+          # BG-71: caveats block documents the macOS TCC prompt.
+          grep -q "def caveats" dist-formula/ariaflow-server.rb
+          grep -q "Full Disk Access" dist-formula/ariaflow-server.rb
 
       # BG-67: Sigstore keyless signature on the rendered formula so a
       # client (or future ariaflow auto-update verifier) can confirm

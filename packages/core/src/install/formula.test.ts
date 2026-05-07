@@ -75,6 +75,10 @@ describe("renderFormula", () => {
     // Version stamp into cli/package.json so ariaflow --version is
     // truthful when built from source via brew.
     expect(text).toContain("packages/cli/package.json");
+    // BG-71: caveats block surfaces the macOS TCC permission story.
+    expect(text).toContain("def caveats");
+    expect(text).toContain("Full Disk Access");
+    expect(text).toContain("/opt/homebrew/bin/node");
   });
 });
 
