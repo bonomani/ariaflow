@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-70 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-70: Publish npm packages with `--provenance` for cross-platform verifiability
 
@@ -83,6 +86,8 @@ Visible at https://npmjs.com/package/@ariaflow/cli with a green
 **References:**
 - npm docs: https://docs.npmjs.com/generating-provenance-statements
 - pnpm docs: https://pnpm.io/cli/publish#--provenance
+
+</details>
 
 ---
 
@@ -1848,6 +1853,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-70 | `release-npm.yml` publish job now passes `--provenance` to `pnpm publish` and adds `id-token: write` to its permissions block, so `@ariaflow/{core,api,cli}` ship with a Sigstore-backed npm provenance statement keyed to the CI run. Mirrors BG-67's brew signing for npm/Windows/Linux installers; npmjs.com renders the green "Provenance" badge | 2026-05-07 |
 | BG-69 | All `actions/checkout`, `actions/setup-node`, `actions/upload-artifact`, `pnpm/action-setup` references in `.github/workflows/*.yml` bumped from `@v4` to `@v5`. Pure version bump; no semantic changes. Aligns with `ariaflow-dashboard`'s CI | 2026-05-07 |
 | BG-68 | Flattened the singleton `for REPO in homebrew-ariaflow-server; do ... done` loop in `release-tap.yml` to a direct script using `${{ env.TAP_REPO }}`. The "no formula changes" branch now `exit 0`s instead of `continue`. Pure refactor, no behavior change | 2026-05-07 |
 | BG-67 | `release-formula.yml` now signs the rendered formula with Sigstore (cosign keyless) and emits a GitHub provenance attestation. Job permissions widened with `id-token: write` + `attestations: write`. New steps after the smoke check: install cosign → `cosign sign-blob --yes` producing `.sig` + `.pem` next to the formula → `actions/attest-build-provenance@v2` with the formula as subject. Release upload step now ships all three artifacts (`.rb`, `.rb.sig`, `.rb.pem`). Sign-only fires on the tag-push path; `workflow_dispatch` runs still produce the unsigned artifact for backfills. Sets up the symmetry the dashboard already shipped; client-side verification is a separate work item | 2026-05-07 |

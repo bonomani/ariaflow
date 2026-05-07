@@ -108,6 +108,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write    # BG-70: required for npm provenance OIDC
     steps:
       - name: Resolve tag
         id: tag
@@ -183,4 +184,6 @@ jobs:
         run: |
           # pnpm replaces workspace:* with the concrete version per its
           # publish docs (https://pnpm.io/cli/publish#publishing-monorepo).
-          pnpm --filter "@ariaflow/*" publish --no-git-checks --access public
+          # BG-70: --provenance attaches a Sigstore-backed npm provenance
+          # statement keyed to this CI run, mirroring BG-67's brew signing.
+          pnpm --filter "@ariaflow/*" publish --no-git-checks --access public --provenance
