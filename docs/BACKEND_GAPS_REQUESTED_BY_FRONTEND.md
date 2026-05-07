@@ -11,7 +11,80 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-70: Publish npm packages with `--provenance` for cross-platform verifiability
+
+**Status:** open · **Priority:** low · **Blocks frontend gap:** (none, supply chain symmetry)
+
+**Context:** BG-67 added Sigstore signing + GitHub provenance attestations
+to `release-formula.yml`. The brew bottle/formula is now cryptographically
+verifiable. But `release-npm.yml` publishes `@ariaflow/{core,api,cli}` to
+npm without using npm's native **provenance** mechanism.
+
+npm has supported package provenance since 2023 (npmjs.com/package/...
+shows a "Provenance" badge with the GitHub Actions run that produced the
+package). It's free, requires only `--provenance` on the publish command,
+and gives Windows/Linux users installing via `npm install -g @ariaflow/cli`
+the same supply-chain confidence brew users get from BG-67.
+
+**Cross-platform impact:** brew is macOS + Linuxbrew. Windows users (or
+anyone preferring npm) install ariaflow-server via `npm install -g
+@ariaflow/cli`. Without npm provenance, those installs have **no
+cryptographic link** to our CI. Brew install is signed; npm install is not.
+Asymmetric trust.
+
+**Recommendation:** add `--provenance` to the pnpm publish command in
+`release-npm.yml`:
+
+```yaml
+permissions:
+  contents: read
+  id-token: write    # ← required for npm provenance OIDC
+
+# ...
+
+- name: Publish
+  if: steps.secret.outputs.available == 'true'
+  env:
+    NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  run: |
+    pnpm --filter "@ariaflow/*" publish \
+      --no-git-checks \
+      --access public \
+      --provenance         # ← new flag
+```
+
+**Verification (consumer side, all OS):**
+
+```bash
+npm view @ariaflow/cli --json | jq '.dist.attestations'
+# Returns provenance metadata, including the GitHub Actions run URL
+# that built and published the package.
+```
+
+Visible at https://npmjs.com/package/@ariaflow/cli with a green
+"Provenance" badge.
+
+**Effort:** ~5 min. Add the flag + the `id-token: write` permission.
+
+**Acceptance:**
+- `release-npm.yml` includes `--provenance` on the publish command
+- Permissions block has `id-token: write`
+- Next release publishes packages with verifiable provenance
+- npm registry shows the Provenance badge
+
+**What this gap does NOT include:**
+- Sigstore signing of the npm tarballs separately (npm provenance uses
+  Sigstore under the hood; one or the other is enough)
+- Client-side enforcement (operator can choose to require provenance
+  via `npm install --enforce-attestations` since npm 10.5)
+
+**References:**
+- npm docs: https://docs.npmjs.com/generating-provenance-statements
+- pnpm docs: https://pnpm.io/cli/publish#--provenance
+
+---
 
 <details>
 <summary>BG-68 (resolved) — original frontend brief retained for context</summary>
