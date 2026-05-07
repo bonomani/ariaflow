@@ -11,7 +11,143 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (0)
+## Open (1)
+
+### BG-67: Sign release artifacts with Sigstore + emit GitHub provenance attestation
+
+**Status:** open · **Blocks frontend gap:** (none, infra symmetry)
+
+**Context:** the frontend (`ariaflow-dashboard`) just shipped Sigstore
+signing + GitHub provenance attestation in its `release.yml`. Operators
+auto-updating the dashboard get cryptographically verifiable artifacts.
+For consistency and defense-in-depth, the backend's release pipeline
+should match.
+
+**Operator-visible benefit:** future client-side verification (planned
+in `docs/UPDATE_PROCESSES.md` §18.4) will reject any bottle/formula
+that isn't signed by the legitimate CI OIDC identity. Defense against
+tap repo compromise, GitHub release tampering, and auto-bump bot
+compromise. SHA256 alone doesn't protect against attackers who can
+modify the formula (they recompute the hash).
+
+**What we did on the dashboard side (for reference):**
+
+```yaml
+# .github/workflows/release.yml
+permissions:
+  contents: write
+  id-token: write       # Sigstore OIDC keyless
+  attestations: write   # GitHub provenance
+
+steps:
+  # ... existing build steps ...
+
+  - name: Install cosign
+    uses: sigstore/cosign-installer@v3
+
+  - name: Sign release artifacts (Sigstore)
+    run: |
+      cd release
+      for f in *.tar.gz; do
+        cosign sign-blob --yes \
+          --output-signature="${f}.sig" \
+          --output-certificate="${f}.pem" \
+          "${f}"
+      done
+
+  - name: Generate artifact attestation
+    uses: actions/attest-build-provenance@v2
+    with:
+      subject-path: 'release/*.tar.gz'
+
+  # files: release/* picks up the new .sig and .pem alongside .tar.gz
+```
+
+**What the backend needs:**
+
+The backend's release flow has 3 parallel jobs; the most natural place
+to sign is `release-formula.yml` (the canonical artifact is the
+rendered `ariaflow-server.rb` formula). Add to that workflow:
+
+```yaml
+# .github/workflows/release-formula.yml
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+steps:
+  # ... existing render steps ...
+
+  - name: Install cosign
+    uses: sigstore/cosign-installer@v3
+
+  - name: Sign formula (Sigstore)
+    run: |
+      cosign sign-blob --yes \
+        --output-signature="dist-formula/ariaflow-server.rb.sig" \
+        --output-certificate="dist-formula/ariaflow-server.rb.pem" \
+        dist-formula/ariaflow-server.rb
+
+  - name: Generate provenance attestation
+    uses: actions/attest-build-provenance@v2
+    with:
+      subject-path: 'dist-formula/ariaflow-server.rb'
+
+  # In Upload as release asset:
+  files: |
+    dist-formula/ariaflow-server.rb
+    dist-formula/ariaflow-server.rb.sig
+    dist-formula/ariaflow-server.rb.pem
+```
+
+**Optional (but recommended): also sign the bottle archives.** If
+brew bottles are uploaded as release assets, they should be signed
+too. If they're delivered via brew's normal mechanism (HTTPS URLs in
+the formula), only the formula signature matters because the formula
+contains the SHA256 of the bottle.
+
+**Verification command** (for clients):
+
+```
+cosign verify-blob \
+  --certificate ariaflow-server.rb.pem \
+  --signature ariaflow-server.rb.sig \
+  --certificate-identity-regexp 'https://github.com/bonomani/ariaflow-server/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ariaflow-server.rb
+```
+
+**What this gap does NOT include:**
+
+- Client-side verification — that's a separate work item, planned
+  client-side after both sides emit signatures consistently
+- GPG signing (Solution 2 in the design doc) — optional 3rd layer
+- Apple Developer ID code-signing — n/a for brew-distributed bottles
+- Health-check post-release — separate concern, see UPDATE_PROCESSES.md §18.6
+
+**Effort estimate:** ~30 min CI changes, no breaking changes.
+Additive only: existing consumers continue to work; new consumers
+can opt into verification.
+
+**Acceptance criteria:**
+
+- ✅ `release-formula.yml` produces `*.sig` + `*.pem` alongside the `.rb`
+- ✅ Provenance attestation visible via
+  `gh attestation list --repo bonomani/ariaflow-server`
+- ✅ A verifier can run `cosign verify-blob` against a published
+  formula and get success
+- ✅ The release-tap workflow can optionally also push the .sig/.pem
+  to the tap repo (low priority; release-formula's GitHub release
+  asset is the canonical source)
+
+**References:**
+- `docs/UPDATE_PROCESSES.md §18.4` (frontend side, full rationale)
+- `docs/UPDATE_PROCESSES.md §18.5` (provenance attestation rationale)
+- Sigstore docs: https://docs.sigstore.dev/cosign/
+- GitHub provenance: https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds
+
+---
 
 <details>
 <summary>BG-66 (resolved) — original frontend brief retained for context</summary>
