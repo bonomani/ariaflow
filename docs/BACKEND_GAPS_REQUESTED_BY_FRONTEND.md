@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (2)
+## Open (0)
+
+<details>
+<summary>BG-68 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-68: Drop singleton `for REPO` loop in `release-tap.yml`
 
@@ -48,7 +51,12 @@ version where multiple tap repos may have been targeted.
 - One release tag verifies the workflow still publishes the formula
   to the tap repo.
 
+</details>
+
 ---
+
+<details>
+<summary>BG-69 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-69: Align GitHub Actions versions with frontend (v5+, currently v4)
 
@@ -86,6 +94,8 @@ verify everything still works.
 - All `@v4` references for the actions above bumped to `@v5`.
 - Existing release pipeline still completes successfully.
 - No semantic changes to job logic.
+
+</details>
 
 ---
 
@@ -1765,6 +1775,8 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-69 | All `actions/checkout`, `actions/setup-node`, `actions/upload-artifact`, `pnpm/action-setup` references in `.github/workflows/*.yml` bumped from `@v4` to `@v5`. Pure version bump; no semantic changes. Aligns with `ariaflow-dashboard`'s CI | 2026-05-07 |
+| BG-68 | Flattened the singleton `for REPO in homebrew-ariaflow-server; do ... done` loop in `release-tap.yml` to a direct script using `${{ env.TAP_REPO }}`. The "no formula changes" branch now `exit 0`s instead of `continue`. Pure refactor, no behavior change | 2026-05-07 |
 | BG-67 | `release-formula.yml` now signs the rendered formula with Sigstore (cosign keyless) and emits a GitHub provenance attestation. Job permissions widened with `id-token: write` + `attestations: write`. New steps after the smoke check: install cosign → `cosign sign-blob --yes` producing `.sig` + `.pem` next to the formula → `actions/attest-build-provenance@v2` with the formula as subject. Release upload step now ships all three artifacts (`.rb`, `.rb.sig`, `.rb.pem`). Sign-only fires on the tag-push path; `workflow_dispatch` runs still produce the unsigned artifact for backfills. Sets up the symmetry the dashboard already shipped; client-side verification is a separate work item | 2026-05-07 |
 | BG-66 | Both homebrew upgrade chains now insert `brew link --overwrite ariaflow-server 2>/dev/null` between `brew upgrade` and the restart so an "installed but not linked" cellar (interrupted install / manual unlink / install.sh race) recovers automatically. Idempotent: succeeds whether the formula is already linked, just installed, or both. Sites: `dispatchAriaflowUpdate` (homebrew branch only — pipx/npm have no link concept) and `applyUpdate` in the auto-update controller | 2026-05-06 |
 | BG-65 | Both upgrade-then-restart chains switched from `&&` to `;` (`api/_lifecycle_actions.ts` `dispatchAriaflowUpdate`, `cli/_auto_update_controller.ts` `applyUpdate`). A no-op `brew upgrade` (stale cellar case — running version lags installed) now still triggers the bootout+bootstrap so the running process realigns to the cellar. Trade-off accepted in the brief: a failed upgrade still bounces, briefly, on the unchanged version | 2026-05-06 |

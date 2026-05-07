@@ -50,15 +50,15 @@ jobs:
             echo "available=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: steps.secret.outputs.available == 'true'
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
         if: steps.secret.outputs.available == 'true'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         if: steps.secret.outputs.available == 'true'
         with:
           node-version: "20"
@@ -78,28 +78,24 @@ jobs:
             --tag "${{ steps.tag.outputs.value }}" \
             --output "dist-formula/ariaflow-server.rb"
 
-      - name: Push to tap repos
+      - name: Push to tap repo
         if: steps.secret.outputs.available == 'true'
         run: |
           TAG="${{ steps.tag.outputs.value }}"
-          for REPO in homebrew-ariaflow-server; do
-            echo "--- Updating ${{ env.TAP_OWNER }}/${REPO} ---"
-            rm -rf tap-repo
-            git clone --depth 1 \
-              "https://x-access-token:${{ secrets.TAP_PUSH_TOKEN }}@github.com/${{ env.TAP_OWNER }}/${REPO}.git" \
-              tap-repo
-            mkdir -p "tap-repo/$(dirname ${{ env.FORMULA_PATH }})"
-            cp dist-formula/ariaflow-server.rb "tap-repo/${{ env.FORMULA_PATH }}"
-            cd tap-repo
-            git config user.name  "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            if git diff --quiet -- "${{ env.FORMULA_PATH }}"; then
-              echo "no formula changes in ${REPO} — skipping"
-              cd ..
-              continue
-            fi
-            git add "${{ env.FORMULA_PATH }}"
-            git commit -m "Bump ariaflow-server to ${TAG}"
-            git push
-            cd ..
-          done
+          echo "--- Updating ${{ env.TAP_OWNER }}/${{ env.TAP_REPO }} ---"
+          rm -rf tap-repo
+          git clone --depth 1 \
+            "https://x-access-token:${{ secrets.TAP_PUSH_TOKEN }}@github.com/${{ env.TAP_OWNER }}/${{ env.TAP_REPO }}.git" \
+            tap-repo
+          mkdir -p "tap-repo/$(dirname ${{ env.FORMULA_PATH }})"
+          cp dist-formula/ariaflow-server.rb "tap-repo/${{ env.FORMULA_PATH }}"
+          cd tap-repo
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- "${{ env.FORMULA_PATH }}"; then
+            echo "no formula changes in ${{ env.TAP_REPO }} — skipping"
+            exit 0
+          fi
+          git add "${{ env.FORMULA_PATH }}"
+          git commit -m "Bump ariaflow-server to ${TAG}"
+          git push

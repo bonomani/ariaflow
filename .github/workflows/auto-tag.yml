@@ -40,7 +40,7 @@ jobs:
             echo "TAP_PUSH_TOKEN present; proceeding."
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: env.HAS_PAT == 'true'
         with:
           ref: ${{ github.event.workflow_run.head_sha }}

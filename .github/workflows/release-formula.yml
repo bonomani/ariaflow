@@ -28,13 +28,13 @@ jobs:
       id-token: write       # BG-67: Sigstore keyless OIDC
       attestations: write   # BG-67: GitHub provenance
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: pnpm
@@ -104,7 +104,7 @@ jobs:
 
       - name: Upload as workflow artifact (for manual dispatch)
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ariaflow-server-formula
           path: dist-formula/ariaflow-server.rb
