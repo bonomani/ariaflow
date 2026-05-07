@@ -42,7 +42,9 @@ const probe = (over: Partial<ResolvedProbe> = {}): ResolvedProbe =>
 describe("applyBandwidthCap (BG-52/53)", () => {
   it("returns early when cap_bytes_per_sec is missing", async () => {
     const { client: c, calls } = client();
-    await applyBandwidthCap(c, probe({ cap_bytes_per_sec: undefined }));
+    const p = probe();
+    delete (p as { cap_bytes_per_sec?: number }).cap_bytes_per_sec;
+    await applyBandwidthCap(c, p);
     expect(calls).toEqual([]);
   });
 

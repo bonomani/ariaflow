@@ -19,7 +19,7 @@ describe("updateOutputPath (BG-56)", () => {
   });
 
   it("returns false and leaves rows untouched when no match", () => {
-    const items = [item({ output_path: "/a" }), item({ output_path: undefined })];
+    const items = [item({ output_path: "/a" }), item({ id: "no-path" })];
     expect(updateOutputPath(items, "/missing", "/new")).toBe(false);
     expect(items[0]!.output_path).toBe("/a");
     expect(items[1]!.output_path).toBeUndefined();
@@ -31,7 +31,7 @@ describe("markMissingByPath (BG-56)", () => {
     const items = [
       item({ id: "a", output_path: "/dl/gone.iso" }),
       item({ id: "b", output_path: "/dl/here.iso" }),
-      item({ id: "c", output_path: undefined }),
+      item({ id: "c" }),
     ];
     expect(markMissingByPath(items, new Set(["/dl/gone.iso"]))).toBe(true);
     expect(items[0]!.file_present_on_disk).toBe(false);

@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-72 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-72: 🔴 URGENT — Restore green CI on backend `main`; release pipeline blocked since 913e715
 
@@ -99,6 +102,8 @@ unmerged work that gets harder to bisect when finally fixed. Also,
 the supply-chain stack we just shipped (BG-67/70/71 Sigstore +
 provenance + caveats) doesn't reach operators because no release
 fires.
+
+</details>
 
 ---
 
@@ -2028,6 +2033,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-72 | Removed three `{ field: undefined }` literals from `cap.test.ts` + `history_sync.test.ts` that tripped `tsc --build`'s `exactOptionalPropertyTypes` strictness. Vitest transpilation was lenient enough to pass them locally; CI's plain `tsc -b` rejected. Followed Option A from the brief (omit the property instead of setting it to undefined): `probe()` + `delete` for the cap_bytes_per_sec absent case; switched the `output_path: undefined` rows to bare `item({ id: ... })`. 533/533 tests pass; build clean | 2026-05-07 |
 | BG-71 | `renderFormula` in `core/install/formula.ts` now emits a `def caveats ... end` block before the `service do` section, documenting the first-install TCC prompt + the Full Disk Access escape hatch on `/opt/homebrew/bin/node`. Smoke-checked in `release-formula.yml` (`grep -q "def caveats"`, `grep -q "Full Disk Access"`); covered by `formula.test.ts`. Text-only — surfaces in `brew info ariaflow-server` and at install time, no runtime impact | 2026-05-07 |
 | BG-70 | `release-npm.yml` publish job now passes `--provenance` to `pnpm publish` and adds `id-token: write` to its permissions block, so `@ariaflow/{core,api,cli}` ship with a Sigstore-backed npm provenance statement keyed to the CI run. Mirrors BG-67's brew signing for npm/Windows/Linux installers; npmjs.com renders the green "Provenance" badge | 2026-05-07 |
 | BG-69 | All `actions/checkout`, `actions/setup-node`, `actions/upload-artifact`, `pnpm/action-setup` references in `.github/workflows/*.yml` bumped from `@v4` to `@v5`. Pure version bump; no semantic changes. Aligns with `ariaflow-dashboard`'s CI | 2026-05-07 |
