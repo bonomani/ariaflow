@@ -25,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write       # BG-67: Sigstore keyless OIDC
+      attestations: write   # BG-67: GitHub provenance
     steps:
       - uses: actions/checkout@v4
         with:
@@ -68,11 +70,36 @@ jobs:
           grep -q 'depends_on "aria2"' dist-formula/ariaflow-server.rb
           grep -q "service do" dist-formula/ariaflow-server.rb
 
+      # BG-67: Sigstore keyless signature on the rendered formula so a
+      # client (or future ariaflow auto-update verifier) can confirm
+      # the artifact came from this repo's CI without needing a
+      # long-lived signing key.
+      - name: Install cosign
+        if: github.event_name == 'push'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign formula (Sigstore)
+        if: github.event_name == 'push'
+        run: |
+          cosign sign-blob --yes \
+            --output-signature="dist-formula/ariaflow-server.rb.sig" \
+            --output-certificate="dist-formula/ariaflow-server.rb.pem" \
+            dist-formula/ariaflow-server.rb
+
+      - name: Generate provenance attestation
+        if: github.event_name == 'push'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist-formula/ariaflow-server.rb
+
       - name: Upload as release asset
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist-formula/ariaflow-server.rb
+          files: |
+            dist-formula/ariaflow-server.rb
+            dist-formula/ariaflow-server.rb.sig
+            dist-formula/ariaflow-server.rb.pem
           fail_on_unmatched_files: true
 
       - name: Upload as workflow artifact (for manual dispatch)

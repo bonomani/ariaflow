@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-67 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-67: Sign release artifacts with Sigstore + emit GitHub provenance attestation
 
@@ -146,6 +149,8 @@ can opt into verification.
 - `docs/UPDATE_PROCESSES.md §18.5` (provenance attestation rationale)
 - Sigstore docs: https://docs.sigstore.dev/cosign/
 - GitHub provenance: https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds
+
+</details>
 
 ---
 
@@ -1684,6 +1689,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-67 | `release-formula.yml` now signs the rendered formula with Sigstore (cosign keyless) and emits a GitHub provenance attestation. Job permissions widened with `id-token: write` + `attestations: write`. New steps after the smoke check: install cosign → `cosign sign-blob --yes` producing `.sig` + `.pem` next to the formula → `actions/attest-build-provenance@v2` with the formula as subject. Release upload step now ships all three artifacts (`.rb`, `.rb.sig`, `.rb.pem`). Sign-only fires on the tag-push path; `workflow_dispatch` runs still produce the unsigned artifact for backfills. Sets up the symmetry the dashboard already shipped; client-side verification is a separate work item | 2026-05-07 |
 | BG-66 | Both homebrew upgrade chains now insert `brew link --overwrite ariaflow-server 2>/dev/null` between `brew upgrade` and the restart so an "installed but not linked" cellar (interrupted install / manual unlink / install.sh race) recovers automatically. Idempotent: succeeds whether the formula is already linked, just installed, or both. Sites: `dispatchAriaflowUpdate` (homebrew branch only — pipx/npm have no link concept) and `applyUpdate` in the auto-update controller | 2026-05-06 |
 | BG-65 | Both upgrade-then-restart chains switched from `&&` to `;` (`api/_lifecycle_actions.ts` `dispatchAriaflowUpdate`, `cli/_auto_update_controller.ts` `applyUpdate`). A no-op `brew upgrade` (stale cellar case — running version lags installed) now still triggers the bootout+bootstrap so the running process realigns to the cellar. Trade-off accepted in the brief: a failed upgrade still bounces, briefly, on the unchanged version | 2026-05-06 |
 | BG-64 | `last_probed_at` (epoch seconds, `Math.floor(Date.now()/1000)`) stamped on every `result` block in `/api/lifecycle` (`buildAriaflowServerRow`, `buildAria2Row`, `buildNetworkqualityRow` in `_lifecycle_rows.ts`). Same field added to the BG-63 `lifecycle_changed` SSE payload (`LifecycleSnapshot`); the diff function ignores it so a fresh timestamp alone doesn't trigger an emit | 2026-05-06 |
