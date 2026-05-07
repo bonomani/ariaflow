@@ -2034,3 +2034,128 @@ describe("404 handler", () => {
     expect(res.json()).toMatchObject({ ok: false, error: "not_found" });
   });
 });
+
+// BG-56: /api/files folder ops sandbox
+describe("/api/files (BG-56)", () => {
+  let downloadDir: string;
+  beforeEach(async () => {
+    const { mkdtempSync: mk, writeFileSync } = await import("node:fs");
+    downloadDir = mk(join(tmpdir(), "files-dl-"));
+    writeFileSync(join(downloadDir, "ubuntu.iso"), "x".repeat(100));
+    // Patch download_dir on the same on-disk declaration the running
+    // app reads. The store loads from $ARIAFLOW_DIR every request, so
+    // we don't need to rebuild the server.
+    const env = { ARIAFLOW_DIR: dir };
+    const lock = new StorageLock(storageLockPath(env));
+    const decls = new DeclarationStore(lock, env);
+    const decl = await decls.load();
+    const prefs = decl.uic.preferences;
+    const idx = prefs.findIndex((p) => p.name === "download_dir");
+    if (idx >= 0) prefs[idx]!.value = downloadDir;
+    else prefs.push({ name: "download_dir", value: downloadDir, options: [], rationale: "" });
+    await decls.save(decl);
+  });
+  afterEach(() => {
+    rmSync(downloadDir, { recursive: true, force: true });
+  });
+
+  it("GET /api/files lists entries with rel_path + size", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/files" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.ok).toBe(true);
+    const row = body.files.find((f: { rel_path: string }) => f.rel_path === "ubuntu.iso");
+    expect(row).toBeDefined();
+    expect(row.size).toBe(100);
+    expect(row.type).toBe("file");
+  });
+
+  it("POST /api/files/rename renames a file inside download_dir", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/files/rename",
+      payload: { path: "ubuntu.iso", new_name: "ubuntu-2604.iso" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().ok).toBe(true);
+    const { existsSync } = await import("node:fs");
+    expect(existsSync(join(downloadDir, "ubuntu-2604.iso"))).toBe(true);
+    expect(existsSync(join(downloadDir, "ubuntu.iso"))).toBe(false);
+  });
+
+  it("POST /api/files/rename rejects path-traversal escapes from download_dir", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/files/rename",
+      payload: { path: "../etc/hosts", new_name: "stolen" },
+    });
+    // 400 path_outside_download_dir or 404 not_found depending on whether
+    // the parent ../etc resolves under root — both are correct rejections.
+    expect([400, 404]).toContain(res.statusCode);
+  });
+
+  it("POST /api/files/rename 400 on non-bare new_name", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/files/rename",
+      payload: { path: "ubuntu.iso", new_name: "sub/ubuntu.iso" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("invalid_new_name");
+  });
+
+  it("DELETE /api/files removes a file", async () => {
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/files",
+      payload: { path: "ubuntu.iso" },
+    });
+    expect(res.statusCode).toBe(204);
+    const { existsSync } = await import("node:fs");
+    expect(existsSync(join(downloadDir, "ubuntu.iso"))).toBe(false);
+  });
+
+  it("DELETE /api/files refuses non-empty dir without recursive: true", async () => {
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    mkdirSync(join(downloadDir, "subdir"));
+    writeFileSync(join(downloadDir, "subdir", "x"), "x");
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/files",
+      payload: { path: "subdir" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe("directory_not_empty");
+  });
+});
+
+// BG-57: status summary describes the unfiltered queue
+describe("/api/status summary (BG-57)", () => {
+  it("returns full counts even when ?status= filters items", async () => {
+    // Seed three queued items, then move one to 'paused' status.
+    for (let i = 0; i < 3; i++) {
+      const r = await app.inject({
+        method: "POST",
+        url: "/api/downloads",
+        payload: { items: [{ url: `http://example.com/q${i}.iso` }] },
+      });
+      expect(r.statusCode).toBe(200);
+    }
+    const list = await app.inject({ method: "GET", url: "/api/downloads" });
+    const ids = list.json().items.map((i: { id: string }) => i.id);
+    await app.inject({ method: "POST", url: `/api/downloads/${ids[0]}/pause` });
+
+    const unfiltered = await app.inject({ method: "GET", url: "/api/status" });
+    const ub = unfiltered.json();
+    const total = Number(ub.summary.total ?? 0);
+    expect(total).toBe(3);
+    const pausedFull = Number(ub.summary.paused ?? 0);
+
+    // BG-57: filtering items must NOT shrink the summary block — the
+    // FE filter bar relies on it for the per-bucket counts.
+    const res = await app.inject({ method: "GET", url: "/api/status?status=paused" });
+    const body = res.json();
+    expect(body.summary.total).toBe(total);
+    expect(body.summary.paused).toBe(pausedFull);
+  });
+});
