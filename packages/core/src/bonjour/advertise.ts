@@ -14,7 +14,10 @@ export interface AdvertiseHandle {
 
 export interface AdvertiseOptions {
   port: number;
+  /** Reserved — no longer in TXT (BG-73 dropped `path`); accepted for back-compat. */
   path?: string;
+  /** BG-73: software version to publish as `v=...` in the TXT record. */
+  version?: string;
   /** Override the auto-detected backend (testing). */
   backend?: BonjourBackend;
   /** Spawn override (testing). */
@@ -45,11 +48,12 @@ export function advertiseHttpService(opts: AdvertiseOptions): AdvertiseHandle {
   if (!backend) {
     return { backend: null, stop: async () => {} };
   }
-  const path = opts.path ?? "/api";
+  const cmdOpts = {
+    port: opts.port,
+    ...(opts.version ? { version: opts.version } : {}),
+  };
   const argv =
-    backend === "dns-sd"
-      ? buildDnsSdCmd({ port: opts.port, path })
-      : buildAvahiCmd({ port: opts.port, path });
+    backend === "dns-sd" ? buildDnsSdCmd(cmdOpts) : buildAvahiCmd(cmdOpts);
   let proc: ChildProcess | null = null;
   try {
     proc = (opts.spawn ?? nodeSpawn)(argv[0]!, argv.slice(1), {

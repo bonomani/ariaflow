@@ -226,7 +226,10 @@ export async function cmdServe(
   // Failures are non-fatal — the HTTP listener stays up either way.
   const mdnsHandle = opts.noMdns
     ? null
-    : advertiseHttpService({ port, path: "/api" });
+    : advertiseHttpService({
+        port,
+        ...(resolvedVersion ? { version: resolvedVersion } : {}),
+      });
   if (mdnsHandle && mdnsHandle.backend) {
     await ctx.actions.record({
       action: ACTIONS.systemBonjourRegister,

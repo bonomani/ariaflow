@@ -82,15 +82,40 @@ export const bonjourAvailable = (env?: BonjourEnvironment): boolean =>
   detectBackend(env) !== null;
 
 /**
+ * BG-73: TXT-record protocol version. Bumped when the field set changes
+ * incompatibly. Consumers gate compat checks at pairing on this.
+ */
+export const MDNS_PROTOCOL_VERSION = "0.2";
+
+interface BuildCmdOpts {
+  port: number;
+  /** Software version (from package.json); rendered as `v=...`. */
+  version?: string;
+  /** Override the dns-sd / avahi binary path (testing). */
+  binary?: string;
+}
+
+/**
+ * BG-73: TXT records published over `_ariaflow-server._tcp`.
+ * `path` / `tls` / `hostname` were dropped — `path=/api` and `tls=0`
+ * were constants every consumer hardcoded; `hostname` duplicated the
+ * SRV target.
+ *
+ * `ver=<protocol>` and `role=server` are stable; `v=<software>` only
+ * fires when the caller supplies it (cmdServe injects the resolved
+ * package version).
+ */
+function txtRecords(version: string | undefined): string[] {
+  const txt = [`ver=${MDNS_PROTOCOL_VERSION}`, "role=server"];
+  if (version) txt.push(`v=${version}`);
+  return txt;
+}
+
+/**
  * Build the dns-sd command (macOS / Windows) for advertising an HTTP
  * service named after the short hostname under _ariaflow-server._tcp.
  */
-export function buildDnsSdCmd(opts: {
-  port: number;
-  path?: string;
-  binary?: string;
-}): string[] {
-  const path = opts.path ?? "/api";
+export function buildDnsSdCmd(opts: BuildCmdOpts): string[] {
   return [
     opts.binary ?? dnsSdPath() ?? "dns-sd",
     "-R",
@@ -98,28 +123,19 @@ export function buildDnsSdCmd(opts: {
     "_ariaflow-server._tcp",
     "local",
     String(opts.port),
-    `path=${path}`,
-    "tls=0",
-    `hostname=${shortHostname()}`,
+    ...txtRecords(opts.version),
   ];
 }
 
 /**
  * Build the avahi-publish-service command (Linux, non-WSL).
  */
-export function buildAvahiCmd(opts: {
-  port: number;
-  path?: string;
-  binary?: string;
-}): string[] {
-  const path = opts.path ?? "/api";
+export function buildAvahiCmd(opts: BuildCmdOpts): string[] {
   return [
     opts.binary ?? avahiPublishPath() ?? "avahi-publish-service",
     instanceName(),
     "_ariaflow-server._tcp",
     String(opts.port),
-    `path=${path}`,
-    "tls=0",
-    `hostname=${shortHostname()}`,
+    ...txtRecords(opts.version),
   ];
 }

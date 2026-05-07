@@ -79,9 +79,9 @@ describe("detectBackend", () => {
   });
 });
 
-describe("buildDnsSdCmd / buildAvahiCmd", () => {
-  it("dns-sd command contains the correct service type and order", () => {
-    const cmd = buildDnsSdCmd({ port: 6800, path: "/api", binary: "/usr/bin/dns-sd" });
+describe("buildDnsSdCmd / buildAvahiCmd (BG-73)", () => {
+  it("dns-sd command emits ver/role/v TXT records, no path/tls/hostname", () => {
+    const cmd = buildDnsSdCmd({ port: 6800, version: "1.2.3", binary: "/usr/bin/dns-sd" });
     expect(cmd).toEqual([
       "/usr/bin/dns-sd",
       "-R",
@@ -89,23 +89,35 @@ describe("buildDnsSdCmd / buildAvahiCmd", () => {
       "_ariaflow-server._tcp",
       "local",
       "6800",
-      "path=/api",
-      "tls=0",
-      `hostname=${shortHostname()}`,
+      "ver=0.2",
+      "role=server",
+      "v=1.2.3",
     ]);
+    // Regression — the legacy keys must be gone.
+    expect(cmd.some((s) => s.startsWith("path="))).toBe(false);
+    expect(cmd.some((s) => s.startsWith("tls="))).toBe(false);
+    expect(cmd.some((s) => s.startsWith("hostname="))).toBe(false);
   });
 
   it("avahi command does NOT include the 'local' domain or '-R' flag", () => {
-    const cmd = buildAvahiCmd({ port: 6800, path: "/api", binary: "/usr/bin/avahi-publish-service" });
+    const cmd = buildAvahiCmd({
+      port: 6800,
+      version: "1.2.3",
+      binary: "/usr/bin/avahi-publish-service",
+    });
     expect(cmd[0]).toBe("/usr/bin/avahi-publish-service");
     expect(cmd[1]).toBe(instanceName());
     expect(cmd).not.toContain("-R");
     expect(cmd).not.toContain("local");
-    expect(cmd).toContain("path=/api");
-    expect(cmd).toContain("tls=0");
+    expect(cmd).toContain("ver=0.2");
+    expect(cmd).toContain("role=server");
+    expect(cmd).toContain("v=1.2.3");
   });
 
-  it("defaults path to /api when omitted", () => {
-    expect(buildDnsSdCmd({ port: 1234, binary: "x" })).toContain("path=/api");
+  it("omits the v= field when no version is supplied", () => {
+    const cmd = buildDnsSdCmd({ port: 1234, binary: "x" });
+    expect(cmd).toContain("ver=0.2");
+    expect(cmd).toContain("role=server");
+    expect(cmd.some((s) => s.startsWith("v="))).toBe(false);
   });
 });

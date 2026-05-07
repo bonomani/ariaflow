@@ -11,7 +11,10 @@
 > `../ariaflow-dashboard/FRONTEND_GAPS.md` marked `Blocked by: BG-N` (unless it's
 > pure infrastructure with no user-visible counterpart — then `Blocks frontend gap: (none)`).
 
-## Open (1)
+## Open (0)
+
+<details>
+<summary>BG-73 (resolved) — original frontend brief retained for context</summary>
 
 ### BG-73: Clean up + consolidate mDNS TXT records (drop redundant fields, add `ver`/`v`/`role`)
 
@@ -142,6 +145,8 @@ or equivalent.)
 - Existing field semantics in `packages/core/src/bonjour/bonjour.ts:80-110`
 - FE consumer code in `../ariaflow-dashboard/src/ariaflow_dashboard/bonjour.py:175-227`
 - FE filter in `../ariaflow-dashboard/src/ariaflow_dashboard/static/ts/backend.ts:138-148`
+
+</details>
 
 ---
 
@@ -2165,6 +2170,7 @@ detection per installer (`brew outdated`, `pipx list --outdated`,
 
 | ID | Summary | Date |
 |----|---------|------|
+| BG-73 | mDNS TXT records cleaned up in `core/bonjour/bonjour.ts`. Dropped `path=/api`, `tls=0`, `hostname=...` (constants every consumer hardcoded / redundant with SRV target). Added `ver=0.2` (new `MDNS_PROTOCOL_VERSION` constant), `role=server` (matches the FE filter that was a no-op before), and optional `v=<software-version>` when the caller threads a version through (`cmdServe` passes the resolved cli/package.json version). Both `buildDnsSdCmd` and `buildAvahiCmd` rebased onto a shared `txtRecords()` helper. `AdvertiseOptions.version` added; `path` retained but unused for source-compat. Tests rewritten to assert the new TXT shape and the absence of legacy keys. Future BG-67 `fp=<hash>` fingerprint plugs in alongside `ver` | 2026-05-07 |
 | BG-72 | Removed three `{ field: undefined }` literals from `cap.test.ts` + `history_sync.test.ts` that tripped `tsc --build`'s `exactOptionalPropertyTypes` strictness. Vitest transpilation was lenient enough to pass them locally; CI's plain `tsc -b` rejected. Followed Option A from the brief (omit the property instead of setting it to undefined): `probe()` + `delete` for the cap_bytes_per_sec absent case; switched the `output_path: undefined` rows to bare `item({ id: ... })`. 533/533 tests pass; build clean | 2026-05-07 |
 | BG-71 | `renderFormula` in `core/install/formula.ts` now emits a `def caveats ... end` block before the `service do` section, documenting the first-install TCC prompt + the Full Disk Access escape hatch on `/opt/homebrew/bin/node`. Smoke-checked in `release-formula.yml` (`grep -q "def caveats"`, `grep -q "Full Disk Access"`); covered by `formula.test.ts`. Text-only — surfaces in `brew info ariaflow-server` and at install time, no runtime impact | 2026-05-07 |
 | BG-70 | `release-npm.yml` publish job now passes `--provenance` to `pnpm publish` and adds `id-token: write` to its permissions block, so `@ariaflow/{core,api,cli}` ship with a Sigstore-backed npm provenance statement keyed to the CI run. Mirrors BG-67's brew signing for npm/Windows/Linux installers; npmjs.com renders the green "Provenance" badge | 2026-05-07 |
